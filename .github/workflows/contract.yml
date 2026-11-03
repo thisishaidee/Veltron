@@ -23,5 +23,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
       - name: Run treasury contract tests
         run: cargo test -p veltron-treasury
+      - name: Build NEAR WebAssembly contract
+        run: cargo build --release -p veltron-treasury --target wasm32-unknown-unknown
