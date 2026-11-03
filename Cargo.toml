@@ -1,5 +1,5 @@
 [workspace]
-members = ["contracts/treasury"]
+members = ["contracts/treasury", "contracts/test-token"]
 resolver = "2"
 
 [profile.release]
