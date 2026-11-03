@@ -423,6 +423,44 @@ mod tests {
     }
 
     #[test]
+    fn trusted_token_deposit_increases_treasury_balance() {
+        let mut contract = setup("owner.near");
+        let mut builder = VMContextBuilder::new();
+        builder.predecessor_account_id(account("token.near"));
+        testing_env!(builder.build());
+
+        let unused = contract.ft_on_transfer(
+            account("depositor.near"),
+            U128(250),
+            String::new(),
+        );
+        assert!(matches!(unused, PromiseOrValue::Value(U128(0))));
+        assert_eq!(contract.get_financial_position().treasury_balance.0, 250);
+    }
+
+    #[test]
+    #[should_panic(expected = "Untrusted token contract")]
+    fn rejects_deposit_from_untrusted_token_contract() {
+        let mut contract = setup("owner.near");
+        contract.ft_on_transfer(
+            account("attacker.near"),
+            U128(250),
+            String::new(),
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "Only the authorized agent")]
+    fn rejects_payment_request_from_non_agent() {
+        let mut contract = setup("owner.near");
+        contract.request_payment(
+            account("vendor.near"),
+            U128(50),
+            None,
+        );
+    }
+
+    #[test]
     fn owner_can_cancel_commitment_and_release_reservation() {
         let mut contract = setup("owner.near");
         contract.treasury_balance = 1_000;
