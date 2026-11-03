@@ -460,6 +460,83 @@ mod tests {
         );
     }
 
+    fn callback_context() {
+        let mut builder = VMContextBuilder::new();
+        builder.current_account_id(account("treasury.near"));
+        builder.predecessor_account_id(account("treasury.near"));
+        testing_env!(builder.build());
+    }
+
+    #[test]
+    fn successful_discretionary_transfer_reduces_treasury_balance() {
+        let mut contract = setup("agent.near");
+        contract.treasury_balance = 1_000;
+        contract.request_payment(account("vendor.near"), U128(50), None);
+        assert_eq!(contract.get_pending_transfers().len(), 1);
+
+        callback_context();
+        contract.on_transfer_complete(0, Ok(()));
+
+        assert_eq!(contract.get_financial_position().treasury_balance.0, 950);
+        assert!(contract.get_pending_transfers().is_empty());
+    }
+
+    #[test]
+    fn failed_discretionary_transfer_preserves_treasury_balance() {
+        let mut contract = setup("agent.near");
+        contract.treasury_balance = 1_000;
+        contract.request_payment(account("vendor.near"), U128(50), None);
+
+        callback_context();
+        contract.on_transfer_complete(0, Err(PromiseError::Failed));
+
+        assert_eq!(contract.get_financial_position().treasury_balance.0, 1_000);
+        assert!(contract.get_pending_transfers().is_empty());
+    }
+
+    #[test]
+    fn successful_commitment_settlement_reduces_balance_and_removes_commitment() {
+        let mut contract = setup("owner.near");
+        contract.treasury_balance = 1_000;
+        contract.create_commitment(
+            "invoice-1".to_string(),
+            account("vendor.near"),
+            U128(200),
+            "Vendor invoice".to_string(),
+        );
+        contract.settle_commitment("invoice-1".to_string());
+        assert_eq!(contract.get_commitments().len(), 1);
+        assert!(contract.get_commitments()[0].settlement_pending);
+
+        callback_context();
+        contract.on_transfer_complete(0, Ok(()));
+
+        assert_eq!(contract.get_financial_position().treasury_balance.0, 800);
+        assert!(contract.get_commitments().is_empty());
+    }
+
+    #[test]
+    fn failed_commitment_settlement_keeps_commitment_and_releases_pending_flag() {
+        let mut contract = setup("owner.near");
+        contract.treasury_balance = 1_000;
+        contract.create_commitment(
+            "invoice-2".to_string(),
+            account("vendor.near"),
+            U128(200),
+            "Vendor invoice".to_string(),
+        );
+        contract.settle_commitment("invoice-2".to_string());
+
+        callback_context();
+        contract.on_transfer_complete(0, Err(PromiseError::Failed));
+
+        let commitments = contract.get_commitments();
+        assert_eq!(commitments.len(), 1);
+        assert!(!commitments[0].settlement_pending);
+        assert_eq!(commitments[0].amount.0, 200);
+        assert_eq!(contract.get_financial_position().treasury_balance.0, 1_000);
+    }
+
     #[test]
     fn owner_can_cancel_commitment_and_release_reservation() {
         let mut contract = setup("owner.near");
