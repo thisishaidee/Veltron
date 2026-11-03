@@ -25,7 +25,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
-      - name: Run treasury contract tests
-        run: cargo test -p veltron-treasury
-      - name: Build NEAR WebAssembly contract
+      - name: Run workspace contract tests
+        run: cargo test --workspace
+      - name: Build treasury WebAssembly contract
         run: cargo build --release -p veltron-treasury --target wasm32-unknown-unknown
+      - name: Build test-token WebAssembly contract
+        run: cargo build --release -p veltron-test-token --target wasm32-unknown-unknown
