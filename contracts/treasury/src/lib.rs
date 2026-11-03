@@ -1,7 +1,8 @@
 use near_sdk::{
     env, ext_contract, near, require, AccountId, Gas, NearToken, PanicOnDefault, Promise,
-    PromiseError, PromiseOrValue, U128,
+    PromiseError, PromiseOrValue,
 };
+use near_sdk::json_types::U128;
 use std::collections::BTreeMap;
 
 const FT_TRANSFER_GAS: Gas = Gas::from_tgas(10);
