@@ -1,0 +1,24 @@
+name: Contract checks
+
+on:
+  push:
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "contracts/**"
+      - ".github/workflows/contract.yml"
+  pull_request:
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "contracts/**"
+      - ".github/workflows/contract.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run treasury contract tests
+        run: cargo test -p veltron-treasury
