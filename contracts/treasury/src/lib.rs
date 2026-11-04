@@ -157,6 +157,7 @@ impl Veltron {
         require!(!id.is_empty(), "Commitment ID cannot be empty");
         require!(id.len() <= MAX_COMMITMENT_ID_LENGTH, "Commitment ID is too long");
         require!(recipient_id != env::current_account_id(), "Commitment recipient cannot be treasury");
+        require!(recipient_id != self.token_id, "Commitment recipient cannot be token contract");
         require!(!self.commitments.contains_key(&id), "Commitment already exists");
         require!(self.commitments.len() < MAX_COMMITMENTS, "Maximum active commitments reached");
         require!(amount.0 > 0, "Commitment amount must be positive");
@@ -181,6 +182,7 @@ impl Veltron {
         require!(amount.0 > 0, "Commitment amount must be positive");
         require!(description.len() <= 256, "Description is too long");
         require!(recipient_id != env::current_account_id(), "Commitment recipient cannot be treasury");
+        require!(recipient_id != self.token_id, "Commitment recipient cannot be token contract");
         require!(!self.settlement_pending.get(&id).copied().unwrap_or(false),
             "Cannot update a commitment while settlement is pending");
         let commitment = self.commitments.get_mut(&id)
@@ -223,6 +225,7 @@ impl Veltron {
         require!(amount.0 > 0, "Payment amount must be positive");
         require!(amount.0 <= self.max_per_transaction, "Per-transaction limit exceeded");
         require!(recipient_id != env::current_account_id(), "Cannot pay treasury to itself");
+        require!(recipient_id != self.token_id, "Cannot pay the token contract");
         require!(memo.as_ref().map_or(true, |value| value.len() <= MAX_PAYMENT_MEMO_LENGTH), "Payment memo is too long");
         let position = self.calculate_position();
         require!(amount.0 <= position.spendable_balance.0, "Insufficient spendable balance");
