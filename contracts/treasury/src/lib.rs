@@ -498,6 +498,82 @@ mod tests {
     }
 
     #[test]
+    fn commitment_aggregate_tracks_create_update_cancel_and_settlement() {
+        let mut contract = setup("owner.near");
+        contract.treasury_balance = 2_000;
+        contract.create_commitment("a".to_string(), account("a.near"), U128(200), "A".to_string());
+        contract.create_commitment("b".to_string(), account("b.near"), U128(300), "B".to_string());
+        assert_eq!(contract.get_financial_position().active_commitments.0, 500);
+
+        contract.update_commitment("a".to_string(), account("a.near"), U128(250), "A revised".to_string());
+        assert_eq!(contract.get_financial_position().active_commitments.0, 550);
+
+        contract.cancel_commitment("b".to_string());
+        assert_eq!(contract.get_financial_position().active_commitments.0, 250);
+
+        contract.settle_commitment("a".to_string());
+        callback_context();
+        contract.on_transfer_complete(0, Ok(()));
+        assert_eq!(contract.get_financial_position().active_commitments.0, 0);
+    }
+
+    #[test]
+    fn commitments_are_returned_in_bounded_cursor_pages() {
+        let mut contract = setup("owner.near");
+        contract.treasury_balance = 10_000;
+        for id in ["a", "b", "c", "d", "e"] {
+            contract.create_commitment(
+                id.to_string(),
+                account("vendor.near"),
+                U128(10),
+                "Page test".to_string(),
+            );
+        }
+
+        let first = contract.get_commitments(None, Some(2));
+        assert_eq!(first.commitments.iter().map(|c| c.id.as_str()).collect::<Vec<_>>(), vec!["a", "b"]);
+        assert_eq!(first.next_cursor.as_deref(), Some("b"));
+
+        let second = contract.get_commitments(first.next_cursor, Some(2));
+        assert_eq!(second.commitments.iter().map(|c| c.id.as_str()).collect::<Vec<_>>(), vec!["c", "d"]);
+        assert_eq!(second.next_cursor.as_deref(), Some("d"));
+
+        let third = contract.get_commitments(second.next_cursor, Some(2));
+        assert_eq!(third.commitments.iter().map(|c| c.id.as_str()).collect::<Vec<_>>(), vec!["e"]);
+        assert_eq!(third.next_cursor, None);
+    }
+
+    #[test]
+    fn commitment_page_size_is_capped() {
+        let contract = setup("owner.near");
+        let page = contract.get_commitments(None, Some(u32::MAX));
+        assert!(page.commitments.len() <= MAX_COMMITMENT_PAGE_SIZE as usize);
+        assert_eq!(page.next_cursor, None);
+    }
+
+    #[test]
+    #[should_panic(expected = "Maximum active commitments reached")]
+    fn rejects_commitments_beyond_active_limit() {
+        let mut contract = setup("owner.near");
+        contract.treasury_balance = 1_000_000;
+        for index in 0..MAX_COMMITMENTS {
+            let id = format!("commitment-{index:03}");
+            contract.create_commitment(
+                id,
+                account("vendor.near"),
+                U128(1),
+                "Bounded commitment".to_string(),
+            );
+        }
+        contract.create_commitment(
+            "one-too-many".to_string(),
+            account("vendor.near"),
+            U128(1),
+            "Must be rejected".to_string(),
+        );
+    }
+
+    #[test]
     fn commitment_total_is_counted_against_treasury() {
         let mut contract = setup("owner.near");
         contract.treasury_balance = 1_000;
