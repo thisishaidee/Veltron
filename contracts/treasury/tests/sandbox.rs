@@ -1,6 +1,7 @@
 use near_workspaces::types::NearToken;
 use near_workspaces::{Account, Contract};
 use serde_json::{json, Value};
+use std::task::Poll;
 
 const TREASURY_WASM: &[u8] =
     include_bytes!("../../../target/wasm32-unknown-unknown/release/veltron_treasury.wasm");
@@ -1023,6 +1024,182 @@ async fn sandbox_deposit_invalidates_prior_surplus_audit() -> anyhow::Result<()>
     let audit = view_json(&treasury, "get_token_balance_audit", json!({})).await?;
     assert_eq!(position["treasury_balance"], "50");
     assert_eq!(audit["observed_token_balance"], Value::Null);
+
+    Ok(())
+}
+
+
+#[tokio::test]
+async fn sandbox_discretionary_payment_can_start_while_commitment_settlement_is_pending() -> anyhow::Result<()> {
+    let worker = near_workspaces::sandbox().await?;
+    let owner = worker.dev_create_account().await?;
+    let agent = worker.dev_create_account().await?;
+    let commitment_vendor = worker.dev_create_account().await?;
+    let discretionary_vendor = worker.dev_create_account().await?;
+
+    let token = worker.dev_deploy(TOKEN_WASM).await?;
+    token
+        .call("new")
+        .args_json(json!({
+            "owner_id": owner.id(),
+            "total_supply": "10000",
+            "metadata": {
+                "spec": "ft-1.0.0",
+                "name": "VELTRON Test Token",
+                "symbol": "VTT",
+                "decimals": 6
+            }
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    let treasury = worker.dev_deploy(TREASURY_WASM).await?;
+    treasury
+        .call("new")
+        .args_json(json!({
+            "owner_id": owner.id(),
+            "token_id": token.id(),
+            "agent_id": agent.id(),
+            "max_per_transaction": "500",
+            "safety_reserve": "100"
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    register_token_account(&owner, &token, treasury.id().as_str()).await?;
+    register_token_account(&owner, &token, commitment_vendor.id().as_str()).await?;
+    register_token_account(&owner, &token, discretionary_vendor.id().as_str()).await?;
+
+    owner
+        .call(token.id(), "ft_transfer_call")
+        .args_json(json!({
+            "receiver_id": treasury.id(),
+            "amount": "1000",
+            "memo": "Fund asynchronous interleaving test",
+            "msg": ""
+        }))
+        .deposit(NearToken::from_yoctonear(1))
+        .transact()
+        .await?
+        .into_result()?;
+
+    owner
+        .call(treasury.id(), "create_commitment")
+        .args_json(json!({
+            "id": "pending-invoice",
+            "recipient_id": commitment_vendor.id(),
+            "amount": "400",
+            "description": "Commitment held during asynchronous settlement"
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    // Submit settlement without waiting for its promise chain to finish.
+    let settlement_status = owner
+        .call(treasury.id(), "settle_commitment")
+        .args_json(json!({ "id": "pending-invoice" }))
+        .max_gas()
+        .transact_async()
+        .await?;
+
+    // Wait until the treasury's initial receipt has installed the settlement lock.
+    // The transfer callback must still be outstanding at this observation point.
+    let mut settlement_lock_observed = false;
+    for _ in 0..200 {
+        let page = view_json(
+            &treasury,
+            "get_commitments",
+            json!({ "from_id": null, "limit": 10 }),
+        )
+        .await?;
+        if page["commitments"][0]["settlement_pending"] == true {
+            settlement_lock_observed = true;
+            break;
+        }
+        if matches!(settlement_status.status().await?, Poll::Ready(_)) {
+            break;
+        }
+        tokio::task::yield_now().await;
+    }
+    assert!(
+        settlement_lock_observed,
+        "settlement callback completed before the pending lock could be observed"
+    );
+
+    let position_during_settlement =
+        view_json(&treasury, "get_financial_position", json!({})).await?;
+    assert_eq!(position_during_settlement["treasury_balance"], "1000");
+    assert_eq!(position_during_settlement["reserved_commitments"], "400");
+    assert_eq!(position_during_settlement["spendable_balance"], "500");
+
+    // Submit the agent payment while the commitment is visibly still locked.
+    // Do not await either promise chain until both pending reservations are observed.
+    let discretionary_status = agent
+        .call(treasury.id(), "request_payment")
+        .args_json(json!({
+            "recipient_id": discretionary_vendor.id(),
+            "amount": "500",
+            "memo": "Discretionary payment during commitment settlement"
+        }))
+        .max_gas()
+        .transact_async()
+        .await?;
+
+    let mut both_reservations_observed = false;
+    for _ in 0..200 {
+        let page = view_json(
+            &treasury,
+            "get_commitments",
+            json!({ "from_id": null, "limit": 10 }),
+        )
+        .await?;
+        let position = view_json(&treasury, "get_financial_position", json!({})).await?;
+        if page["commitments"][0]["settlement_pending"] == true
+            && position["pending_discretionary"] == "500"
+            && position["spendable_balance"] == "0"
+        {
+            both_reservations_observed = true;
+            break;
+        }
+        if matches!(settlement_status.status().await?, Poll::Ready(_))
+            || matches!(discretionary_status.status().await?, Poll::Ready(_))
+        {
+            break;
+        }
+        tokio::task::yield_now().await;
+    }
+    assert!(
+        both_reservations_observed,
+        "could not observe commitment and discretionary reservations at the same time"
+    );
+
+    // Now allow both real NEP-141 promise chains and treasury callbacks to finish.
+    let settlement_result = settlement_status.await?;
+    settlement_result.clone().into_result()?;
+    let discretionary_result = discretionary_status.await?;
+    discretionary_result.clone().into_result()?;
+
+    assert!(settlement_result.logs().iter().any(|log| log.contains("VELTRON_TRANSFER_SUCCESS:0")));
+    assert!(discretionary_result.logs().iter().any(|log| log.contains("VELTRON_TRANSFER_SUCCESS:1")));
+
+    let final_position = view_json(&treasury, "get_financial_position", json!({})).await?;
+    let final_commitments =
+        view_json(&treasury, "get_commitments", json!({ "from_id": null, "limit": 10 })).await?;
+    let commitment_vendor_balance =
+        view_json(&token, "ft_balance_of", json!({ "account_id": commitment_vendor.id() })).await?;
+    let discretionary_vendor_balance =
+        view_json(&token, "ft_balance_of", json!({ "account_id": discretionary_vendor.id() })).await?;
+
+    assert_eq!(final_position["treasury_balance"], "100");
+    assert_eq!(final_position["active_commitments"], "0");
+    assert_eq!(final_position["pending_discretionary"], "0");
+    assert_eq!(final_position["spendable_balance"], "0");
+    assert_eq!(final_commitments["commitments"].as_array().unwrap().len(), 0);
+    assert_eq!(commitment_vendor_balance, "400");
+    assert_eq!(discretionary_vendor_balance, "500");
 
     Ok(())
 }
