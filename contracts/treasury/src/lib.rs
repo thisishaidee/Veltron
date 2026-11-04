@@ -453,8 +453,10 @@ impl Veltron {
         transfer_id: u64,
         #[callback_result] result: Result<(), PromiseError>,
     ) {
+        env::log_str(&format!("VELTRON_GAS_PHASE:callback_start:{}", env::used_gas().as_gas()));
         let transfer = self.pending.remove(&transfer_id)
             .unwrap_or_else(|| env::panic_str("Pending transfer not found"));
+        env::log_str(&format!("VELTRON_GAS_PHASE:pending_remove:{}", env::used_gas().as_gas()));
 
         match result {
             Ok(()) => {
@@ -463,17 +465,22 @@ impl Veltron {
                 if let PendingKind::CommitmentSettlement { commitment_id } = transfer.kind {
                     let settled = self.commitments.remove(&commitment_id)
                         .unwrap_or_else(|| env::panic_str("Commitment not found during settlement callback"));
+                    env::log_str(&format!("VELTRON_GAS_PHASE:commitment_remove:{}", env::used_gas().as_gas()));
                     self.active_commitments_total = self.active_commitments_total.checked_sub(settled.amount)
                         .unwrap_or_else(|| env::panic_str("Commitment total underflow"));
                     self.settlement_pending.remove(&commitment_id);
+                    env::log_str(&format!("VELTRON_GAS_PHASE:settlement_lock_remove:{}", env::used_gas().as_gas()));
                 }
                 env::log_str(&format!("VELTRON_TRANSFER_SUCCESS:{}", transfer_id));
+                env::log_str(&format!("VELTRON_GAS_PHASE:callback_end:{}", env::used_gas().as_gas()));
             }
             Err(_) => {
                 if let PendingKind::CommitmentSettlement { commitment_id } = transfer.kind {
                     self.settlement_pending.remove(&commitment_id);
+                    env::log_str(&format!("VELTRON_GAS_PHASE:settlement_lock_remove:{}", env::used_gas().as_gas()));
                 }
                 env::log_str(&format!("VELTRON_TRANSFER_FAILED:{}", transfer_id));
+                env::log_str(&format!("VELTRON_GAS_PHASE:callback_end:{}", env::used_gas().as_gas()));
             }
         }
     }
