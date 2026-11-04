@@ -20,6 +20,14 @@ Spendable = max(
 
 Pending discretionary transfers are subtracted separately because NEAR cross-contract calls are asynchronous. The funds remain reserved until the token transfer callback confirms success or failure.
 
+## Token balance audit
+
+- The owner can call `refresh_token_balance_audit` to query the configured NEP-141 contract's actual token balance for the treasury.
+- The asynchronous result is stored by a private callback and exposed through `get_token_balance_audit`, alongside the internal ledger balance captured when the query completes and the observation timestamp.
+- The audit is read-only: it never credits or debits the ledger and never changes spendable balance. A difference is evidence of a balance discrepancy, not permission to recover or spend the difference.
+- Only one audit can be pending at a time. A failed query clears the pending flag and preserves the previous successful observation.
+- The observation is a point-in-time diagnostic, not a continuously synchronized balance or a cryptographic proof of token solvency.
+
 ## Commitment limits and retrieval
 
 - The MVP permits at most 256 active commitments at a time. Owners can cancel or settle commitments to free capacity.
@@ -52,7 +60,7 @@ Commitment recipients are fixed by the owner. The agent cannot change commitment
 
 - This is an MVP implementation, not an audited production treasury.
 - Internal accounting tracks deposits and outgoing transfers made through this contract. It does not query the token balance on every decision.
-- Tokens transferred directly to the contract without `ft_transfer_call` are not credited. They become unaccounted token surplus: the actual NEP-141 balance can exceed the internal ledger, while spendable balance remains based on the ledger. The MVP has no surplus-recovery method; do not assume direct transfers are recoverable.
+- Tokens transferred directly to the contract without `ft_transfer_call` are not credited. They become unaccounted token surplus: the actual NEP-141 balance can exceed the internal ledger, while spendable balance remains based on the ledger. The owner can inspect this discrepancy using the read-only token balance audit, but the MVP has no surplus-recovery method; do not assume direct transfers are recoverable.
 - The configured token contract is trusted; deploying with a malicious token address is unsafe.
 - Token transfer callbacks, token registration requirements, storage costs, and deployed test-token behavior must be verified on testnet.
 - A safety reserve is a protected accounting floor, not a separate escrow account.
