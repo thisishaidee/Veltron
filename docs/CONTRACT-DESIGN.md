@@ -20,6 +20,12 @@ Spendable = max(
 
 Pending discretionary transfers are subtracted separately because NEAR cross-contract calls are asynchronous. The funds remain reserved until the token transfer callback confirms success or failure.
 
+## Commitment limits and retrieval
+
+- The MVP permits at most 256 active commitments at a time. Owners can cancel or settle commitments to free capacity.
+- Commitment reads use cursor pagination. `get_commitments` accepts `from_id` (exclusive) and `limit`; the default page size is 25 and the maximum is 50. Use the returned `next_cursor` as the next request's `from_id` until it is `null`.
+- The active-commitment total is calculated over a bounded collection, so accounting work cannot grow without limit. This cap is an MVP guardrail, not a substitute for profiling gas and storage costs under realistic workloads.
+
 ## Payment lifecycle
 
 1. The authorized agent requests a discretionary payment, or the owner starts settlement of an existing commitment.
