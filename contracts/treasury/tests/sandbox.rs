@@ -792,3 +792,184 @@ async fn sandbox_only_owner_can_start_token_balance_audit() -> anyhow::Result<()
 
     Ok(())
 }
+
+
+#[tokio::test]
+async fn sandbox_owner_reconciles_only_audited_surplus_and_consumes_snapshot() -> anyhow::Result<()> {
+    let worker = near_workspaces::sandbox().await?;
+    let owner = worker.dev_create_account().await?;
+    let agent = worker.dev_create_account().await?;
+    let token = worker.dev_deploy(TOKEN_WASM).await?;
+    token
+        .call("new")
+        .args_json(json!({
+            "owner_id": owner.id(),
+            "total_supply": "10000",
+            "metadata": {
+                "spec": "ft-1.0.0",
+                "name": "VELTRON Test Token",
+                "symbol": "VTT",
+                "decimals": 6
+            }
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    let treasury = worker.dev_deploy(TREASURY_WASM).await?;
+    treasury
+        .call("new")
+        .args_json(json!({
+            "owner_id": owner.id(),
+            "token_id": token.id(),
+            "agent_id": agent.id(),
+            "max_per_transaction": "500",
+            "safety_reserve": "100"
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+    register_token_account(&owner, &token, treasury.id().as_str()).await?;
+
+    owner
+        .call(token.id(), "ft_transfer")
+        .args_json(json!({
+            "receiver_id": treasury.id(),
+            "amount": "250",
+            "memo": "Direct unaccounted surplus"
+        }))
+        .deposit(NearToken::from_yoctonear(1))
+        .transact()
+        .await?
+        .into_result()?;
+
+    owner
+        .call(treasury.id(), "refresh_token_balance_audit")
+        .max_gas()
+        .transact()
+        .await?
+        .into_result()?;
+
+    owner
+        .call(treasury.id(), "reconcile_token_surplus")
+        .args_json(json!({ "amount": "200" }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    let position = view_json(&treasury, "get_financial_position", json!({})).await?;
+    let audit = view_json(&treasury, "get_token_balance_audit", json!({})).await?;
+    let actual = view_json(&token, "ft_balance_of", json!({ "account_id": treasury.id() })).await?;
+    assert_eq!(position["treasury_balance"], "200");
+    assert_eq!(position["spendable_balance"], "100");
+    assert_eq!(actual, "250");
+    assert_eq!(audit["observed_token_balance"], Value::Null);
+
+    let replay = owner
+        .call(treasury.id(), "reconcile_token_surplus")
+        .args_json(json!({ "amount": "1" }))
+        .transact()
+        .await?;
+    assert!(replay.into_result().is_err());
+
+    owner
+        .call(treasury.id(), "refresh_token_balance_audit")
+        .max_gas()
+        .transact()
+        .await?
+        .into_result()?;
+    owner
+        .call(treasury.id(), "reconcile_token_surplus")
+        .args_json(json!({ "amount": "50" }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    let final_position = view_json(&treasury, "get_financial_position", json!({})).await?;
+    assert_eq!(final_position["treasury_balance"], "250");
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn sandbox_deposit_invalidates_prior_surplus_audit() -> anyhow::Result<()> {
+    let worker = near_workspaces::sandbox().await?;
+    let owner = worker.dev_create_account().await?;
+    let agent = worker.dev_create_account().await?;
+    let token = worker.dev_deploy(TOKEN_WASM).await?;
+    token
+        .call("new")
+        .args_json(json!({
+            "owner_id": owner.id(),
+            "total_supply": "10000",
+            "metadata": {
+                "spec": "ft-1.0.0",
+                "name": "VELTRON Test Token",
+                "symbol": "VTT",
+                "decimals": 6
+            }
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    let treasury = worker.dev_deploy(TREASURY_WASM).await?;
+    treasury
+        .call("new")
+        .args_json(json!({
+            "owner_id": owner.id(),
+            "token_id": token.id(),
+            "agent_id": agent.id(),
+            "max_per_transaction": "500",
+            "safety_reserve": "100"
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+    register_token_account(&owner, &token, treasury.id().as_str()).await?;
+
+    owner
+        .call(token.id(), "ft_transfer")
+        .args_json(json!({
+            "receiver_id": treasury.id(),
+            "amount": "100",
+            "memo": "Initial direct surplus"
+        }))
+        .deposit(NearToken::from_yoctonear(1))
+        .transact()
+        .await?
+        .into_result()?;
+    owner
+        .call(treasury.id(), "refresh_token_balance_audit")
+        .max_gas()
+        .transact()
+        .await?
+        .into_result()?;
+
+    owner
+        .call(token.id(), "ft_transfer_call")
+        .args_json(json!({
+            "receiver_id": treasury.id(),
+            "amount": "50",
+            "memo": "New accounted deposit",
+            "msg": ""
+        }))
+        .deposit(NearToken::from_yoctonear(1))
+        .transact()
+        .await?
+        .into_result()?;
+
+    let stale = owner
+        .call(treasury.id(), "reconcile_token_surplus")
+        .args_json(json!({ "amount": "1" }))
+        .transact()
+        .await?;
+    assert!(stale.into_result().is_err());
+
+    let position = view_json(&treasury, "get_financial_position", json!({})).await?;
+    let audit = view_json(&treasury, "get_token_balance_audit", json!({})).await?;
+    assert_eq!(position["treasury_balance"], "50");
+    assert_eq!(audit["observed_token_balance"], Value::Null);
+
+    Ok(())
+}
