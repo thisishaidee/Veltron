@@ -3,7 +3,7 @@ use near_sdk::{
     PromiseError, PromiseOrValue,
 };
 use near_sdk::json_types::{U128, U64};
-use near_sdk::collections::TreeMap;
+use near_sdk::collections::{LookupMap, TreeMap, UnorderedSet};
 
 const FT_TRANSFER_GAS: Gas = Gas::from_tgas(10);
 const CALLBACK_GAS: Gas = Gas::from_tgas(10);
@@ -110,10 +110,11 @@ pub struct Veltron {
     treasury_balance: u128,
     safety_reserve: u128,
     next_transfer_id: u64,
-    commitments: TreeMap<String, Commitment>,
+    commitments: LookupMap<String, Commitment>,
+    commitment_ids: UnorderedSet<String>,
     active_commitments_total: u128,
     pending: TreeMap<u64, PendingTransfer>,
-    settlement_pending: TreeMap<String, bool>,
+    settlement_pending: LookupMap<String, bool>,
     balance_audit_pending: bool,
     paused: bool,
     observed_token_balance: Option<u128>,
@@ -147,10 +148,11 @@ impl Veltron {
             treasury_balance: 0,
             safety_reserve: safety_reserve.0,
             next_transfer_id: 0,
-            commitments: TreeMap::new(&b"veltron_commitments"[..]),
+            commitments: LookupMap::new(b"veltron_commitments"),
+            commitment_ids: UnorderedSet::new(b"veltron_commitment_ids"),
             active_commitments_total: 0,
             pending: TreeMap::new(&b"veltron_pending"[..]),
-            settlement_pending: TreeMap::new(&b"veltron_settlement_pending"[..]),
+            settlement_pending: LookupMap::new(b"veltron_settlement_pending"),
             balance_audit_pending: false,
             paused: false,
             observed_token_balance: None,
@@ -202,7 +204,7 @@ impl Veltron {
         require!(recipient_id != env::current_account_id(), "Commitment recipient cannot be treasury");
         require!(recipient_id != self.token_id, "Commitment recipient cannot be token contract");
         require!(!self.commitments.contains_key(&id), "Commitment already exists");
-        require!(self.commitments.len() < MAX_COMMITMENTS as u64, "Maximum active commitments reached");
+        require!(self.commitment_ids.len() < MAX_COMMITMENTS as u64, "Maximum active commitments reached");
         require!(amount.0 > 0, "Commitment amount must be positive");
         require!(description.len() <= MAX_DESCRIPTION_LENGTH, "Description is too long");
         let new_total = self.active_commitments_total.checked_add(amount.0)
@@ -213,6 +215,7 @@ impl Veltron {
             amount: amount.0,
             description,
         });
+        require!(self.commitment_ids.insert(&id), "Commitment index already exists");
         self.active_commitments_total = new_total;
         self.assert_solvent();
     }
@@ -250,6 +253,7 @@ impl Veltron {
         require!(!self.settlement_pending.get(&id).unwrap_or(false),
             "Cannot cancel a commitment while settlement is pending");
         let removed = self.commitments.remove(&id).unwrap_or_else(|| env::panic_str("Commitment not found"));
+        require!(self.commitment_ids.remove(&id), "Commitment index entry not found");
         self.active_commitments_total = self.active_commitments_total.checked_sub(removed.amount)
             .unwrap_or_else(|| env::panic_str("Commitment total underflow"));
     }
@@ -401,29 +405,30 @@ impl Veltron {
         let limit = limit.unwrap_or(DEFAULT_COMMITMENT_PAGE_SIZE);
         require!(limit > 0, "Page limit must be positive");
         let limit = limit.min(MAX_COMMITMENT_PAGE_SIZE) as usize;
-        let mut commitments: Vec<CommitmentView> = match from_id {
-            Some(cursor) => self.commitments
-                .iter_from(cursor)
-                .take(limit + 1)
-                .map(|(_, c)| CommitmentView {
+        // The active set is capped at 256 entries. Sort IDs in memory to preserve
+        // the API's lexicographic cursor order without a persistent AVL tree.
+        let mut ids: Vec<String> = self.commitment_ids.iter().collect();
+        ids.sort_unstable();
+        let start = from_id
+            .as_ref()
+            .map(|cursor| ids.partition_point(|id| id <= cursor))
+            .unwrap_or(0);
+        let mut commitments: Vec<CommitmentView> = ids
+            .into_iter()
+            .skip(start)
+            .take(limit + 1)
+            .map(|id| {
+                let c = self.commitments.get(&id)
+                    .unwrap_or_else(|| env::panic_str("Commitment index points to missing record"));
+                CommitmentView {
                     id: c.id.clone(),
                     recipient_id: c.recipient_id.clone(),
                     amount: U128(c.amount),
                     description: c.description.clone(),
-                    settlement_pending: self.settlement_pending.get(&c.id).unwrap_or(false),
-                })
-                .collect(),
-            None => self.commitments.iter()
-                .take(limit + 1)
-                .map(|(_, c)| CommitmentView {
-                    id: c.id.clone(),
-                    recipient_id: c.recipient_id.clone(),
-                    amount: U128(c.amount),
-                    description: c.description.clone(),
-                    settlement_pending: self.settlement_pending.get(&c.id).unwrap_or(false),
-                })
-                .collect(),
-        };
+                    settlement_pending: self.settlement_pending.get(&id).unwrap_or(false),
+                }
+            })
+            .collect();
         let has_more = commitments.len() > limit;
         if has_more {
             commitments.pop();
@@ -453,10 +458,8 @@ impl Veltron {
         transfer_id: u64,
         #[callback_result] result: Result<(), PromiseError>,
     ) {
-        env::log_str(&format!("VELTRON_GAS_PHASE:callback_start:{}", env::used_gas().as_gas()));
         let transfer = self.pending.remove(&transfer_id)
             .unwrap_or_else(|| env::panic_str("Pending transfer not found"));
-        env::log_str(&format!("VELTRON_GAS_PHASE:pending_remove:{}", env::used_gas().as_gas()));
 
         match result {
             Ok(()) => {
@@ -465,22 +468,18 @@ impl Veltron {
                 if let PendingKind::CommitmentSettlement { commitment_id } = transfer.kind {
                     let settled = self.commitments.remove(&commitment_id)
                         .unwrap_or_else(|| env::panic_str("Commitment not found during settlement callback"));
-                    env::log_str(&format!("VELTRON_GAS_PHASE:commitment_remove:{}", env::used_gas().as_gas()));
+                    require!(self.commitment_ids.remove(&commitment_id), "Commitment index entry not found during settlement");
                     self.active_commitments_total = self.active_commitments_total.checked_sub(settled.amount)
                         .unwrap_or_else(|| env::panic_str("Commitment total underflow"));
                     self.settlement_pending.remove(&commitment_id);
-                    env::log_str(&format!("VELTRON_GAS_PHASE:settlement_lock_remove:{}", env::used_gas().as_gas()));
                 }
                 env::log_str(&format!("VELTRON_TRANSFER_SUCCESS:{}", transfer_id));
-                env::log_str(&format!("VELTRON_GAS_PHASE:callback_end:{}", env::used_gas().as_gas()));
             }
             Err(_) => {
                 if let PendingKind::CommitmentSettlement { commitment_id } = transfer.kind {
                     self.settlement_pending.remove(&commitment_id);
-                    env::log_str(&format!("VELTRON_GAS_PHASE:settlement_lock_remove:{}", env::used_gas().as_gas()));
                 }
                 env::log_str(&format!("VELTRON_TRANSFER_FAILED:{}", transfer_id));
-                env::log_str(&format!("VELTRON_GAS_PHASE:callback_end:{}", env::used_gas().as_gas()));
             }
         }
     }
