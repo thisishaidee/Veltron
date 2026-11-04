@@ -563,8 +563,14 @@ mod tests {
             U128(600),
             "Protected payroll".to_string(),
         );
+
+        // Switch to the authorized agent after the owner creates the commitment.
+        let mut builder = VMContextBuilder::new();
+        builder.predecessor_account_id(account("agent.near"));
+        testing_env!(builder.build());
+
         // 1,000 balance - 600 commitment - 100 reserve = 300 spendable.
-        contract.request_payment(account("vendor.near"), U128(301), None);
+        let _ = contract.request_payment(account("vendor.near"), U128(301), None);
     }
 
     #[test]
