@@ -109,10 +109,11 @@ impl Veltron {
     /// The contract accepts the full transfer; unsupported msg formats are rejected.
     pub fn ft_on_transfer(
         &mut self,
-        _sender_id: AccountId,
+        sender_id: AccountId,
         amount: U128,
         msg: String,
     ) -> PromiseOrValue<U128> {
+        let _ = sender_id;
         env::log_str("VELTRON_DEPOSIT: entered ft_on_transfer");
         let predecessor = env::predecessor_account_id();
         env::log_str(&format!("VELTRON_DEPOSIT: predecessor={}", predecessor));
