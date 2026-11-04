@@ -247,8 +247,8 @@ async fn sandbox_commitment_settlement_success_failure_and_retry() -> anyhow::Re
     println!("Commitment success callback gas at 256 commitments: {} Tgas",
         success_callback_gas as f64 / 1_000_000_000_000.0);
     println!("Commitment success callback phase logs: {:#?}", success_callback_receipt.logs);
-    // Temporary diagnostic run: keep executing to capture failure and retry callback measurements.
-    println!("DIAGNOSTIC_ONLY: success callback gas threshold assertion temporarily skipped: {}", success_callback_gas);
+    assert!(success_callback_gas < 5_000_000_000_000,
+        "commitment success callback consumed more than 5 Tgas: {}", success_callback_gas);
 
     let after_success = view_json(&treasury, "get_financial_position", json!({})).await?;
     let paid_vendor_balance =
@@ -276,7 +276,8 @@ async fn sandbox_commitment_settlement_success_failure_and_retry() -> anyhow::Re
     let failure_callback_gas = failure_callback_receipt.gas_burnt.as_gas();
     println!("Commitment failure callback gas at 255 commitments: {} Tgas",
         failure_callback_gas as f64 / 1_000_000_000_000.0);
-    println!("DIAGNOSTIC_ONLY: failure callback gas threshold assertion temporarily skipped: {}", failure_callback_gas);
+    assert!(failure_callback_gas < 5_000_000_000_000,
+        "commitment failure callback consumed more than 5 Tgas: {}", failure_callback_gas);
 
     let after_failure = view_json(&treasury, "get_financial_position", json!({})).await?;
     let commitments_after_failure =
@@ -300,7 +301,8 @@ async fn sandbox_commitment_settlement_success_failure_and_retry() -> anyhow::Re
     let retry_callback_gas = retry_callback_receipt.gas_burnt.as_gas();
     println!("Commitment retry callback gas at 255 commitments: {} Tgas",
         retry_callback_gas as f64 / 1_000_000_000_000.0);
-    println!("DIAGNOSTIC_ONLY: retry callback gas threshold assertion temporarily skipped: {}", retry_callback_gas);
+    assert!(retry_callback_gas < 5_000_000_000_000,
+        "commitment retry callback consumed more than 5 Tgas: {}", retry_callback_gas);
 
     let after_retry = view_json(&treasury, "get_financial_position", json!({})).await?;
     let retry_vendor_balance = view_json(
