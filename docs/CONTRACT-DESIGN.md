@@ -25,6 +25,7 @@ Pending discretionary transfers are subtracted separately because NEAR cross-con
 - The MVP permits at most 256 active commitments at a time. Owners can cancel or settle commitments to free capacity.
 - Commitment reads use cursor pagination. `get_commitments` accepts `from_id` (exclusive) and `limit`; the default page size is 25 and the maximum is 50. Use the returned `next_cursor` as the next request's `from_id` until it is `null`.
 - The active-commitment total is calculated over a bounded collection, so accounting work cannot grow without limit. This cap is an MVP guardrail, not a substitute for profiling gas and storage costs under realistic workloads.
+- Commitment IDs are limited to 64 UTF-8 bytes. Commitment descriptions and optional discretionary-payment memos are each limited to 256 UTF-8 bytes. These limits constrain user-supplied strings passed through contract calls; an omitted memo is allowed.
 
 ## Payment lifecycle
 
