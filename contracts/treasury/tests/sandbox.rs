@@ -1132,7 +1132,7 @@ async fn sandbox_discretionary_payment_can_start_while_commitment_settlement_is_
     let position_during_settlement =
         view_json(&treasury, "get_financial_position", json!({})).await?;
     assert_eq!(position_during_settlement["treasury_balance"], "1000");
-    assert_eq!(position_during_settlement["reserved_commitments"], "400");
+    assert_eq!(position_during_settlement["active_commitments"], "400");
     assert_eq!(position_during_settlement["spendable_balance"], "500");
 
     // Submit the agent payment while the commitment is visibly still locked.
