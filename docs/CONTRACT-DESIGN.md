@@ -2,7 +2,7 @@
 
 ## MVP boundary
 
-The first contract supports one configured NEP-141 token, one owner, and one authorized agent. It does not support recurring schedules, multiple tokens, cross-chain transfers, or AI-controlled commitment edits.
+The first contract supports one configured NEP-141 token, one owner, and one authorized agent. The owner, agent, token contract, and treasury contract must be four distinct accounts; owner and agent separation is enforced at initialization. It does not support recurring schedules, multiple tokens, cross-chain transfers, or AI-controlled commitment edits.
 
 ## Accounting model
 
