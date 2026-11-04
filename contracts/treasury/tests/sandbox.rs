@@ -1,4 +1,4 @@
-use near_workspaces::types::{NearGas, NearToken};
+use near_workspaces::types::NearToken;
 use near_workspaces::{Account, Contract};
 use serde_json::{json, Value};
 
@@ -92,8 +92,8 @@ async fn sandbox_deposit_and_agent_payment_use_real_nep141_calls() -> anyhow::Re
     assert_eq!(funded_position["treasury_balance"], "1000");
     assert_eq!(funded_position["spendable_balance"], "900");
 
-    // Explicitly fund the call with enough gas to execute the treasury method,
-    // the outgoing NEP-141 transfer, and its resolution callback in Sandbox.
+    // Give the complete cross-contract payment flow the maximum transaction gas
+    // while diagnosing the prepaid-gas failure in Sandbox.
     let payment_result = agent
         .call(treasury.id(), "request_payment")
         .args_json(json!({
@@ -101,7 +101,7 @@ async fn sandbox_deposit_and_agent_payment_use_real_nep141_calls() -> anyhow::Re
             "amount": "200",
             "memo": "Sandbox vendor payment"
         }))
-        .gas(NearGas::from_tgas(100))
+        .max_gas()
         .transact()
         .await?;
     println!("Agent payment transaction outcome: {:#?}", payment_result);
