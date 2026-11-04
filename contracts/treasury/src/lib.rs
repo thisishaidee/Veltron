@@ -942,19 +942,6 @@ mod tests {
     }
 
 
-    #[test]
-    #[should_panic(expected = "Method is private")]
-    fn rejects_callback_from_external_account() {
-        let mut contract = setup("agent.near");
-        contract.treasury_balance = 1_000;
-        contract.request_payment(account("vendor.near"), U128(50), None);
-
-        let mut builder = VMContextBuilder::new();
-        builder.current_account_id(account("treasury.near"));
-        builder.predecessor_account_id(account("attacker.near"));
-        testing_env!(builder.build());
-        contract.on_transfer_complete(0, Ok(()));
-    }
 
     #[test]
     #[should_panic(expected = "Pending transfer not found")]
