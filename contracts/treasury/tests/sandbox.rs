@@ -70,7 +70,7 @@ async fn sandbox_deposit_and_agent_payment_use_real_nep141_calls() -> anyhow::Re
     register_token_account(&owner, &token, treasury.id().as_str()).await?;
     register_token_account(&owner, &token, vendor.id().as_str()).await?;
 
-    owner
+    let deposit_result = owner
         .call(token.id(), "ft_transfer_call")
         .args_json(json!({
             "receiver_id": treasury.id(),
@@ -80,8 +80,13 @@ async fn sandbox_deposit_and_agent_payment_use_real_nep141_calls() -> anyhow::Re
         }))
         .deposit(NearToken::from_yoctonear(1))
         .transact()
-        .await?
-        .into_result()?;
+        .await?;
+    println!("Deposit transaction outcome: {:#?}", deposit_result);
+    deposit_result.into_result()?;
+
+    let token_balance_at_treasury =
+        view_json(&token, "ft_balance_of", json!({ "account_id": treasury.id() })).await?;
+    println!("Actual NEP-141 balance at treasury: {token_balance_at_treasury}");
 
     let funded_position = view_json(&treasury, "get_financial_position", json!({})).await?;
     assert_eq!(funded_position["treasury_balance"], "1000");
