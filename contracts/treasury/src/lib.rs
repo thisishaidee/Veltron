@@ -1145,6 +1145,55 @@ mod tests {
     }
 
     #[test]
+    fn mixed_outcome_out_of_order_callbacks_preserve_treasury_accounting() {
+        let mut contract = setup("agent.near");
+        contract.treasury_balance = 1_000;
+
+        // Three transfers are pending simultaneously: 100, 200, and 150.
+        contract.request_payment(account("vendor-a.near"), U128(100), None);
+        contract.request_payment(account("vendor-b.near"), U128(200), None);
+        contract.request_payment(account("vendor-c.near"), U128(150), None);
+
+        let initial = contract.get_financial_position();
+        assert_eq!(initial.treasury_balance.0, 1_000);
+        assert_eq!(initial.pending_discretionary.0, 450);
+        assert_eq!(initial.spendable_balance.0, 450);
+
+        callback_context();
+
+        // Transfer B fails first. Its reservation is released without debiting
+        // the treasury ledger; transfers A and C remain pending.
+        contract.on_transfer_complete(1, Err(PromiseError::Failed));
+        let after_failure = contract.get_financial_position();
+        assert_eq!(after_failure.treasury_balance.0, 1_000);
+        assert_eq!(after_failure.pending_discretionary.0, 250);
+        assert_eq!(after_failure.spendable_balance.0, 650);
+        assert_eq!(
+            contract.get_pending_transfers().iter().map(|p| p.id.0).collect::<Vec<_>>(),
+            vec![0, 2],
+        );
+
+        // Transfer C succeeds next. Only its 150 is deducted.
+        contract.on_transfer_complete(2, Ok(()));
+        let after_c_success = contract.get_financial_position();
+        assert_eq!(after_c_success.treasury_balance.0, 850);
+        assert_eq!(after_c_success.pending_discretionary.0, 100);
+        assert_eq!(after_c_success.spendable_balance.0, 650);
+        assert_eq!(
+            contract.get_pending_transfers().iter().map(|p| p.id.0).collect::<Vec<_>>(),
+            vec![0],
+        );
+
+        // Transfer A succeeds last. The final debit is exactly 100 more.
+        contract.on_transfer_complete(0, Ok(()));
+        let final_position = contract.get_financial_position();
+        assert_eq!(final_position.treasury_balance.0, 750);
+        assert_eq!(final_position.pending_discretionary.0, 0);
+        assert_eq!(final_position.spendable_balance.0, 650);
+        assert!(contract.get_pending_transfers().is_empty());
+    }
+
+    #[test]
     fn successful_commitment_settlement_reduces_balance_and_removes_commitment() {
         let mut contract = setup("owner.near");
         contract.treasury_balance = 1_000;
