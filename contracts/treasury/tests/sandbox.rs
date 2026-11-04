@@ -123,6 +123,42 @@ async fn sandbox_deposit_and_agent_payment_use_real_nep141_calls() -> anyhow::Re
 }
 
 
+
+#[tokio::test]
+async fn sandbox_rejects_malformed_payment_account_id() -> anyhow::Result<()> {
+    let worker = near_workspaces::sandbox().await?;
+    let owner = worker.dev_create_account().await?;
+    let agent = worker.dev_create_account().await?;
+    let token = worker.dev_create_account().await?;
+
+    let treasury = worker.dev_deploy(TREASURY_WASM).await?;
+    treasury
+        .call("new")
+        .args_json(json!({
+            "owner_id": owner.id(),
+            "token_id": token.id(),
+            "agent_id": agent.id(),
+            "max_per_transaction": "500",
+            "safety_reserve": "100"
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    let result = agent
+        .call(treasury.id(), "request_payment")
+        .args_json(json!({
+            "recipient_id": "NOT A VALID ACCOUNT",
+            "amount": "10",
+            "memo": null
+        }))
+        .transact()
+        .await?;
+
+    assert!(result.into_result().is_err());
+    Ok(())
+}
+
 #[tokio::test]
 async fn sandbox_failed_nep141_transfer_clears_pending_and_preserves_treasury() -> anyhow::Result<()> {
     let worker = near_workspaces::sandbox().await?;
