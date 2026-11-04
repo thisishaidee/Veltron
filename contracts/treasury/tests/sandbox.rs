@@ -105,7 +105,7 @@ async fn sandbox_deposit_and_agent_payment_use_real_nep141_calls() -> anyhow::Re
         .transact()
         .await?;
     println!("Agent payment transaction outcome: {:#?}", payment_result);
-    payment_result.into_result()?;
+    payment_result.clone().into_result()?;
     let callback_receipt = payment_result.receipt_outcomes().iter()
         .find(|receipt| receipt.logs.iter().any(|log| log == "VELTRON_TRANSFER_SUCCESS:0"))
         .expect("successful discretionary callback receipt must be present");
