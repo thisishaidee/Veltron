@@ -1250,4 +1250,73 @@ mod tests {
         assert_eq!(contract.balance_observed_at_ns, None);
     }
 
+
+    #[test]
+    #[should_panic(expected = "Treasury is paused")]
+    fn paused_treasury_rejects_new_agent_payment() {
+        let mut contract = setup("agent.near");
+        contract.treasury_balance = 1_000;
+        contract.paused = true;
+        contract.request_payment(account("vendor.near"), U128(50), None);
+    }
+
+    #[test]
+    #[should_panic(expected = "Treasury is paused")]
+    fn paused_treasury_rejects_new_commitment_settlement() {
+        let mut contract = setup("owner.near");
+        contract.treasury_balance = 1_000;
+        contract.create_commitment(
+            "paused-invoice".to_string(),
+            account("vendor.near"),
+            U128(100),
+            "Invoice".to_string(),
+        );
+        contract.paused = true;
+        contract.settle_commitment("paused-invoice".to_string());
+    }
+
+    #[test]
+    fn owner_can_pause_and_unpause_treasury() {
+        let mut contract = setup("owner.near");
+        contract.set_paused(true);
+        assert!(contract.get_pause_status());
+        contract.set_paused(false);
+        assert!(!contract.get_pause_status());
+    }
+
+    #[test]
+    #[should_panic(expected = "Only the treasury owner")]
+    fn non_owner_cannot_pause_treasury() {
+        let mut contract = setup("agent.near");
+        contract.set_paused(true);
+    }
+
+    #[test]
+    fn pending_transfer_callback_completes_while_paused() {
+        let mut contract = setup("agent.near");
+        contract.treasury_balance = 1_000;
+        contract.request_payment(account("vendor.near"), U128(100), None);
+        contract.set_paused(true);
+
+        callback_context();
+        contract.on_transfer_complete(0, Ok(()));
+
+        assert_eq!(contract.treasury_balance, 900);
+        assert!(contract.pending.is_empty());
+        assert!(contract.get_pause_status());
+    }
+
+    #[test]
+    fn accepted_deposit_is_still_credited_while_paused() {
+        let mut contract = setup("owner.near");
+        contract.paused = true;
+        let mut builder = VMContextBuilder::new();
+        builder.predecessor_account_id(account("token.near"));
+        testing_env!(builder.build());
+
+        contract.ft_on_transfer(account("depositor.near"), U128(100), String::new());
+        assert_eq!(contract.treasury_balance, 100);
+        assert!(contract.paused);
+    }
+
 }
