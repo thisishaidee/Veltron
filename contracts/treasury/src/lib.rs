@@ -101,8 +101,13 @@ impl Veltron {
         max_per_transaction: U128,
         safety_reserve: U128,
     ) -> Self {
+        let treasury_id = env::current_account_id();
+        require!(owner_id != treasury_id, "Owner cannot be treasury contract");
+        require!(agent_id != treasury_id, "Agent cannot be treasury contract");
+        require!(token_id != treasury_id, "Token contract cannot be treasury contract");
         require!(owner_id != token_id, "Owner and token contract must differ");
         require!(agent_id != token_id, "Agent and token contract must differ");
+        require!(owner_id != agent_id, "Owner and agent must differ");
         require!(max_per_transaction.0 > 0, "Transaction limit must be positive");
         Self {
             owner_id,
@@ -425,6 +430,64 @@ mod tests {
         )
     }
 
+
+
+    #[test]
+    #[should_panic(expected = "Owner and agent must differ")]
+    fn rejects_owner_and_agent_sharing_one_account() {
+        let _ = Veltron::new(
+            account("owner.near"),
+            account("token.near"),
+            account("owner.near"),
+            U128(500),
+            U128(100),
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "Owner cannot be treasury contract")]
+    fn rejects_treasury_as_owner_at_initialization() {
+        let mut builder = VMContextBuilder::new();
+        builder.current_account_id(account("treasury.near"));
+        testing_env!(builder.build());
+        let _ = Veltron::new(
+            account("treasury.near"),
+            account("token.near"),
+            account("agent.near"),
+            U128(500),
+            U128(100),
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "Agent cannot be treasury contract")]
+    fn rejects_treasury_as_agent_at_initialization() {
+        let mut builder = VMContextBuilder::new();
+        builder.current_account_id(account("treasury.near"));
+        testing_env!(builder.build());
+        let _ = Veltron::new(
+            account("owner.near"),
+            account("token.near"),
+            account("treasury.near"),
+            U128(500),
+            U128(100),
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "Token contract cannot be treasury contract")]
+    fn rejects_treasury_as_token_contract_at_initialization() {
+        let mut builder = VMContextBuilder::new();
+        builder.current_account_id(account("treasury.near"));
+        testing_env!(builder.build());
+        let _ = Veltron::new(
+            account("owner.near"),
+            account("treasury.near"),
+            account("agent.near"),
+            U128(500),
+            U128(100),
+        );
+    }
 
     #[test]
     #[should_panic(expected = "Transaction limit must be positive")]
