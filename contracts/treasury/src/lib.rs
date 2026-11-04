@@ -146,9 +146,9 @@ impl Veltron {
             treasury_balance: 0,
             safety_reserve: safety_reserve.0,
             next_transfer_id: 0,
-            commitments: TreeMap::new(b"veltron_commitments"),
-            pending: TreeMap::new(b"veltron_pending"),
-            settlement_pending: TreeMap::new(b"veltron_settlement_pending"),
+            commitments: TreeMap::new(&b"veltron_commitments"[..]),
+            pending: TreeMap::new(&b"veltron_pending"[..]),
+            settlement_pending: TreeMap::new(&b"veltron_settlement_pending"[..]),
             balance_audit_pending: false,
             paused: false,
             observed_token_balance: None,
@@ -204,7 +204,7 @@ impl Veltron {
         require!(amount.0 > 0, "Commitment amount must be positive");
         require!(description.len() <= MAX_DESCRIPTION_LENGTH, "Description is too long");
         self.commitments.insert(&id, &Commitment {
-            id,
+            id: id.clone(),
             recipient_id,
             amount: amount.0,
             description,
@@ -237,7 +237,7 @@ impl Veltron {
 
     pub fn cancel_commitment(&mut self, id: String) {
         self.assert_owner();
-        require!(!self.settlement_pending.get(&id).copied().unwrap_or(false),
+        require!(!self.settlement_pending.get(&id).unwrap_or(false),
             "Cannot cancel a commitment while settlement is pending");
         self.commitments.remove(&id).unwrap_or_else(|| env::panic_str("Commitment not found"));
     }
@@ -408,7 +408,7 @@ impl Veltron {
                     recipient_id: c.recipient_id.clone(),
                     amount: U128(c.amount),
                     description: c.description.clone(),
-                    settlement_pending: self.settlement_pending.get(&c.id).copied().unwrap_or(false),
+                    settlement_pending: self.settlement_pending.get(&c.id).unwrap_or(false),
                 })
                 .collect(),
         };
