@@ -941,6 +941,62 @@ mod tests {
         assert!(contract.get_pending_transfers().is_empty());
     }
 
+
+    #[test]
+    #[should_panic(expected = "Method is private")]
+    fn rejects_callback_from_external_account() {
+        let mut contract = setup("agent.near");
+        contract.treasury_balance = 1_000;
+        contract.request_payment(account("vendor.near"), U128(50), None);
+
+        let mut builder = VMContextBuilder::new();
+        builder.current_account_id(account("treasury.near"));
+        builder.predecessor_account_id(account("attacker.near"));
+        testing_env!(builder.build());
+        contract.on_transfer_complete(0, Ok(()));
+    }
+
+    #[test]
+    #[should_panic(expected = "Pending transfer not found")]
+    fn rejects_unknown_transfer_callback_id() {
+        let mut contract = setup("agent.near");
+        callback_context();
+        contract.on_transfer_complete(99, Ok(()));
+    }
+
+    #[test]
+    #[should_panic(expected = "Pending transfer not found")]
+    fn rejects_replayed_transfer_callback() {
+        let mut contract = setup("agent.near");
+        contract.treasury_balance = 1_000;
+        contract.request_payment(account("vendor.near"), U128(50), None);
+
+        callback_context();
+        contract.on_transfer_complete(0, Ok(()));
+        contract.on_transfer_complete(0, Ok(()));
+    }
+
+    #[test]
+    fn out_of_order_callbacks_preserve_pending_and_treasury_accounting() {
+        let mut contract = setup("agent.near");
+        contract.treasury_balance = 1_000;
+        contract.request_payment(account("vendor-a.near"), U128(100), None);
+        contract.request_payment(account("vendor-b.near"), U128(200), None);
+        assert_eq!(contract.get_financial_position().pending_discretionary.0, 300);
+
+        callback_context();
+        contract.on_transfer_complete(1, Ok(()));
+        assert_eq!(contract.get_financial_position().treasury_balance.0, 800);
+        assert_eq!(contract.get_financial_position().pending_discretionary.0, 100);
+        assert_eq!(contract.get_financial_position().spendable_balance.0, 600);
+
+        contract.on_transfer_complete(0, Ok(()));
+        assert_eq!(contract.get_financial_position().treasury_balance.0, 700);
+        assert_eq!(contract.get_financial_position().pending_discretionary.0, 0);
+        assert_eq!(contract.get_financial_position().spendable_balance.0, 600);
+        assert!(contract.get_pending_transfers().is_empty());
+    }
+
     #[test]
     fn successful_commitment_settlement_reduces_balance_and_removes_commitment() {
         let mut contract = setup("owner.near");
