@@ -1,103 +1,70 @@
 # VELTRON
 
-**Commitment-aware treasury infrastructure for autonomous businesses, built on [NEAR Protocol](https://near.org/).**
+**Commitment-aware treasury infrastructure for autonomous businesses, built on NEAR Protocol.**
 
 VELTRON protects money already assigned to future business obligations before an autonomous agent can spend treasury funds.
 
 > The agent had permission to spend the money. It just wasn't supposed to spend that money.
 
-## The problem
-
-Autonomous businesses need agents that can pay contractors, suppliers, and service providers. A general spending limit alone cannot protect money already promised to someone else. An agent could stay below its transaction limit and still spend funds reserved for payroll or an invoice.
-
 ## Core mechanism: Commitment Lock
 
-The treasury owner records obligations such as contractor invoices, supplier payments, or payroll, including each obligation's fixed recipient. VELTRON reserves those amounts in its on-chain accounting and only authorizes agent payments from the remaining spendable balance.
+The treasury owner records obligations such as contractor invoices, supplier payments, or payroll. VELTRON reserves those amounts in its on-chain accounting and only authorizes agent payments from the remaining spendable balance.
 
 ```
-Spendable balance =
-  Treasury balance
-  - Active commitments
-  - Safety reserve
-  - Pending discretionary payments
+Spendable = Treasury Balance
+          - Active Commitments
+          - Safety Reserve
+          - Pending Discretionary Payments
 ```
 
-The smart contract—not the AI agent or frontend—is the authority for payment decisions. An agent cannot edit or cancel commitments or change their recipients.
+The contract—not the AI agent or frontend—is the authority for payment decisions.
 
-## Current MVP
+## MVP implementation
 
-The Rust contracts are in `contracts/treasury` and `contracts/test-token`.
+The first Rust contract crate is in `contracts/treasury`.
 
 - One configured NEP-141 fungible token.
-- Owner-managed commitments with fixed recipients, bounded pagination, and aggregate reservation accounting.
+- Owner-managed commitments with fixed recipients.
 - Owner-managed safety reserve and agent transaction limit.
 - Agent-initiated discretionary payments.
 - Owner-initiated commitment settlement.
-- Asynchronous NEP-141 transfer callbacks, with pending transfers reserved until their outcomes are confirmed.
-- Emergency pause for new outgoing payments and commitment settlements.
-- Read-only token-balance audit and guarded reconciliation of observed surplus.
-- Unit tests and NEAR Sandbox integration tests using a test NEP-141 token.
+- Asynchronous transfer callbacks; pending discretionary payments remain reserved until confirmed.
+- Unit tests for the initial accounting and reservation rules.
 
-The MVP supports one owner, one authorized agent, and one configured token. It does not yet support multiple tokens, recurring schedules, cross-chain transfers, or agent-controlled commitment changes.
+Read [the contract design and limitations](docs/CONTRACT-DESIGN.md) before using the MVP.
 
 ## Example
 
-Imagine the treasury has 1,000 test-token units:
+A treasury holds 1,000 test-token units.
 
-| Allocation | Amount |
+| Item | Amount |
 |---|---:|
 | Treasury balance | 1,000 |
 | Contractor commitment | 400 |
 | Supplier commitment | 200 |
 | Safety reserve | 100 |
-| **Available to spend** | **300** |
+| **Spendable** | **300** |
 
-Even if the agent's per-transaction limit is 500, a request for 450 is rejected because it would use protected funds. A request for 250 is within the available balance.
+Even if the agent's per-transaction limit is 500, a request for 450 is rejected. A request for 250 is within the spendable balance.
 
-These are illustrative test-token units, not a live USDC balance.
+These figures describe test-token units, not real USDC or a live stablecoin balance.
 
-## Network and hackathon focus
+## Network and track
 
-- **Network:** NEAR Protocol
-- **Primary track:** Autonomous Business
-- **Related track:** AI Security & Defense
+- **Network:** NEAR Protocol (testnet development target)
+- **Primary hackathon track:** Autonomous Business
+- **Secondary relevance:** AI Security & Defense
 
-## Repository structure
+## Current status
 
-```
-.
-├── .github/workflows/contract.yml
-├── contracts/
-│   ├── test-token/
-│   └── treasury/
-│       ├── src/lib.rs
-│       └── tests/sandbox.rs
-├── docs/CONTRACT-DESIGN.md
-├── Cargo.toml
-└── README.md
-```
+This is an early hackathon MVP under active development. It has not been audited, deployed, or verified on testnet. Do not deposit real funds.
 
-## Run the full contract checks locally
+## Local contract checks
 
-The sandbox integration tests embed the compiled WebAssembly files for both contracts. From the repository root, install the target, build both contracts, and then run the workspace tests:
+From the repository root, run:
 
 ```bash
-rustup target add wasm32-unknown-unknown
-
-cargo build --release -p veltron-treasury --target wasm32-unknown-unknown
-cargo build --release -p veltron-test-token --target wasm32-unknown-unknown
-
-cargo test --workspace
+cargo test -p veltron-treasury
 ```
 
-The GitHub Actions workflow performs these same WebAssembly builds and runs the workspace tests on relevant pushes and pull requests. The shorter `cargo test -p veltron-treasury` command runs the treasury crate's tests, but it does not replace the full WebAssembly build plus workspace/sandbox check above.
-
-## Security and project status
-
-VELTRON is an early hackathon MVP under active development. It has **not** been independently audited, deployed, or verified on NEAR testnet. Do not deposit real funds or use this implementation to manage production assets.
-
-Before testnet or production use, review [the contract design and limitations](docs/CONTRACT-DESIGN.md), verify NEP-141 transfer and callback behavior, complete adversarial testing, and obtain an independent security review.
-
-## Maintainer
-
-Built by [@thisishaidee](https://github.com/thisishaidee).
+A GitHub Actions workflow also runs the contract tests on relevant pushes and pull requests.
