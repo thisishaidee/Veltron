@@ -52,7 +52,7 @@ Commitment recipients are fixed by the owner. The agent cannot change commitment
 
 - This is an MVP implementation, not an audited production treasury.
 - Internal accounting tracks deposits and outgoing transfers made through this contract. It does not query the token balance on every decision.
-- Tokens transferred directly to the contract without `ft_transfer_call` are not credited.
+- Tokens transferred directly to the contract without `ft_transfer_call` are not credited. They become unaccounted token surplus: the actual NEP-141 balance can exceed the internal ledger, while spendable balance remains based on the ledger. The MVP has no surplus-recovery method; do not assume direct transfers are recoverable.
 - The configured token contract is trusted; deploying with a malicious token address is unsafe.
 - Token transfer callbacks, token registration requirements, storage costs, and deployed test-token behavior must be verified on testnet.
 - A safety reserve is a protected accounting floor, not a separate escrow account.
