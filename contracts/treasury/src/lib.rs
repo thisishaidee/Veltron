@@ -1296,6 +1296,11 @@ mod tests {
         let mut contract = setup("agent.near");
         contract.treasury_balance = 1_000;
         contract.request_payment(account("vendor.near"), U128(100), None);
+
+        let mut owner_context = VMContextBuilder::new();
+        owner_context.current_account_id(account("treasury.near"));
+        owner_context.predecessor_account_id(account("owner.near"));
+        testing_env!(owner_context.build());
         contract.set_paused(true);
 
         callback_context();
