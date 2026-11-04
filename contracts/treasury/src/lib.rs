@@ -292,7 +292,7 @@ impl Veltron {
     pub fn settle_commitment(&mut self, id: String) -> Promise {
         self.assert_owner();
         require!(!self.paused, "Treasury is paused");
-        require!(!self.settlement_pending.get(&id).copied().unwrap_or(false),
+        require!(!self.settlement_pending.get(&id).unwrap_or(false),
             "Settlement already pending");
         let commitment = self.commitments.get(&id)
             .unwrap_or_else(|| env::panic_str("Commitment not found"))
@@ -860,7 +860,7 @@ mod tests {
             U128(600),
             "Payroll".to_string(),
         );
-        contract.pending.insert(7, PendingTransfer {
+        contract.pending.insert(&7, &PendingTransfer {
             id: 7,
             amount: 200,
             kind: PendingKind::Discretionary {
@@ -1377,7 +1377,7 @@ mod tests {
         let mut contract = setup("agent.near");
         contract.treasury_balance = 1_000;
         for id in 0..MAX_PENDING_TRANSFERS as u64 {
-            contract.pending.insert(id, PendingTransfer {
+            contract.pending.insert(&id, &PendingTransfer {
                 id,
                 amount: 1,
                 kind: PendingKind::Discretionary {
