@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 
 const FT_TRANSFER_GAS: Gas = Gas::from_tgas(10);
 const CALLBACK_GAS: Gas = Gas::from_tgas(10);
+const MAX_COMMITMENT_ID_LENGTH: usize = 64;
 
 #[near(serializers = [borsh, json])]
 #[derive(Clone)]
@@ -91,6 +92,7 @@ impl Veltron {
     ) -> Self {
         require!(owner_id != token_id, "Owner and token contract must differ");
         require!(agent_id != token_id, "Agent and token contract must differ");
+        require!(max_per_transaction.0 > 0, "Transaction limit must be positive");
         Self {
             owner_id,
             token_id,
@@ -142,6 +144,8 @@ impl Veltron {
     ) {
         self.assert_owner();
         require!(!id.is_empty(), "Commitment ID cannot be empty");
+        require!(id.len() <= MAX_COMMITMENT_ID_LENGTH, "Commitment ID is too long");
+        require!(recipient_id != env::current_account_id(), "Commitment recipient cannot be treasury");
         require!(!self.commitments.contains_key(&id), "Commitment already exists");
         require!(amount.0 > 0, "Commitment amount must be positive");
         require!(description.len() <= 256, "Description is too long");
@@ -164,6 +168,7 @@ impl Veltron {
         self.assert_owner();
         require!(amount.0 > 0, "Commitment amount must be positive");
         require!(description.len() <= 256, "Description is too long");
+        require!(recipient_id != env::current_account_id(), "Commitment recipient cannot be treasury");
         require!(!self.settlement_pending.get(&id).copied().unwrap_or(false),
             "Cannot update a commitment while settlement is pending");
         let commitment = self.commitments.get_mut(&id)
@@ -366,6 +371,65 @@ mod tests {
             U128(500),
             U128(100),
         )
+    }
+
+
+    #[test]
+    #[should_panic(expected = "Transaction limit must be positive")]
+    fn rejects_zero_transaction_limit_at_initialization() {
+        let _ = Veltron::new(
+            account("owner.near"),
+            account("token.near"),
+            account("agent.near"),
+            U128(0),
+            U128(100),
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "Commitment recipient cannot be treasury")]
+    fn rejects_commitment_to_treasury_itself() {
+        let mut contract = setup("owner.near");
+        let treasury_id = env::current_account_id();
+        contract.create_commitment(
+            "self-payment".to_string(),
+            treasury_id,
+            U128(100),
+            "Invalid self-payment".to_string(),
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "Commitment recipient cannot be treasury")]
+    fn rejects_updating_commitment_recipient_to_treasury() {
+        let mut contract = setup("owner.near");
+        contract.treasury_balance = 1_000;
+        contract.create_commitment(
+            "invoice-self-update".to_string(),
+            account("vendor.near"),
+            U128(100),
+            "Vendor invoice".to_string(),
+        );
+        let treasury_id = env::current_account_id();
+        contract.update_commitment(
+            "invoice-self-update".to_string(),
+            treasury_id,
+            U128(100),
+            "Invalid self-payment".to_string(),
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "Commitment ID is too long")]
+    fn rejects_oversized_commitment_id() {
+        let mut contract = setup("owner.near");
+        contract.treasury_balance = 1_000;
+        contract.create_commitment(
+            "x".repeat(MAX_COMMITMENT_ID_LENGTH + 1),
+            account("vendor.near"),
+            U128(100),
+            "Vendor invoice".to_string(),
+        );
     }
 
     #[test]
