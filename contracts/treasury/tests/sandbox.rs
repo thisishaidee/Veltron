@@ -106,6 +106,12 @@ async fn sandbox_deposit_and_agent_payment_use_real_nep141_calls() -> anyhow::Re
         .await?;
     println!("Agent payment transaction outcome: {:#?}", payment_result);
     payment_result.into_result()?;
+    let callback_receipt = payment_result.receipt_outcomes().iter()
+        .find(|receipt| receipt.logs.iter().any(|log| log == "VELTRON_TRANSFER_SUCCESS:0"))
+        .expect("successful discretionary callback receipt must be present");
+    let callback_gas = callback_receipt.gas_burnt.as_gas();
+    println!("Discretionary success callback gas: {} Tgas", callback_gas as f64 / 1_000_000_000_000.0);
+    assert!(callback_gas < 5_000_000_000_000, "callback consumed more than 5 Tgas: {}", callback_gas);
 
     let final_position = view_json(&treasury, "get_financial_position", json!({})).await?;
     let vendor_balance = view_json(
@@ -205,14 +211,38 @@ async fn sandbox_commitment_settlement_success_failure_and_retry() -> anyhow::Re
         .await?
         .into_result()?;
 
+    // Fill the commitment collection to its configured maximum before settlement.
+    // This stresses callback storage updates while the largest supported commitment set exists.
+    for index in 0..254 {
+        owner
+            .call(treasury.id(), "create_commitment")
+            .args_json(json!({
+                "id": format!("filler-{index:03}"),
+                "recipient_id": paid_vendor.id(),
+                "amount": "1",
+                "description": "Gas stress fixture"
+            }))
+            .transact()
+            .await?
+            .into_result()?;
+    }
+
     // Registered recipient: the real NEP-141 transfer and callback should settle.
-    owner
+    let successful_settlement = owner
         .call(treasury.id(), "settle_commitment")
         .args_json(json!({ "id": "paid-invoice" }))
         .max_gas()
         .transact()
-        .await?
-        .into_result()?;
+        .await?;
+    successful_settlement.clone().into_result()?;
+    let success_callback_receipt = successful_settlement.receipt_outcomes().iter()
+        .find(|receipt| receipt.logs.iter().any(|log| log == "VELTRON_TRANSFER_SUCCESS:0"))
+        .expect("successful commitment callback receipt must be present");
+    let success_callback_gas = success_callback_receipt.gas_burnt.as_gas();
+    println!("Commitment success callback gas at 256 commitments: {} Tgas",
+        success_callback_gas as f64 / 1_000_000_000_000.0);
+    assert!(success_callback_gas < 5_000_000_000_000,
+        "commitment success callback consumed more than 5 Tgas: {}", success_callback_gas);
 
     let after_success = view_json(&treasury, "get_financial_position", json!({})).await?;
     let paid_vendor_balance =
@@ -222,35 +252,51 @@ async fn sandbox_commitment_settlement_success_failure_and_retry() -> anyhow::Re
 
     assert_eq!(after_success["treasury_balance"], "800");
     assert_eq!(paid_vendor_balance, "200");
-    assert_eq!(commitments_after_success["commitments"].as_array().unwrap().len(), 1);
-    assert_eq!(commitments_after_success["commitments"][0]["id"], "retry-invoice");
+    assert_eq!(after_success["active_commitments"], "404");
+    assert_eq!(commitments_after_success["commitments"].as_array().unwrap().len(), 50);
 
     // Unregistered recipient: NEP-141 transfer fails, callback must preserve
     // the commitment and clear its settlement-pending lock.
-    owner
+    let failed_settlement = owner
         .call(treasury.id(), "settle_commitment")
         .args_json(json!({ "id": "retry-invoice" }))
         .max_gas()
         .transact()
-        .await?
-        .into_result()?;
+        .await?;
+    failed_settlement.clone().into_result()?;
+    let failure_callback_receipt = failed_settlement.receipt_outcomes().iter()
+        .find(|receipt| receipt.logs.iter().any(|log| log == "VELTRON_TRANSFER_FAILED:1"))
+        .expect("failed commitment callback receipt must be present");
+    let failure_callback_gas = failure_callback_receipt.gas_burnt.as_gas();
+    println!("Commitment failure callback gas at 255 commitments: {} Tgas",
+        failure_callback_gas as f64 / 1_000_000_000_000.0);
+    assert!(failure_callback_gas < 5_000_000_000_000,
+        "commitment failure callback consumed more than 5 Tgas: {}", failure_callback_gas);
 
     let after_failure = view_json(&treasury, "get_financial_position", json!({})).await?;
     let commitments_after_failure =
         view_json(&treasury, "get_commitments", json!({ "from_id": null, "limit": 50 })).await?;
     assert_eq!(after_failure["treasury_balance"], "800");
-    assert_eq!(commitments_after_failure["commitments"].as_array().unwrap().len(), 1);
-    assert_eq!(commitments_after_failure["commitments"][0]["settlement_pending"], false);
+    assert_eq!(after_failure["active_commitments"], "404");
+    assert_eq!(commitments_after_failure["commitments"].as_array().unwrap().len(), 50);
 
     // Register the recipient and retry: a failed settlement must be recoverable.
     register_token_account(&owner, &token, initially_unregistered_vendor.id().as_str()).await?;
-    owner
+    let retried_settlement = owner
         .call(treasury.id(), "settle_commitment")
         .args_json(json!({ "id": "retry-invoice" }))
         .max_gas()
         .transact()
-        .await?
-        .into_result()?;
+        .await?;
+    retried_settlement.clone().into_result()?;
+    let retry_callback_receipt = retried_settlement.receipt_outcomes().iter()
+        .find(|receipt| receipt.logs.iter().any(|log| log == "VELTRON_TRANSFER_SUCCESS:2"))
+        .expect("retried commitment callback receipt must be present");
+    let retry_callback_gas = retry_callback_receipt.gas_burnt.as_gas();
+    println!("Commitment retry callback gas at 255 commitments: {} Tgas",
+        retry_callback_gas as f64 / 1_000_000_000_000.0);
+    assert!(retry_callback_gas < 5_000_000_000_000,
+        "commitment retry callback consumed more than 5 Tgas: {}", retry_callback_gas);
 
     let after_retry = view_json(&treasury, "get_financial_position", json!({})).await?;
     let retry_vendor_balance = view_json(
@@ -264,7 +310,8 @@ async fn sandbox_commitment_settlement_success_failure_and_retry() -> anyhow::Re
 
     assert_eq!(after_retry["treasury_balance"], "650");
     assert_eq!(retry_vendor_balance, "150");
-    assert_eq!(final_commitments["commitments"].as_array().unwrap().len(), 0);
+    assert_eq!(after_retry["active_commitments"], "254");
+    assert_eq!(final_commitments["commitments"].as_array().unwrap().len(), 50);
     assert_eq!(after_retry["pending_discretionary"], "0");
 
     Ok(())
