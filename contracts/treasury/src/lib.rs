@@ -82,7 +82,6 @@ pub struct Veltron {
     agent_id: AccountId,
     max_per_transaction: u128,
     treasury_balance: u128,
-    active_commitment_total: u128,
     safety_reserve: u128,
     next_transfer_id: u64,
     commitments: BTreeMap<String, Commitment>,
@@ -109,7 +108,6 @@ impl Veltron {
             agent_id,
             max_per_transaction: max_per_transaction.0,
             treasury_balance: 0,
-            active_commitment_total: 0,
             safety_reserve: safety_reserve.0,
             next_transfer_id: 0,
             commitments: BTreeMap::new(),
@@ -161,15 +159,12 @@ impl Veltron {
         require!(self.commitments.len() < MAX_COMMITMENTS, "Maximum active commitments reached");
         require!(amount.0 > 0, "Commitment amount must be positive");
         require!(description.len() <= 256, "Description is too long");
-        let updated_total = self.active_commitment_total.checked_add(amount.0)
-            .unwrap_or_else(|| env::panic_str("Commitment total overflow"));
         self.commitments.insert(id.clone(), Commitment {
             id,
             recipient_id,
             amount: amount.0,
             description,
         });
-        self.active_commitment_total = updated_total;
         self.assert_solvent();
     }
 
@@ -186,19 +181,11 @@ impl Veltron {
         require!(recipient_id != env::current_account_id(), "Commitment recipient cannot be treasury");
         require!(!self.settlement_pending.get(&id).copied().unwrap_or(false),
             "Cannot update a commitment while settlement is pending");
-        let old_amount = self.commitments.get(&id)
-            .unwrap_or_else(|| env::panic_str("Commitment not found"))
-            .amount;
-        let updated_total = self.active_commitment_total
-            .checked_sub(old_amount)
-            .and_then(|total| total.checked_add(amount.0))
-            .unwrap_or_else(|| env::panic_str("Commitment total overflow"));
         let commitment = self.commitments.get_mut(&id)
             .unwrap_or_else(|| env::panic_str("Commitment not found"));
         commitment.recipient_id = recipient_id;
         commitment.amount = amount.0;
         commitment.description = description;
-        self.active_commitment_total = updated_total;
         self.assert_solvent();
     }
 
@@ -207,8 +194,6 @@ impl Veltron {
         require!(!self.settlement_pending.get(&id).copied().unwrap_or(false),
             "Cannot cancel a commitment while settlement is pending");
         let removed = self.commitments.remove(&id).unwrap_or_else(|| env::panic_str("Commitment not found"));
-        self.active_commitment_total = self.active_commitment_total.checked_sub(removed.amount)
-            .unwrap_or_else(|| env::panic_str("Commitment total underflow"));
     }
 
     pub fn set_safety_reserve(&mut self, amount: U128) {
@@ -326,8 +311,6 @@ impl Veltron {
                 if let PendingKind::CommitmentSettlement { commitment_id } = transfer.kind {
                     let commitment = self.commitments.remove(&commitment_id)
                         .unwrap_or_else(|| env::panic_str("Commitment not found during settlement callback"));
-                    self.active_commitment_total = self.active_commitment_total.checked_sub(commitment.amount)
-                        .unwrap_or_else(|| env::panic_str("Commitment total underflow"));
                     self.settlement_pending.remove(&commitment_id);
                 }
                 env::log_str(&format!("VELTRON_TRANSFER_SUCCESS:{}", transfer_id));
@@ -357,8 +340,14 @@ impl Veltron {
         })
     }
 
+    fn active_commitment_total(&self) -> u128 {
+        self.commitments.values().fold(0u128, |sum, c| {
+            sum.checked_add(c.amount).unwrap_or_else(|| env::panic_str("Commitment total overflow"))
+        })
+    }
+
     fn calculate_position(&self) -> FinancialPosition {
-        let commitments = self.active_commitment_total;
+        let commitments = self.active_commitment_total();
         let pending = self.pending_discretionary_total();
         let reserved = commitments
             .checked_add(self.safety_reserve)
@@ -375,7 +364,7 @@ impl Veltron {
     }
 
     fn assert_solvent(&self) {
-        let reserved = self.active_commitment_total
+        let reserved = self.active_commitment_total()
             .checked_add(self.safety_reserve)
             .and_then(|v| v.checked_add(self.pending_discretionary_total()))
             .unwrap_or_else(|| env::panic_str("Reserved balance overflow"));
