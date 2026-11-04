@@ -124,6 +124,40 @@ async fn sandbox_deposit_and_agent_payment_use_real_nep141_calls() -> anyhow::Re
 
 
 
+
+#[tokio::test]
+async fn sandbox_rejects_external_callback_invocation() -> anyhow::Result<()> {
+    let worker = near_workspaces::sandbox().await?;
+    let owner = worker.dev_create_account().await?;
+    let agent = worker.dev_create_account().await?;
+    let token = worker.dev_create_account().await?;
+
+    let treasury = worker.dev_deploy(TREASURY_WASM).await?;
+    treasury
+        .call("new")
+        .args_json(json!({
+            "owner_id": owner.id(),
+            "token_id": token.id(),
+            "agent_id": agent.id(),
+            "max_per_transaction": "500",
+            "safety_reserve": "100"
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    // Exercise NEAR's generated #[private] check through the deployed entry point.
+    let result = owner
+        .call(treasury.id(), "on_transfer_complete")
+        .args_json(json!({ "transfer_id": 0 }))
+        .transact()
+        .await?;
+
+    assert!(result.into_result().is_err());
+    Ok(())
+}
+
+
 #[tokio::test]
 async fn sandbox_rejects_malformed_payment_account_id() -> anyhow::Result<()> {
     let worker = near_workspaces::sandbox().await?;
