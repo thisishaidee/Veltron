@@ -193,7 +193,7 @@ impl Veltron {
         self.assert_owner();
         require!(!self.settlement_pending.get(&id).copied().unwrap_or(false),
             "Cannot cancel a commitment while settlement is pending");
-        let removed = self.commitments.remove(&id).unwrap_or_else(|| env::panic_str("Commitment not found"));
+        self.commitments.remove(&id).unwrap_or_else(|| env::panic_str("Commitment not found"));
     }
 
     pub fn set_safety_reserve(&mut self, amount: U128) {
@@ -309,7 +309,7 @@ impl Veltron {
                 require!(self.treasury_balance >= transfer.amount, "Treasury accounting underflow");
                 self.treasury_balance -= transfer.amount;
                 if let PendingKind::CommitmentSettlement { commitment_id } = transfer.kind {
-                    let commitment = self.commitments.remove(&commitment_id)
+                    self.commitments.remove(&commitment_id)
                         .unwrap_or_else(|| env::panic_str("Commitment not found during settlement callback"));
                     self.settlement_pending.remove(&commitment_id);
                 }
