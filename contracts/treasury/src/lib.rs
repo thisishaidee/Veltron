@@ -2,11 +2,12 @@ use near_sdk::{
     env, ext_contract, near, require, AccountId, Gas, NearToken, PanicOnDefault, Promise,
     PromiseError, PromiseOrValue,
 };
-use near_sdk::json_types::U128;
+use near_sdk::json_types::{U128, U64};
 use std::collections::BTreeMap;
 
 const FT_TRANSFER_GAS: Gas = Gas::from_tgas(10);
 const CALLBACK_GAS: Gas = Gas::from_tgas(10);
+const BALANCE_QUERY_GAS: Gas = Gas::from_tgas(5);
 const MAX_COMMITMENT_ID_LENGTH: usize = 64;
 const MAX_DESCRIPTION_LENGTH: usize = 256;
 const MAX_PAYMENT_MEMO_LENGTH: usize = 256;
@@ -48,6 +49,14 @@ pub struct FinancialPosition {
 }
 
 #[near(serializers = [json])]
+pub struct TokenBalanceAudit {
+    pub audit_pending: bool,
+    pub observed_token_balance: Option<U128>,
+    pub ledger_balance_at_observation: Option<U128>,
+    pub observed_at_ns: Option<U64>,
+}
+
+#[near(serializers = [json])]
 pub struct CommitmentPage {
     pub commitments: Vec<CommitmentView>,
     pub next_cursor: Option<String>,
@@ -65,6 +74,7 @@ pub struct CommitmentView {
 #[ext_contract(ext_ft)]
 pub trait FungibleToken {
     fn ft_transfer(&mut self, receiver_id: AccountId, amount: U128, memo: Option<String>);
+    fn ft_balance_of(&self, account_id: AccountId) -> U128;
 }
 
 #[ext_contract(ext_self)]
@@ -73,6 +83,10 @@ pub trait VeltronCallbacks {
         &mut self,
         transfer_id: u64,
         #[callback_result] result: Result<(), PromiseError>,
+    );
+    fn on_balance_audit_complete(
+        &mut self,
+        #[callback_result] result: Result<U128, PromiseError>,
     );
 }
 
@@ -89,6 +103,10 @@ pub struct Veltron {
     commitments: BTreeMap<String, Commitment>,
     pending: BTreeMap<u64, PendingTransfer>,
     settlement_pending: BTreeMap<String, bool>,
+    balance_audit_pending: bool,
+    observed_token_balance: Option<u128>,
+    ledger_balance_at_observation: Option<u128>,
+    balance_observed_at_ns: Option<u64>,
 }
 
 #[near]
@@ -120,6 +138,10 @@ impl Veltron {
             commitments: BTreeMap::new(),
             pending: BTreeMap::new(),
             settlement_pending: BTreeMap::new(),
+            balance_audit_pending: false,
+            observed_token_balance: None,
+            ledger_balance_at_observation: None,
+            balance_observed_at_ns: None,
         }
     }
 
@@ -257,6 +279,50 @@ impl Veltron {
 
     pub fn get_financial_position(&self) -> FinancialPosition {
         self.calculate_position()
+    }
+
+    /// Requests a read-only snapshot of the configured NEP-141 token balance.
+    /// The result is observational only and never changes the internal ledger.
+    pub fn refresh_token_balance_audit(&mut self) -> Promise {
+        self.assert_owner();
+        require!(!self.balance_audit_pending, "A token balance audit is already pending");
+        self.balance_audit_pending = true;
+        ext_ft::ext(self.token_id.clone())
+            .with_static_gas(BALANCE_QUERY_GAS)
+            .ft_balance_of(env::current_account_id())
+            .then(
+                ext_self::ext(env::current_account_id())
+                    .with_static_gas(CALLBACK_GAS)
+                    .on_balance_audit_complete()
+            )
+    }
+
+    pub fn get_token_balance_audit(&self) -> TokenBalanceAudit {
+        TokenBalanceAudit {
+            audit_pending: self.balance_audit_pending,
+            observed_token_balance: self.observed_token_balance.map(U128),
+            ledger_balance_at_observation: self.ledger_balance_at_observation.map(U128),
+            observed_at_ns: self.balance_observed_at_ns.map(U64),
+        }
+    }
+
+    #[private]
+    pub fn on_balance_audit_complete(
+        &mut self,
+        #[callback_result] result: Result<U128, PromiseError>,
+    ) {
+        self.balance_audit_pending = false;
+        match result {
+            Ok(actual_balance) => {
+                self.observed_token_balance = Some(actual_balance.0);
+                self.ledger_balance_at_observation = Some(self.treasury_balance);
+                self.balance_observed_at_ns = Some(env::block_timestamp());
+                env::log_str("VELTRON_TOKEN_BALANCE_AUDIT: completed");
+            }
+            Err(_) => {
+                env::log_str("VELTRON_TOKEN_BALANCE_AUDIT: failed");
+            }
+        }
     }
 
     /// Returns commitments after `from_id` (exclusive), with a bounded page size.
