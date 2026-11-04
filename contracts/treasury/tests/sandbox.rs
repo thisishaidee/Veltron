@@ -272,6 +272,72 @@ async fn sandbox_commitment_settlement_success_failure_and_retry() -> anyhow::Re
 
 
 
+
+#[tokio::test]
+async fn sandbox_direct_token_transfer_is_not_credited_to_internal_ledger() -> anyhow::Result<()> {
+    let worker = near_workspaces::sandbox().await?;
+    let owner = worker.dev_create_account().await?;
+    let agent = worker.dev_create_account().await?;
+
+    let token = worker.dev_deploy(TOKEN_WASM).await?;
+    token
+        .call("new")
+        .args_json(json!({
+            "owner_id": owner.id(),
+            "total_supply": "10000",
+            "metadata": {
+                "spec": "ft-1.0.0",
+                "name": "VELTRON Test Token",
+                "symbol": "VTT",
+                "decimals": 6
+            }
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    let treasury = worker.dev_deploy(TREASURY_WASM).await?;
+    treasury
+        .call("new")
+        .args_json(json!({
+            "owner_id": owner.id(),
+            "token_id": token.id(),
+            "agent_id": agent.id(),
+            "max_per_transaction": "500",
+            "safety_reserve": "100"
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    register_token_account(&owner, &token, treasury.id().as_str()).await?;
+
+    // Plain ft_transfer moves tokens but does not invoke ft_on_transfer.
+    owner
+        .call(token.id(), "ft_transfer")
+        .args_json(json!({
+            "receiver_id": treasury.id(),
+            "amount": "250",
+            "memo": "Direct transfer without receiver hook"
+        }))
+        .deposit(NearToken::from_yoctonear(1))
+        .transact()
+        .await?
+        .into_result()?;
+
+    let position = view_json(&treasury, "get_financial_position", json!({})).await?;
+    let actual_balance =
+        view_json(&token, "ft_balance_of", json!({ "account_id": treasury.id() })).await?;
+
+    // The token balance increased, but the internal ledger remains uncredited.
+    assert_eq!(actual_balance, "250");
+    assert_eq!(position["treasury_balance"], "0");
+    assert_eq!(position["spendable_balance"], "0");
+
+    Ok(())
+}
+
+
 #[tokio::test]
 async fn sandbox_rejects_forged_and_unsupported_deposits() -> anyhow::Result<()> {
     let worker = near_workspaces::sandbox().await?;
