@@ -1109,4 +1109,39 @@ mod tests {
         contract.cancel_commitment("vendor".to_string());
         assert_eq!(contract.get_financial_position().spendable_balance.0, 900);
     }
+
+    #[test]
+    #[should_panic(expected = "Token balance audit in progress")]
+    fn rejects_deposit_while_balance_audit_is_pending() {
+        let mut contract = setup("token.near");
+        contract.balance_audit_pending = true;
+        contract.ft_on_transfer(
+            account("depositor.near"),
+            U128(10),
+            String::new(),
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "Token balance audit in progress")]
+    fn rejects_outgoing_transfer_while_balance_audit_is_pending() {
+        let mut contract = setup("agent.near");
+        contract.treasury_balance = 1_000;
+        contract.balance_audit_pending = true;
+        contract.request_payment(account("vendor.near"), U128(10), None);
+    }
+
+    #[test]
+    #[should_panic(expected = "Cannot audit while transfers are pending")]
+    fn rejects_balance_audit_while_outgoing_transfer_is_pending() {
+        let mut contract = setup("agent.near");
+        contract.treasury_balance = 1_000;
+        contract.request_payment(account("vendor.near"), U128(10), None);
+
+        let mut builder = VMContextBuilder::new();
+        builder.predecessor_account_id(account("owner.near"));
+        testing_env!(builder.build());
+        contract.refresh_token_balance_audit();
+    }
+
 }
