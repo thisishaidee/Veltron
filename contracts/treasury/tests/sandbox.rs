@@ -271,6 +271,96 @@ async fn sandbox_commitment_settlement_success_failure_and_retry() -> anyhow::Re
 }
 
 
+
+#[tokio::test]
+async fn sandbox_rejects_forged_and_unsupported_deposits() -> anyhow::Result<()> {
+    let worker = near_workspaces::sandbox().await?;
+    let owner = worker.dev_create_account().await?;
+    let attacker = worker.dev_create_account().await?;
+
+    let token = worker.dev_deploy(TOKEN_WASM).await?;
+    token
+        .call("new")
+        .args_json(json!({
+            "owner_id": owner.id(),
+            "total_supply": "10000",
+            "metadata": {
+                "spec": "ft-1.0.0",
+                "name": "VELTRON Test Token",
+                "symbol": "VTT",
+                "decimals": 6
+            }
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    let treasury = worker.dev_deploy(TREASURY_WASM).await?;
+    treasury
+        .call("new")
+        .args_json(json!({
+            "owner_id": owner.id(),
+            "token_id": token.id(),
+            "agent_id": attacker.id(),
+            "max_per_transaction": "500",
+            "safety_reserve": "100"
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    register_token_account(&owner, &token, treasury.id().as_str()).await?;
+
+    // A random account cannot impersonate the configured token contract.
+    let forged = attacker
+        .call(treasury.id(), "ft_on_transfer")
+        .args_json(json!({
+            "sender_id": owner.id(),
+            "amount": "500",
+            "msg": ""
+        }))
+        .transact()
+        .await?;
+    assert!(forged.into_result().is_err());
+
+    let after_forgery =
+        view_json(&treasury, "get_financial_position", json!({})).await?;
+    assert_eq!(after_forgery["treasury_balance"], "0");
+
+    let owner_balance_before =
+        view_json(&token, "ft_balance_of", json!({ "account_id": owner.id() })).await?;
+
+    // The configured token may call the receiver, but unsupported deposit
+    // messages are rejected and NEP-141 must refund the unaccepted amount.
+    let unsupported = owner
+        .call(token.id(), "ft_transfer_call")
+        .args_json(json!({
+            "receiver_id": treasury.id(),
+            "amount": "500",
+            "memo": "Unsupported deposit test",
+            "msg": "not-an-empty-message"
+        }))
+        .deposit(NearToken::from_yoctonear(1))
+        .transact()
+        .await?;
+    // Receiver failure is handled by the NEP-141 resolver; inspect final balances.
+    let _ = unsupported;
+
+    let after_unsupported =
+        view_json(&treasury, "get_financial_position", json!({})).await?;
+    let owner_balance_after =
+        view_json(&token, "ft_balance_of", json!({ "account_id": owner.id() })).await?;
+    let treasury_token_balance =
+        view_json(&token, "ft_balance_of", json!({ "account_id": treasury.id() })).await?;
+
+    assert_eq!(after_unsupported["treasury_balance"], "0");
+    assert_eq!(owner_balance_after, owner_balance_before);
+    assert_eq!(treasury_token_balance, "0");
+
+    Ok(())
+}
+
+
 #[tokio::test]
 async fn sandbox_rejects_external_callback_invocation() -> anyhow::Result<()> {
     let worker = near_workspaces::sandbox().await?;
