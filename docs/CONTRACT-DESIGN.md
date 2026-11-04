@@ -20,6 +20,13 @@ Spendable = max(
 
 Pending discretionary transfers are subtracted separately because NEAR cross-contract calls are asynchronous. The funds remain reserved until the token transfer callback confirms success or failure.
 
+## Pending-transfer monitoring and limits
+
+- Each outgoing transfer is recorded with a monotonically increasing ID, amount, transfer kind, and creation timestamp before the NEP-141 call is scheduled.
+- `get_pending_transfers` exposes the current bounded in-flight list and timestamps. An old entry is an alert for investigation, not proof of failure: the token transfer may have succeeded even if the callback did not complete.
+- The contract allows at most 64 pending transfers. New outgoing transfers are rejected at the cap; existing callbacks remain able to clear entries normally.
+- There is deliberately no owner force-clear or timeout-based release. Funds remain reserved until the real transfer outcome is resolved. Operational recovery for a genuinely missing callback requires inspecting the token contract and chain receipts, then a separately designed, evidence-based procedure.
+
 ## Emergency pause
 
 - The owner can call `set_paused(true)` to block new discretionary payments and commitment settlements. `get_pause_status` exposes the current state.
