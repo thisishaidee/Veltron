@@ -159,6 +159,7 @@ impl Veltron {
         env::log_str(&format!("VELTRON_DEPOSIT: predecessor={}", predecessor));
         env::log_str(&format!("VELTRON_DEPOSIT: configured_token={}", self.token_id));
         require!(predecessor == self.token_id, "Untrusted token contract");
+        require!(!self.balance_audit_pending, "Token balance audit in progress");
 
         env::log_str(&format!("VELTRON_DEPOSIT: msg_empty={}", msg.is_empty()));
         require!(msg.is_empty(), "Unsupported deposit message");
@@ -286,6 +287,7 @@ impl Veltron {
     pub fn refresh_token_balance_audit(&mut self) -> Promise {
         self.assert_owner();
         require!(!self.balance_audit_pending, "A token balance audit is already pending");
+        require!(self.pending.is_empty(), "Cannot audit while transfers are pending");
         self.balance_audit_pending = true;
         ext_ft::ext(self.token_id.clone())
             .with_static_gas(BALANCE_QUERY_GAS)
@@ -451,6 +453,7 @@ impl Veltron {
     }
 
     fn start_transfer(&mut self, amount: u128, kind: PendingKind) -> Promise {
+        require!(!self.balance_audit_pending, "Token balance audit in progress");
         let id = self.next_transfer_id;
         self.next_transfer_id = self.next_transfer_id.checked_add(1)
             .unwrap_or_else(|| env::panic_str("Transfer ID overflow"));
