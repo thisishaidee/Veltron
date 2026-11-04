@@ -111,6 +111,7 @@ pub struct Veltron {
     safety_reserve: u128,
     next_transfer_id: u64,
     commitments: TreeMap<String, Commitment>,
+    active_commitments_total: u128,
     pending: TreeMap<u64, PendingTransfer>,
     settlement_pending: TreeMap<String, bool>,
     balance_audit_pending: bool,
@@ -147,6 +148,7 @@ impl Veltron {
             safety_reserve: safety_reserve.0,
             next_transfer_id: 0,
             commitments: TreeMap::new(&b"veltron_commitments"[..]),
+            active_commitments_total: 0,
             pending: TreeMap::new(&b"veltron_pending"[..]),
             settlement_pending: TreeMap::new(&b"veltron_settlement_pending"[..]),
             balance_audit_pending: false,
@@ -203,12 +205,15 @@ impl Veltron {
         require!(self.commitments.len() < MAX_COMMITMENTS as u64, "Maximum active commitments reached");
         require!(amount.0 > 0, "Commitment amount must be positive");
         require!(description.len() <= MAX_DESCRIPTION_LENGTH, "Description is too long");
+        let new_total = self.active_commitments_total.checked_add(amount.0)
+            .unwrap_or_else(|| env::panic_str("Commitment total overflow"));
         self.commitments.insert(&id, &Commitment {
             id: id.clone(),
             recipient_id,
             amount: amount.0,
             description,
         });
+        self.active_commitments_total = new_total;
         self.assert_solvent();
     }
 
@@ -228,10 +233,15 @@ impl Veltron {
             "Cannot update a commitment while settlement is pending");
         let mut commitment = self.commitments.get(&id)
             .unwrap_or_else(|| env::panic_str("Commitment not found"));
+        let new_total = self.active_commitments_total
+            .checked_sub(commitment.amount)
+            .and_then(|total| total.checked_add(amount.0))
+            .unwrap_or_else(|| env::panic_str("Commitment total overflow"));
         commitment.recipient_id = recipient_id;
         commitment.amount = amount.0;
         commitment.description = description;
         self.commitments.insert(&id, &commitment);
+        self.active_commitments_total = new_total;
         self.assert_solvent();
     }
 
@@ -239,7 +249,9 @@ impl Veltron {
         self.assert_owner();
         require!(!self.settlement_pending.get(&id).unwrap_or(false),
             "Cannot cancel a commitment while settlement is pending");
-        self.commitments.remove(&id).unwrap_or_else(|| env::panic_str("Commitment not found"));
+        let removed = self.commitments.remove(&id).unwrap_or_else(|| env::panic_str("Commitment not found"));
+        self.active_commitments_total = self.active_commitments_total.checked_sub(removed.amount)
+            .unwrap_or_else(|| env::panic_str("Commitment total underflow"));
     }
 
     /// Emergency circuit breaker for new outgoing treasury transfers.
@@ -449,8 +461,10 @@ impl Veltron {
                 require!(self.treasury_balance >= transfer.amount, "Treasury accounting underflow");
                 self.treasury_balance -= transfer.amount;
                 if let PendingKind::CommitmentSettlement { commitment_id } = transfer.kind {
-                    self.commitments.remove(&commitment_id)
+                    let settled = self.commitments.remove(&commitment_id)
                         .unwrap_or_else(|| env::panic_str("Commitment not found during settlement callback"));
+                    self.active_commitments_total = self.active_commitments_total.checked_sub(settled.amount)
+                        .unwrap_or_else(|| env::panic_str("Commitment total underflow"));
                     self.settlement_pending.remove(&commitment_id);
                 }
                 env::log_str(&format!("VELTRON_TRANSFER_SUCCESS:{}", transfer_id));
@@ -487,9 +501,7 @@ impl Veltron {
     }
 
     fn active_commitment_total(&self) -> u128 {
-        self.commitments.iter().fold(0u128, |sum, (_, c)| {
-            sum.checked_add(c.amount).unwrap_or_else(|| env::panic_str("Commitment total overflow"))
-        })
+        self.active_commitments_total
     }
 
     fn calculate_position(&self) -> FinancialPosition {
