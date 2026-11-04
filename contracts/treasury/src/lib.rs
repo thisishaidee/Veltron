@@ -471,6 +471,47 @@ mod tests {
         );
     }
 
+
+    #[test]
+    #[should_panic(expected = "Commitment recipient cannot be token contract")]
+    fn rejects_commitment_to_configured_token_contract() {
+        let mut contract = setup("owner.near");
+        contract.treasury_balance = 1_000;
+        contract.create_commitment(
+            "token-recipient".to_string(),
+            account("token.near"),
+            U128(100),
+            "Invalid token-contract recipient".to_string(),
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "Commitment recipient cannot be token contract")]
+    fn rejects_updating_commitment_to_configured_token_contract() {
+        let mut contract = setup("owner.near");
+        contract.treasury_balance = 1_000;
+        contract.create_commitment(
+            "token-update".to_string(),
+            account("vendor.near"),
+            U128(100),
+            "Vendor invoice".to_string(),
+        );
+        contract.update_commitment(
+            "token-update".to_string(),
+            account("token.near"),
+            U128(100),
+            "Invalid token-contract recipient".to_string(),
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "Cannot pay the token contract")]
+    fn rejects_discretionary_payment_to_configured_token_contract() {
+        let mut contract = setup("agent.near");
+        contract.treasury_balance = 1_000;
+        contract.request_payment(account("token.near"), U128(50), None);
+    }
+
     #[test]
     #[should_panic(expected = "Commitment ID is too long")]
     fn rejects_oversized_commitment_id() {
