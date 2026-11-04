@@ -8,6 +8,8 @@ use std::collections::BTreeMap;
 const FT_TRANSFER_GAS: Gas = Gas::from_tgas(10);
 const CALLBACK_GAS: Gas = Gas::from_tgas(10);
 const MAX_COMMITMENT_ID_LENGTH: usize = 64;
+const MAX_DESCRIPTION_LENGTH: usize = 256;
+const MAX_PAYMENT_MEMO_LENGTH: usize = 256;
 const MAX_COMMITMENTS: usize = 256;
 const DEFAULT_COMMITMENT_PAGE_SIZE: u32 = 25;
 const MAX_COMMITMENT_PAGE_SIZE: u32 = 50;
@@ -158,7 +160,7 @@ impl Veltron {
         require!(!self.commitments.contains_key(&id), "Commitment already exists");
         require!(self.commitments.len() < MAX_COMMITMENTS, "Maximum active commitments reached");
         require!(amount.0 > 0, "Commitment amount must be positive");
-        require!(description.len() <= 256, "Description is too long");
+        require!(description.len() <= MAX_DESCRIPTION_LENGTH, "Description is too long");
         self.commitments.insert(id.clone(), Commitment {
             id,
             recipient_id,
@@ -221,6 +223,7 @@ impl Veltron {
         require!(amount.0 > 0, "Payment amount must be positive");
         require!(amount.0 <= self.max_per_transaction, "Per-transaction limit exceeded");
         require!(recipient_id != env::current_account_id(), "Cannot pay treasury to itself");
+        require!(memo.as_ref().map_or(true, |value| value.len() <= MAX_PAYMENT_MEMO_LENGTH), "Payment memo is too long");
         let position = self.calculate_position();
         require!(amount.0 <= position.spendable_balance.0, "Insufficient spendable balance");
         self.start_transfer(amount.0, PendingKind::Discretionary { recipient_id, memo })
@@ -645,6 +648,30 @@ mod tests {
             U128(250),
             String::new(),
         );
+    }
+
+    #[test]
+    #[should_panic(expected = "Payment memo is too long")]
+    fn rejects_oversized_payment_memo() {
+        let mut contract = setup("agent.near");
+        contract.treasury_balance = 1_000;
+        contract.request_payment(
+            account("vendor.near"),
+            U128(50),
+            Some("m".repeat(MAX_PAYMENT_MEMO_LENGTH + 1)),
+        );
+    }
+
+    #[test]
+    fn accepts_payment_memo_at_maximum_length() {
+        let mut contract = setup("agent.near");
+        contract.treasury_balance = 1_000;
+        contract.request_payment(
+            account("vendor.near"),
+            U128(50),
+            Some("m".repeat(MAX_PAYMENT_MEMO_LENGTH)),
+        );
+        assert_eq!(contract.get_pending_transfers().len(), 1);
     }
 
     #[test]
