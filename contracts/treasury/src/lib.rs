@@ -1177,4 +1177,62 @@ mod tests {
         contract.refresh_token_balance_audit();
     }
 
+
+    #[test]
+    #[should_panic(expected = "Reconciliation amount must be positive")]
+    fn rejects_zero_surplus_reconciliation() {
+        let mut contract = setup("owner.near");
+        contract.observed_token_balance = Some(250);
+        contract.ledger_balance_at_observation = Some(0);
+        contract.reconcile_token_surplus(U128(0));
+    }
+
+    #[test]
+    #[should_panic(expected = "Amount exceeds observed token surplus")]
+    fn rejects_reconciliation_above_observed_surplus() {
+        let mut contract = setup("owner.near");
+        contract.observed_token_balance = Some(250);
+        contract.ledger_balance_at_observation = Some(0);
+        contract.reconcile_token_surplus(U128(251));
+    }
+
+    #[test]
+    #[should_panic(expected = "A successful balance audit is required")]
+    fn rejects_reconciliation_without_successful_audit() {
+        let mut contract = setup("owner.near");
+        contract.reconcile_token_surplus(U128(1));
+    }
+
+    #[test]
+    #[should_panic(expected = "No token surplus was observed")]
+    fn rejects_reconciliation_when_observed_balance_matches_ledger() {
+        let mut contract = setup("owner.near");
+        contract.observed_token_balance = Some(100);
+        contract.ledger_balance_at_observation = Some(100);
+        contract.treasury_balance = 100;
+        contract.reconcile_token_surplus(U128(1));
+    }
+
+    #[test]
+    #[should_panic(expected = "Only the treasury owner")]
+    fn rejects_surplus_reconciliation_by_non_owner() {
+        let mut contract = setup("agent.near");
+        contract.observed_token_balance = Some(250);
+        contract.ledger_balance_at_observation = Some(0);
+        contract.reconcile_token_surplus(U128(1));
+    }
+
+    #[test]
+    fn outgoing_transfer_invalidates_previous_balance_audit() {
+        let mut contract = setup("agent.near");
+        contract.treasury_balance = 1_000;
+        contract.observed_token_balance = Some(1_000);
+        contract.ledger_balance_at_observation = Some(1_000);
+        contract.balance_observed_at_ns = Some(123);
+        contract.request_payment(account("vendor.near"), U128(100), None);
+        assert_eq!(contract.observed_token_balance, None);
+        assert_eq!(contract.ledger_balance_at_observation, None);
+        assert_eq!(contract.balance_observed_at_ns, None);
+    }
+
 }
