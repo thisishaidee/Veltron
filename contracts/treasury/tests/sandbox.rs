@@ -125,6 +125,152 @@ async fn sandbox_deposit_and_agent_payment_use_real_nep141_calls() -> anyhow::Re
 
 
 
+
+#[tokio::test]
+async fn sandbox_commitment_settlement_success_failure_and_retry() -> anyhow::Result<()> {
+    let worker = near_workspaces::sandbox().await?;
+    let owner = worker.dev_create_account().await?;
+    let agent = worker.dev_create_account().await?;
+    let paid_vendor = worker.dev_create_account().await?;
+    let initially_unregistered_vendor = worker.dev_create_account().await?;
+
+    let token = worker.dev_deploy(TOKEN_WASM).await?;
+    token
+        .call("new")
+        .args_json(json!({
+            "owner_id": owner.id(),
+            "total_supply": "10000",
+            "metadata": {
+                "spec": "ft-1.0.0",
+                "name": "VELTRON Test Token",
+                "symbol": "VTT",
+                "decimals": 6
+            }
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    let treasury = worker.dev_deploy(TREASURY_WASM).await?;
+    treasury
+        .call("new")
+        .args_json(json!({
+            "owner_id": owner.id(),
+            "token_id": token.id(),
+            "agent_id": agent.id(),
+            "max_per_transaction": "500",
+            "safety_reserve": "100"
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    register_token_account(&owner, &token, treasury.id().as_str()).await?;
+    register_token_account(&owner, &token, paid_vendor.id().as_str()).await?;
+
+    owner
+        .call(token.id(), "ft_transfer_call")
+        .args_json(json!({
+            "receiver_id": treasury.id(),
+            "amount": "1000",
+            "memo": "Fund commitment settlement test",
+            "msg": ""
+        }))
+        .deposit(NearToken::from_yoctonear(1))
+        .transact()
+        .await?
+        .into_result()?;
+
+    owner
+        .call(treasury.id(), "create_commitment")
+        .args_json(json!({
+            "id": "paid-invoice",
+            "recipient_id": paid_vendor.id(),
+            "amount": "200",
+            "description": "Registered vendor invoice"
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    owner
+        .call(treasury.id(), "create_commitment")
+        .args_json(json!({
+            "id": "retry-invoice",
+            "recipient_id": initially_unregistered_vendor.id(),
+            "amount": "150",
+            "description": "Vendor to register after failed settlement"
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    // Registered recipient: the real NEP-141 transfer and callback should settle.
+    owner
+        .call(treasury.id(), "settle_commitment")
+        .args_json(json!({ "id": "paid-invoice" }))
+        .max_gas()
+        .transact()
+        .await?
+        .into_result()?;
+
+    let after_success = view_json(&treasury, "get_financial_position", json!({})).await?;
+    let paid_vendor_balance =
+        view_json(&token, "ft_balance_of", json!({ "account_id": paid_vendor.id() })).await?;
+    let commitments_after_success =
+        view_json(&treasury, "get_commitments", json!({ "from_id": null, "limit": 50 })).await?;
+
+    assert_eq!(after_success["treasury_balance"], "800");
+    assert_eq!(paid_vendor_balance, "200");
+    assert_eq!(commitments_after_success["commitments"].as_array().unwrap().len(), 1);
+    assert_eq!(commitments_after_success["commitments"][0]["id"], "retry-invoice");
+
+    // Unregistered recipient: NEP-141 transfer fails, callback must preserve
+    // the commitment and clear its settlement-pending lock.
+    owner
+        .call(treasury.id(), "settle_commitment")
+        .args_json(json!({ "id": "retry-invoice" }))
+        .max_gas()
+        .transact()
+        .await?
+        .into_result()?;
+
+    let after_failure = view_json(&treasury, "get_financial_position", json!({})).await?;
+    let commitments_after_failure =
+        view_json(&treasury, "get_commitments", json!({ "from_id": null, "limit": 50 })).await?;
+    assert_eq!(after_failure["treasury_balance"], "800");
+    assert_eq!(commitments_after_failure["commitments"].as_array().unwrap().len(), 1);
+    assert_eq!(commitments_after_failure["commitments"][0]["settlement_pending"], false);
+
+    // Register the recipient and retry: a failed settlement must be recoverable.
+    register_token_account(&owner, &token, initially_unregistered_vendor.id().as_str()).await?;
+    owner
+        .call(treasury.id(), "settle_commitment")
+        .args_json(json!({ "id": "retry-invoice" }))
+        .max_gas()
+        .transact()
+        .await?
+        .into_result()?;
+
+    let after_retry = view_json(&treasury, "get_financial_position", json!({})).await?;
+    let retry_vendor_balance = view_json(
+        &token,
+        "ft_balance_of",
+        json!({ "account_id": initially_unregistered_vendor.id() }),
+    )
+    .await?;
+    let final_commitments =
+        view_json(&treasury, "get_commitments", json!({ "from_id": null, "limit": 50 })).await?;
+
+    assert_eq!(after_retry["treasury_balance"], "650");
+    assert_eq!(retry_vendor_balance, "150");
+    assert_eq!(final_commitments["commitments"].as_array().unwrap().len(), 0);
+    assert_eq!(after_retry["pending_discretionary"], "0");
+
+    Ok(())
+}
+
+
 #[tokio::test]
 async fn sandbox_rejects_external_callback_invocation() -> anyhow::Result<()> {
     let worker = near_workspaces::sandbox().await?;
