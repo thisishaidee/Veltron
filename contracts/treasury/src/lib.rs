@@ -168,6 +168,7 @@ impl Veltron {
         require!(amount.0 > 0, "Deposit amount must be positive");
 
         env::log_str(&format!("VELTRON_DEPOSIT: balance_before={}", self.treasury_balance));
+        self.invalidate_balance_audit();
         self.treasury_balance = self.treasury_balance.checked_add(amount.0)
             .unwrap_or_else(|| env::panic_str("Treasury balance overflow"));
         env::log_str(&format!("VELTRON_DEPOSIT: balance_after={}", self.treasury_balance));
@@ -308,6 +309,31 @@ impl Veltron {
         }
     }
 
+    /// Credits only a caller-selected amount supported by the latest successful audit.
+    /// The observation is consumed after one reconciliation.
+    pub fn reconcile_token_surplus(&mut self, amount: U128) {
+        self.assert_owner();
+        require!(!self.balance_audit_pending, "Token balance audit in progress");
+        require!(self.pending.is_empty(), "Cannot reconcile while transfers are pending");
+        require!(amount.0 > 0, "Reconciliation amount must be positive");
+
+        let observed_balance = self.observed_token_balance
+            .unwrap_or_else(|| env::panic_str("A successful balance audit is required"));
+        let observed_ledger = self.ledger_balance_at_observation
+            .unwrap_or_else(|| env::panic_str("A successful balance audit is required"));
+        require!(observed_ledger == self.treasury_balance,
+            "Balance audit is stale; refresh it before reconciliation");
+        require!(observed_balance > observed_ledger, "No token surplus was observed");
+        let observed_surplus = observed_balance - observed_ledger;
+        require!(amount.0 <= observed_surplus, "Amount exceeds observed token surplus");
+
+        self.treasury_balance = self.treasury_balance.checked_add(amount.0)
+            .unwrap_or_else(|| env::panic_str("Treasury balance overflow"));
+        self.invalidate_balance_audit();
+        self.assert_solvent();
+        env::log_str(&format!("VELTRON_SURPLUS_RECONCILED:{}", amount.0));
+    }
+
     #[private]
     pub fn on_balance_audit_complete(
         &mut self,
@@ -411,6 +437,12 @@ impl Veltron {
         require!(env::predecessor_account_id() == self.owner_id, "Only the treasury owner");
     }
 
+    fn invalidate_balance_audit(&mut self) {
+        self.observed_token_balance = None;
+        self.ledger_balance_at_observation = None;
+        self.balance_observed_at_ns = None;
+    }
+
     fn pending_discretionary_total(&self) -> u128 {
         self.pending.values().fold(0u128, |sum, p| {
             if matches!(p.kind, PendingKind::Discretionary { .. }) {
@@ -454,6 +486,7 @@ impl Veltron {
 
     fn start_transfer(&mut self, amount: u128, kind: PendingKind) -> Promise {
         require!(!self.balance_audit_pending, "Token balance audit in progress");
+        self.invalidate_balance_audit();
         let id = self.next_transfer_id;
         self.next_transfer_id = self.next_transfer_id.checked_add(1)
             .unwrap_or_else(|| env::panic_str("Transfer ID overflow"));
