@@ -20,6 +20,13 @@ Spendable = max(
 
 Pending discretionary transfers are subtracted separately because NEAR cross-contract calls are asynchronous. The funds remain reserved until the token transfer callback confirms success or failure.
 
+## Emergency pause
+
+- The owner can call `set_paused(true)` to block new discretionary payments and commitment settlements. `get_pause_status` exposes the current state.
+- The owner can resume operations with `set_paused(false)`.
+- A pause does not cancel or freeze transfers already submitted to the token contract. Their callbacks continue to finalize accounting, including success and failure handling.
+- Deposits remain accepted while paused, and owner administration, audit, and reconciliation remain available subject to their own safety checks. This pause is an outgoing-transfer circuit breaker, not a complete contract shutdown.
+
 ## Token balance audit
 
 - The owner can call `refresh_token_balance_audit` to query the configured NEP-141 contract's actual token balance for the treasury.
