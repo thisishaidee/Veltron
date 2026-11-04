@@ -866,6 +866,7 @@ mod tests {
                 recipient_id: account("shop.near"),
                 memo: None,
             },
+            created_at_ns: 1,
         });
         let p = contract.get_financial_position();
         assert_eq!(p.spendable_balance.0, 100);
