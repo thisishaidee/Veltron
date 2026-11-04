@@ -555,7 +555,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "Insufficient spendable balance")]
     fn agent_cannot_spend_commitments_or_safety_reserve() {
-        let mut contract = setup("agent.near");
+        let mut contract = setup("owner.near");
         contract.treasury_balance = 1_000;
         contract.create_commitment(
             "payroll-limit".to_string(),
