@@ -1237,6 +1237,57 @@ mod tests {
     }
 
     #[test]
+    fn failed_commitment_settlement_can_be_retried_successfully() {
+        let mut contract = setup("owner.near");
+        contract.treasury_balance = 1_000;
+        contract.create_commitment(
+            "retry-invoice".to_string(),
+            account("vendor.near"),
+            U128(200),
+            "Retryable vendor invoice".to_string(),
+        );
+
+        // First attempt fails: the obligation must remain active and retryable.
+        contract.settle_commitment("retry-invoice".to_string());
+        callback_context();
+        contract.on_transfer_complete(0, Err(PromiseError::Failed));
+
+        let after_failure = contract.get_financial_position();
+        assert_eq!(after_failure.treasury_balance.0, 1_000);
+        assert_eq!(after_failure.active_commitments.0, 200);
+        assert_eq!(after_failure.spendable_balance.0, 700);
+        assert!(contract.get_pending_transfers().is_empty());
+
+        let failed_commitment = contract.get_commitments(None, None).commitments;
+        assert_eq!(failed_commitment.len(), 1);
+        assert_eq!(failed_commitment[0].id, "retry-invoice");
+        assert_eq!(failed_commitment[0].recipient_id, account("vendor.near"));
+        assert_eq!(failed_commitment[0].amount.0, 200);
+        assert!(!failed_commitment[0].settlement_pending);
+
+        // The owner can retry the same obligation after the failure callback.
+        let mut owner_context = VMContextBuilder::new();
+        owner_context.predecessor_account_id(account("owner.near"));
+        testing_env!(owner_context.build());
+        contract.settle_commitment("retry-invoice".to_string());
+
+        let retry_pending = contract.get_pending_transfers();
+        assert_eq!(retry_pending.len(), 1);
+        assert_eq!(retry_pending[0].id.0, 1);
+        assert_eq!(retry_pending[0].amount.0, 200);
+
+        callback_context();
+        contract.on_transfer_complete(1, Ok(()));
+
+        let final_position = contract.get_financial_position();
+        assert_eq!(final_position.treasury_balance.0, 800);
+        assert_eq!(final_position.active_commitments.0, 0);
+        assert_eq!(final_position.spendable_balance.0, 700);
+        assert!(contract.get_commitments(None, None).commitments.is_empty());
+        assert!(contract.get_pending_transfers().is_empty());
+    }
+
+    #[test]
     fn owner_can_cancel_commitment_and_release_reservation() {
         let mut contract = setup("owner.near");
         contract.treasury_balance = 1_000;
