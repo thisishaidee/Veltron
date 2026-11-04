@@ -241,6 +241,7 @@ async fn sandbox_commitment_settlement_success_failure_and_retry() -> anyhow::Re
     let success_callback_gas = success_callback_receipt.gas_burnt.as_gas();
     println!("Commitment success callback gas at 256 commitments: {} Tgas",
         success_callback_gas as f64 / 1_000_000_000_000.0);
+    println!("Commitment success callback phase logs: {:#?}", success_callback_receipt.logs);
     assert!(success_callback_gas < 5_000_000_000_000,
         "commitment success callback consumed more than 5 Tgas: {}", success_callback_gas);
 
