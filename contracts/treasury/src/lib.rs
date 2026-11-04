@@ -113,11 +113,22 @@ impl Veltron {
         amount: U128,
         msg: String,
     ) -> PromiseOrValue<U128> {
-        require!(env::predecessor_account_id() == self.token_id, "Untrusted token contract");
+        env::log_str("VELTRON_DEPOSIT: entered ft_on_transfer");
+        let predecessor = env::predecessor_account_id();
+        env::log_str(&format!("VELTRON_DEPOSIT: predecessor={}", predecessor));
+        env::log_str(&format!("VELTRON_DEPOSIT: configured_token={}", self.token_id));
+        require!(predecessor == self.token_id, "Untrusted token contract");
+
+        env::log_str(&format!("VELTRON_DEPOSIT: msg_empty={}", msg.is_empty()));
         require!(msg.is_empty(), "Unsupported deposit message");
+
+        env::log_str(&format!("VELTRON_DEPOSIT: amount={}", amount.0));
         require!(amount.0 > 0, "Deposit amount must be positive");
+
+        env::log_str(&format!("VELTRON_DEPOSIT: balance_before={}", self.treasury_balance));
         self.treasury_balance = self.treasury_balance.checked_add(amount.0)
             .unwrap_or_else(|| env::panic_str("Treasury balance overflow"));
+        env::log_str(&format!("VELTRON_DEPOSIT: balance_after={}", self.treasury_balance));
         PromiseOrValue::Value(U128(0))
     }
 
