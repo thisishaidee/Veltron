@@ -213,6 +213,8 @@ impl Veltron {
 
     pub fn set_agent(&mut self, agent_id: AccountId, max_per_transaction: U128) {
         self.assert_owner();
+        require!(agent_id != self.owner_id, "Agent and owner must differ");
+        require!(agent_id != env::current_account_id(), "Agent cannot be treasury contract");
         require!(agent_id != self.token_id, "Agent cannot be the token contract");
         require!(max_per_transaction.0 > 0, "Transaction limit must be positive");
         self.agent_id = agent_id;
@@ -800,6 +802,33 @@ mod tests {
     }
 
 
+
+    #[test]
+    #[should_panic(expected = "Agent and owner must differ")]
+    fn cannot_set_owner_as_agent() {
+        let mut contract = setup("owner.near");
+        contract.set_agent(account("owner.near"), U128(500));
+    }
+
+    #[test]
+    #[should_panic(expected = "Agent cannot be treasury contract")]
+    fn cannot_set_treasury_as_agent() {
+        let mut contract = setup("owner.near");
+        let mut builder = VMContextBuilder::new();
+        builder.current_account_id(account("treasury.near"));
+        builder.predecessor_account_id(account("owner.near"));
+        testing_env!(builder.build());
+        contract.set_agent(account("treasury.near"), U128(500));
+    }
+
+    #[test]
+    fn owner_can_rotate_agent_without_changing_role_separation() {
+        let mut contract = setup("owner.near");
+        contract.set_agent(account("new-agent.near"), U128(300));
+        assert_eq!(contract.agent_id, account("new-agent.near"));
+        assert_eq!(contract.max_per_transaction, 300);
+    }
+
     #[test]
     #[should_panic(expected = "Per-transaction limit exceeded")]
     fn agent_cannot_exceed_per_transaction_limit() {
@@ -892,6 +921,8 @@ mod tests {
         contract.on_transfer_complete(0, Ok(()));
 
         assert_eq!(contract.get_financial_position().treasury_balance.0, 950);
+        assert_eq!(contract.get_financial_position().pending_discretionary.0, 0);
+        assert_eq!(contract.get_financial_position().spendable_balance.0, 850);
         assert!(contract.get_pending_transfers().is_empty());
     }
 
@@ -905,6 +936,8 @@ mod tests {
         contract.on_transfer_complete(0, Err(PromiseError::Failed));
 
         assert_eq!(contract.get_financial_position().treasury_balance.0, 1_000);
+        assert_eq!(contract.get_financial_position().pending_discretionary.0, 0);
+        assert_eq!(contract.get_financial_position().spendable_balance.0, 900);
         assert!(contract.get_pending_transfers().is_empty());
     }
 
