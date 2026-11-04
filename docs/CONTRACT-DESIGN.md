@@ -26,7 +26,10 @@ Pending discretionary transfers are subtracted separately because NEAR cross-con
 - The asynchronous result is stored by a private callback and exposed through `get_token_balance_audit`, alongside the internal ledger balance captured when the query completes and the observation timestamp.
 - The audit is read-only: it never credits or debits the ledger and never changes spendable balance. A difference is evidence of a balance discrepancy, not permission to recover or spend the difference.
 - Only one audit can be pending at a time. A failed query clears the pending flag and preserves the previous successful observation.
-- The observation is a point-in-time diagnostic, not a continuously synchronized balance or a cryptographic proof of token solvency.
+- A successful observation can be used once by the owner through `reconcile_token_surplus(amount)`. The amount must be positive and no greater than the observed token balance minus the ledger balance captured at that observation.
+- Reconciliation is rejected while transfers or an audit are pending, when there is no successful observation, when the ledger has changed since observation, or when no surplus was observed. A successful reconciliation consumes the observation; another reconciliation requires a fresh audit.
+- Incoming accepted deposits and the start of outgoing transfers invalidate the stored observation. Audits are blocked while outgoing transfers are pending, and accepted deposits are rejected while an audit is pending. Plain direct NEP-141 transfers do not call the treasury and therefore cannot be locked; a direct transfer arriving after an audit can only make the recorded surplus conservative for a standard non-rebasing NEP-141 token.
+- The observation is a point-in-time diagnostic, not a continuously synchronized balance or a cryptographic proof of token solvency. The configured token contract remains trusted and could report dishonest balances or implement non-standard behavior.
 
 ## Commitment limits and retrieval
 
