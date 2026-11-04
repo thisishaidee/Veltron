@@ -26,6 +26,7 @@ Pending discretionary transfers are subtracted separately because NEAR cross-con
 - Commitment reads use cursor pagination. `get_commitments` accepts `from_id` (exclusive) and `limit`; the default page size is 25 and the maximum is 50. Use the returned `next_cursor` as the next request's `from_id` until it is `null`.
 - The active-commitment total is calculated over a bounded collection, so accounting work cannot grow without limit. This cap is an MVP guardrail, not a substitute for profiling gas and storage costs under realistic workloads.
 - Commitment IDs are limited to 64 UTF-8 bytes. Commitment descriptions and optional discretionary-payment memos are each limited to 256 UTF-8 bytes. These limits constrain user-supplied strings passed through contract calls; an omitted memo is allowed.
+- Recipient and configuration account IDs use NEAR `AccountId` deserialization, so malformed account IDs are rejected before contract logic executes. The treasury rejects itself and the configured token contract as payment or commitment recipients; the token contract is infrastructure, not a vendor destination.
 
 ## Payment lifecycle
 
