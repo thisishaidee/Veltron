@@ -1408,4 +1408,52 @@ mod tests {
         contract.request_payment(account("vendor.near"), U128(1), None);
     }
 
+
+    #[test]
+    fn discretionary_payment_during_pending_commitment_settlement_preserves_reservations() {
+        let mut contract = setup("owner.near");
+        contract.treasury_balance = 1_000;
+        contract.create_commitment(
+            "payroll".to_string(),
+            account("worker.near"),
+            U128(400),
+            "Protected payroll".to_string(),
+        );
+
+        // Settlement is asynchronous: the commitment remains reserved until success.
+        contract.settle_commitment("payroll".to_string());
+        assert_eq!(contract.get_financial_position().active_commitments.0, 400);
+        assert_eq!(contract.get_financial_position().spendable_balance.0, 500);
+
+        // The agent may spend only the remaining 500, not the amount being settled.
+        let mut agent_context = VMContextBuilder::new();
+        agent_context.predecessor_account_id(account("agent.near"));
+        testing_env!(agent_context.build());
+        contract.request_payment(account("vendor.near"), U128(500), None);
+
+        let during_both_pending = contract.get_financial_position();
+        assert_eq!(during_both_pending.pending_discretionary.0, 500);
+        assert_eq!(during_both_pending.active_commitments.0, 400);
+        assert_eq!(during_both_pending.spendable_balance.0, 0);
+
+        // Complete the discretionary transfer first, while the commitment settlement
+        // is still pending. The commitment must remain fully reserved.
+        callback_context();
+        contract.on_transfer_complete(1, Ok(()));
+        let after_discretionary = contract.get_financial_position();
+        assert_eq!(after_discretionary.treasury_balance.0, 500);
+        assert_eq!(after_discretionary.active_commitments.0, 400);
+        assert_eq!(after_discretionary.spendable_balance.0, 0);
+
+        // Then complete the commitment settlement. The final ledger must remain solvent.
+        contract.on_transfer_complete(0, Ok(()));
+        let final_position = contract.get_financial_position();
+        assert_eq!(final_position.treasury_balance.0, 100);
+        assert_eq!(final_position.active_commitments.0, 0);
+        assert_eq!(final_position.pending_discretionary.0, 0);
+        assert_eq!(final_position.spendable_balance.0, 0);
+        assert!(contract.get_commitments(None, None).commitments.is_empty());
+        assert!(contract.get_pending_transfers().is_empty());
+    }
+
 }
