@@ -543,6 +543,82 @@ mod tests {
         testing_env!(builder.build());
     }
 
+
+    #[test]
+    #[should_panic(expected = "Per-transaction limit exceeded")]
+    fn agent_cannot_exceed_per_transaction_limit() {
+        let mut contract = setup("agent.near");
+        contract.treasury_balance = 1_000;
+        contract.request_payment(account("vendor.near"), U128(501), None);
+    }
+
+    #[test]
+    #[should_panic(expected = "Insufficient spendable balance")]
+    fn agent_cannot_spend_commitments_or_safety_reserve() {
+        let mut contract = setup("agent.near");
+        contract.treasury_balance = 1_000;
+        contract.create_commitment(
+            "payroll-limit".to_string(),
+            account("worker.near"),
+            U128(600),
+            "Protected payroll".to_string(),
+        );
+        // 1,000 balance - 600 commitment - 100 reserve = 300 spendable.
+        contract.request_payment(account("vendor.near"), U128(301), None);
+    }
+
+    #[test]
+    #[should_panic(expected = "Insufficient spendable balance")]
+    fn concurrent_pending_payments_cannot_spend_the_same_funds_twice() {
+        let mut contract = setup("agent.near");
+        contract.treasury_balance = 1_000;
+
+        // Reserve 500, then another 400. The 100 safety reserve remains protected.
+        contract.request_payment(account("vendor-a.near"), U128(500), None);
+        contract.request_payment(account("vendor-b.near"), U128(400), None);
+
+        assert_eq!(contract.get_financial_position().pending_discretionary.0, 900);
+        assert_eq!(contract.get_financial_position().spendable_balance.0, 0);
+
+        // Even before either callback completes, a third payment must be rejected.
+        contract.request_payment(account("vendor-c.near"), U128(1), None);
+    }
+
+    #[test]
+    #[should_panic(expected = "Cannot update a commitment while settlement is pending")]
+    fn cannot_update_commitment_during_settlement() {
+        let mut contract = setup("owner.near");
+        contract.treasury_balance = 1_000;
+        contract.create_commitment(
+            "pending-update".to_string(),
+            account("vendor.near"),
+            U128(200),
+            "Invoice".to_string(),
+        );
+        contract.settle_commitment("pending-update".to_string());
+        contract.update_commitment(
+            "pending-update".to_string(),
+            account("other-vendor.near"),
+            U128(150),
+            "Changed invoice".to_string(),
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "Cannot cancel a commitment while settlement is pending")]
+    fn cannot_cancel_commitment_during_settlement() {
+        let mut contract = setup("owner.near");
+        contract.treasury_balance = 1_000;
+        contract.create_commitment(
+            "pending-cancel".to_string(),
+            account("vendor.near"),
+            U128(200),
+            "Invoice".to_string(),
+        );
+        contract.settle_commitment("pending-cancel".to_string());
+        contract.cancel_commitment("pending-cancel".to_string());
+    }
+
     #[test]
     fn successful_discretionary_transfer_reduces_treasury_balance() {
         let mut contract = setup("agent.near");
