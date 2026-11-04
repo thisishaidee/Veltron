@@ -12,6 +12,7 @@ const MAX_COMMITMENT_ID_LENGTH: usize = 64;
 const MAX_DESCRIPTION_LENGTH: usize = 256;
 const MAX_PAYMENT_MEMO_LENGTH: usize = 256;
 const MAX_COMMITMENTS: usize = 256;
+const MAX_PENDING_TRANSFERS: usize = 64;
 const DEFAULT_COMMITMENT_PAGE_SIZE: u32 = 25;
 const MAX_COMMITMENT_PAGE_SIZE: u32 = 50;
 
@@ -37,6 +38,15 @@ pub struct PendingTransfer {
     pub id: u64,
     pub amount: u128,
     pub kind: PendingKind,
+    pub created_at_ns: u64,
+}
+
+#[near(serializers = [json])]
+pub struct PendingTransferView {
+    pub id: U64,
+    pub amount: U128,
+    pub kind: PendingKind,
+    pub created_at_ns: U64,
 }
 
 #[near(serializers = [json])]
@@ -413,8 +423,15 @@ impl Veltron {
         CommitmentPage { commitments, next_cursor }
     }
 
-    pub fn get_pending_transfers(&self) -> Vec<PendingTransfer> {
-        self.pending.values().cloned().collect()
+    /// Returns the bounded in-flight transfer list, including creation timestamps.
+    /// A long-lived entry is a monitoring signal, not proof that the token transfer failed.
+    pub fn get_pending_transfers(&self) -> Vec<PendingTransferView> {
+        self.pending.values().map(|p| PendingTransferView {
+            id: U64(p.id),
+            amount: U128(p.amount),
+            kind: p.kind.clone(),
+            created_at_ns: U64(p.created_at_ns),
+        }).collect()
     }
 
     #[private]
@@ -501,6 +518,7 @@ impl Veltron {
 
     fn start_transfer(&mut self, amount: u128, kind: PendingKind) -> Promise {
         require!(!self.balance_audit_pending, "Token balance audit in progress");
+        require!(self.pending.len() < MAX_PENDING_TRANSFERS, "Maximum pending transfers reached");
         self.invalidate_balance_audit();
         let id = self.next_transfer_id;
         self.next_transfer_id = self.next_transfer_id.checked_add(1)
@@ -513,7 +531,12 @@ impl Veltron {
                 (c.recipient_id.clone(), Some(format!("VELTRON commitment {}", commitment_id)))
             }
         };
-        self.pending.insert(id, PendingTransfer { id, amount, kind });
+        self.pending.insert(id, PendingTransfer {
+            id,
+            amount,
+            kind,
+            created_at_ns: env::block_timestamp(),
+        });
         ext_ft::ext(self.token_id.clone())
             .with_attached_deposit(NearToken::from_yoctonear(1))
             .with_static_gas(FT_TRANSFER_GAS)
@@ -1322,6 +1345,47 @@ mod tests {
         contract.ft_on_transfer(account("depositor.near"), U128(100), String::new());
         assert_eq!(contract.treasury_balance, 100);
         assert!(contract.paused);
+    }
+
+
+    #[test]
+    fn pending_transfer_records_creation_timestamp() {
+        let mut builder = VMContextBuilder::new();
+        builder.predecessor_account_id(account("agent.near"));
+        builder.block_timestamp(123_456);
+        testing_env!(builder.build());
+        let mut contract = Veltron::new(
+            account("owner.near"),
+            account("token.near"),
+            account("agent.near"),
+            U128(500),
+            U128(100),
+        );
+        contract.treasury_balance = 1_000;
+        contract.request_payment(account("vendor.near"), U128(100), None);
+        let pending = contract.get_pending_transfers();
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].created_at_ns, U64(123_456));
+        assert_eq!(pending[0].amount, U128(100));
+    }
+
+    #[test]
+    #[should_panic(expected = "Maximum pending transfers reached")]
+    fn rejects_new_transfer_when_pending_limit_is_reached() {
+        let mut contract = setup("agent.near");
+        contract.treasury_balance = 1_000;
+        for id in 0..MAX_PENDING_TRANSFERS as u64 {
+            contract.pending.insert(id, PendingTransfer {
+                id,
+                amount: 1,
+                kind: PendingKind::Discretionary {
+                    recipient_id: account("vendor.near"),
+                    memo: None,
+                },
+                created_at_ns: 1,
+            });
+        }
+        contract.request_payment(account("vendor.near"), U128(1), None);
     }
 
 }
