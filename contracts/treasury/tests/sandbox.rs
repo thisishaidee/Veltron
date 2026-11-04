@@ -663,3 +663,132 @@ async fn sandbox_read_only_token_balance_audit_detects_unaccounted_surplus() -> 
 
     Ok(())
 }
+
+
+#[tokio::test]
+async fn sandbox_balance_audit_matches_ledger_after_deposit_and_payment() -> anyhow::Result<()> {
+    let worker = near_workspaces::sandbox().await?;
+    let owner = worker.dev_create_account().await?;
+    let agent = worker.dev_create_account().await?;
+    let vendor = worker.dev_create_account().await?;
+
+    let token = worker.dev_deploy(TOKEN_WASM).await?;
+    token
+        .call("new")
+        .args_json(json!({
+            "owner_id": owner.id(),
+            "total_supply": "10000",
+            "metadata": {
+                "spec": "ft-1.0.0",
+                "name": "VELTRON Test Token",
+                "symbol": "VTT",
+                "decimals": 6
+            }
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    let treasury = worker.dev_deploy(TREASURY_WASM).await?;
+    treasury
+        .call("new")
+        .args_json(json!({
+            "owner_id": owner.id(),
+            "token_id": token.id(),
+            "agent_id": agent.id(),
+            "max_per_transaction": "500",
+            "safety_reserve": "100"
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    register_token_account(&owner, &token, treasury.id().as_str()).await?;
+    register_token_account(&owner, &token, vendor.id().as_str()).await?;
+
+    owner
+        .call(token.id(), "ft_transfer_call")
+        .args_json(json!({
+            "receiver_id": treasury.id(),
+            "amount": "1000",
+            "memo": "Accepted deposit",
+            "msg": ""
+        }))
+        .deposit(NearToken::from_yoctonear(1))
+        .transact()
+        .await?
+        .into_result()?;
+
+    owner
+        .call(treasury.id(), "refresh_token_balance_audit")
+        .max_gas()
+        .transact()
+        .await?
+        .into_result()?;
+
+    let after_deposit = view_json(&treasury, "get_token_balance_audit", json!({})).await?;
+    assert_eq!(after_deposit["observed_token_balance"], "1000");
+    assert_eq!(after_deposit["ledger_balance_at_observation"], "1000");
+
+    agent
+        .call(treasury.id(), "request_payment")
+        .args_json(json!({
+            "recipient_id": vendor.id(),
+            "amount": "200",
+            "memo": "Audit after completed payment"
+        }))
+        .max_gas()
+        .transact()
+        .await?
+        .into_result()?;
+
+    owner
+        .call(treasury.id(), "refresh_token_balance_audit")
+        .max_gas()
+        .transact()
+        .await?
+        .into_result()?;
+
+    let after_payment = view_json(&treasury, "get_token_balance_audit", json!({})).await?;
+    let position = view_json(&treasury, "get_financial_position", json!({})).await?;
+    assert_eq!(after_payment["observed_token_balance"], "800");
+    assert_eq!(after_payment["ledger_balance_at_observation"], "800");
+    assert_eq!(position["treasury_balance"], "800");
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn sandbox_only_owner_can_start_token_balance_audit() -> anyhow::Result<()> {
+    let worker = near_workspaces::sandbox().await?;
+    let owner = worker.dev_create_account().await?;
+    let agent = worker.dev_create_account().await?;
+    let token = worker.dev_create_account().await?;
+
+    let treasury = worker.dev_deploy(TREASURY_WASM).await?;
+    treasury
+        .call("new")
+        .args_json(json!({
+            "owner_id": owner.id(),
+            "token_id": token.id(),
+            "agent_id": agent.id(),
+            "max_per_transaction": "500",
+            "safety_reserve": "100"
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    let result = agent
+        .call(treasury.id(), "refresh_token_balance_audit")
+        .max_gas()
+        .transact()
+        .await?;
+
+    assert!(result.into_result().is_err());
+    let audit = view_json(&treasury, "get_token_balance_audit", json!({})).await?;
+    assert_eq!(audit["audit_pending"], false);
+    assert_eq!(audit["observed_token_balance"], Value::Null);
+
+    Ok(())
+}
