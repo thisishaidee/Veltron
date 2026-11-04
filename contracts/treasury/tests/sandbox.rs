@@ -24,7 +24,8 @@ async fn register_token_account(
         }))
         .deposit(NearToken::from_near(1))
         .transact()
-        .await?;
+        .await?
+        .into_result()?;
     Ok(())
 }
 
@@ -49,7 +50,8 @@ async fn sandbox_deposit_and_agent_payment_use_real_nep141_calls() -> anyhow::Re
             }
         }))
         .transact()
-        .await?;
+        .await?
+        .into_result()?;
 
     let treasury = worker.dev_deploy(TREASURY_WASM).await?;
     treasury
@@ -62,7 +64,8 @@ async fn sandbox_deposit_and_agent_payment_use_real_nep141_calls() -> anyhow::Re
             "safety_reserve": "100"
         }))
         .transact()
-        .await?;
+        .await?
+        .into_result()?;
 
     register_token_account(&owner, &token, treasury.id().as_str()).await?;
     register_token_account(&owner, &token, vendor.id().as_str()).await?;
@@ -77,7 +80,8 @@ async fn sandbox_deposit_and_agent_payment_use_real_nep141_calls() -> anyhow::Re
         }))
         .deposit(NearToken::from_yoctonear(1))
         .transact()
-        .await?;
+        .await?
+        .into_result()?;
 
     let funded_position = view_json(&treasury, "get_financial_position", json!({})).await?;
     assert_eq!(funded_position["treasury_balance"], "1000");
@@ -91,7 +95,8 @@ async fn sandbox_deposit_and_agent_payment_use_real_nep141_calls() -> anyhow::Re
             "memo": "Sandbox vendor payment"
         }))
         .transact()
-        .await?;
+        .await?
+        .into_result()?;
 
     let final_position = view_json(&treasury, "get_financial_position", json!({})).await?;
     let vendor_balance = view_json(
