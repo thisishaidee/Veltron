@@ -239,6 +239,11 @@ async fn sandbox_commitment_settlement_success_failure_and_retry() -> anyhow::Re
         .find(|receipt| receipt.logs.iter().any(|log| log == "VELTRON_TRANSFER_SUCCESS:0"))
         .expect("successful commitment callback receipt must be present");
     let success_callback_gas = success_callback_receipt.gas_burnt.as_gas();
+    for log in &success_callback_receipt.logs {
+        if log.starts_with("VELTRON_GAS_PHASE:") {
+            println!("{}", log);
+        }
+    }
     println!("Commitment success callback gas at 256 commitments: {} Tgas",
         success_callback_gas as f64 / 1_000_000_000_000.0);
     println!("Commitment success callback phase logs: {:#?}", success_callback_receipt.logs);
