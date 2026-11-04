@@ -8,6 +8,9 @@ use std::collections::BTreeMap;
 const FT_TRANSFER_GAS: Gas = Gas::from_tgas(10);
 const CALLBACK_GAS: Gas = Gas::from_tgas(10);
 const MAX_COMMITMENT_ID_LENGTH: usize = 64;
+const MAX_COMMITMENTS: usize = 256;
+const DEFAULT_COMMITMENT_PAGE_SIZE: u32 = 25;
+const MAX_COMMITMENT_PAGE_SIZE: u32 = 50;
 
 #[near(serializers = [borsh, json])]
 #[derive(Clone)]
@@ -43,6 +46,12 @@ pub struct FinancialPosition {
 }
 
 #[near(serializers = [json])]
+pub struct CommitmentPage {
+    pub commitments: Vec<CommitmentView>,
+    pub next_cursor: Option<String>,
+}
+
+#[near(serializers = [json])]
 pub struct CommitmentView {
     pub id: String,
     pub recipient_id: AccountId,
@@ -73,6 +82,7 @@ pub struct Veltron {
     agent_id: AccountId,
     max_per_transaction: u128,
     treasury_balance: u128,
+    active_commitment_total: u128,
     safety_reserve: u128,
     next_transfer_id: u64,
     commitments: BTreeMap<String, Commitment>,
@@ -99,6 +109,7 @@ impl Veltron {
             agent_id,
             max_per_transaction: max_per_transaction.0,
             treasury_balance: 0,
+            active_commitment_total: 0,
             safety_reserve: safety_reserve.0,
             next_transfer_id: 0,
             commitments: BTreeMap::new(),
@@ -147,14 +158,18 @@ impl Veltron {
         require!(id.len() <= MAX_COMMITMENT_ID_LENGTH, "Commitment ID is too long");
         require!(recipient_id != env::current_account_id(), "Commitment recipient cannot be treasury");
         require!(!self.commitments.contains_key(&id), "Commitment already exists");
+        require!(self.commitments.len() < MAX_COMMITMENTS, "Maximum active commitments reached");
         require!(amount.0 > 0, "Commitment amount must be positive");
         require!(description.len() <= 256, "Description is too long");
+        let updated_total = self.active_commitment_total.checked_add(amount.0)
+            .unwrap_or_else(|| env::panic_str("Commitment total overflow"));
         self.commitments.insert(id.clone(), Commitment {
             id,
             recipient_id,
             amount: amount.0,
             description,
         });
+        self.active_commitment_total = updated_total;
         self.assert_solvent();
     }
 
@@ -171,11 +186,19 @@ impl Veltron {
         require!(recipient_id != env::current_account_id(), "Commitment recipient cannot be treasury");
         require!(!self.settlement_pending.get(&id).copied().unwrap_or(false),
             "Cannot update a commitment while settlement is pending");
+        let old_amount = self.commitments.get(&id)
+            .unwrap_or_else(|| env::panic_str("Commitment not found"))
+            .amount;
+        let updated_total = self.active_commitment_total
+            .checked_sub(old_amount)
+            .and_then(|total| total.checked_add(amount.0))
+            .unwrap_or_else(|| env::panic_str("Commitment total overflow"));
         let commitment = self.commitments.get_mut(&id)
             .unwrap_or_else(|| env::panic_str("Commitment not found"));
         commitment.recipient_id = recipient_id;
         commitment.amount = amount.0;
         commitment.description = description;
+        self.active_commitment_total = updated_total;
         self.assert_solvent();
     }
 
@@ -183,7 +206,9 @@ impl Veltron {
         self.assert_owner();
         require!(!self.settlement_pending.get(&id).copied().unwrap_or(false),
             "Cannot cancel a commitment while settlement is pending");
-        require!(self.commitments.remove(&id).is_some(), "Commitment not found");
+        let removed = self.commitments.remove(&id).unwrap_or_else(|| env::panic_str("Commitment not found"));
+        self.active_commitment_total = self.active_commitment_total.checked_sub(removed.amount)
+            .unwrap_or_else(|| env::panic_str("Commitment total underflow"));
     }
 
     pub fn set_safety_reserve(&mut self, amount: U128) {
@@ -236,14 +261,49 @@ impl Veltron {
         self.calculate_position()
     }
 
-    pub fn get_commitments(&self) -> Vec<CommitmentView> {
-        self.commitments.values().map(|c| CommitmentView {
-            id: c.id.clone(),
-            recipient_id: c.recipient_id.clone(),
-            amount: U128(c.amount),
-            description: c.description.clone(),
-            settlement_pending: self.settlement_pending.get(&c.id).copied().unwrap_or(false),
-        }).collect()
+    /// Returns commitments after `from_id` (exclusive), with a bounded page size.
+    /// Pass the previous page's `next_cursor` as `from_id` to fetch the next page.
+    pub fn get_commitments(
+        &self,
+        from_id: Option<String>,
+        limit: Option<u32>,
+    ) -> CommitmentPage {
+        let limit = limit.unwrap_or(DEFAULT_COMMITMENT_PAGE_SIZE);
+        require!(limit > 0, "Page limit must be positive");
+        let limit = limit.min(MAX_COMMITMENT_PAGE_SIZE) as usize;
+        let mut commitments: Vec<CommitmentView> = match from_id {
+            Some(cursor) => self.commitments
+                .range((std::ops::Bound::Excluded(cursor), std::ops::Bound::Unbounded))
+                .take(limit + 1)
+                .map(|(_, c)| CommitmentView {
+                    id: c.id.clone(),
+                    recipient_id: c.recipient_id.clone(),
+                    amount: U128(c.amount),
+                    description: c.description.clone(),
+                    settlement_pending: self.settlement_pending.get(&c.id).copied().unwrap_or(false),
+                })
+                .collect(),
+            None => self.commitments.values()
+                .take(limit + 1)
+                .map(|c| CommitmentView {
+                    id: c.id.clone(),
+                    recipient_id: c.recipient_id.clone(),
+                    amount: U128(c.amount),
+                    description: c.description.clone(),
+                    settlement_pending: self.settlement_pending.get(&c.id).copied().unwrap_or(false),
+                })
+                .collect(),
+        };
+        let has_more = commitments.len() > limit;
+        if has_more {
+            commitments.pop();
+        }
+        let next_cursor = if has_more {
+            commitments.last().map(|c| c.id.clone())
+        } else {
+            None
+        };
+        CommitmentPage { commitments, next_cursor }
     }
 
     pub fn get_pending_transfers(&self) -> Vec<PendingTransfer> {
@@ -264,7 +324,10 @@ impl Veltron {
                 require!(self.treasury_balance >= transfer.amount, "Treasury accounting underflow");
                 self.treasury_balance -= transfer.amount;
                 if let PendingKind::CommitmentSettlement { commitment_id } = transfer.kind {
-                    self.commitments.remove(&commitment_id);
+                    let commitment = self.commitments.remove(&commitment_id)
+                        .unwrap_or_else(|| env::panic_str("Commitment not found during settlement callback"));
+                    self.active_commitment_total = self.active_commitment_total.checked_sub(commitment.amount)
+                        .unwrap_or_else(|| env::panic_str("Commitment total underflow"));
                     self.settlement_pending.remove(&commitment_id);
                 }
                 env::log_str(&format!("VELTRON_TRANSFER_SUCCESS:{}", transfer_id));
@@ -284,12 +347,6 @@ impl Veltron {
         require!(env::predecessor_account_id() == self.owner_id, "Only the treasury owner");
     }
 
-    fn active_commitment_total(&self) -> u128 {
-        self.commitments.values().fold(0u128, |sum, c| {
-            sum.checked_add(c.amount).unwrap_or_else(|| env::panic_str("Commitment total overflow"))
-        })
-    }
-
     fn pending_discretionary_total(&self) -> u128 {
         self.pending.values().fold(0u128, |sum, p| {
             if matches!(p.kind, PendingKind::Discretionary { .. }) {
@@ -301,7 +358,7 @@ impl Veltron {
     }
 
     fn calculate_position(&self) -> FinancialPosition {
-        let commitments = self.active_commitment_total();
+        let commitments = self.active_commitment_total;
         let pending = self.pending_discretionary_total();
         let reserved = commitments
             .checked_add(self.safety_reserve)
@@ -318,7 +375,7 @@ impl Veltron {
     }
 
     fn assert_solvent(&self) {
-        let reserved = self.active_commitment_total()
+        let reserved = self.active_commitment_total
             .checked_add(self.safety_reserve)
             .and_then(|v| v.checked_add(self.pending_discretionary_total()))
             .unwrap_or_else(|| env::panic_str("Reserved balance overflow"));
@@ -663,14 +720,14 @@ mod tests {
             "Vendor invoice".to_string(),
         );
         contract.settle_commitment("invoice-1".to_string());
-        assert_eq!(contract.get_commitments().len(), 1);
-        assert!(contract.get_commitments()[0].settlement_pending);
+        assert_eq!(contract.get_commitments(None, None).commitments.len(), 1);
+        assert!(contract.get_commitments(None, None).commitments[0].settlement_pending);
 
         callback_context();
         contract.on_transfer_complete(0, Ok(()));
 
         assert_eq!(contract.get_financial_position().treasury_balance.0, 800);
-        assert!(contract.get_commitments().is_empty());
+        assert!(contract.get_commitments(None, None).commitments.is_empty());
     }
 
     #[test]
@@ -688,7 +745,7 @@ mod tests {
         callback_context();
         contract.on_transfer_complete(0, Err(PromiseError::Failed));
 
-        let commitments = contract.get_commitments();
+        let commitments = contract.get_commitments(None, None).commitments;
         assert_eq!(commitments.len(), 1);
         assert!(!commitments[0].settlement_pending);
         assert_eq!(commitments[0].amount.0, 200);
