@@ -3,7 +3,7 @@ use near_sdk::{
     PromiseError, PromiseOrValue,
 };
 use near_sdk::json_types::{U128, U64};
-use std::collections::BTreeMap;
+use near_sdk::collections::TreeMap;
 
 const FT_TRANSFER_GAS: Gas = Gas::from_tgas(10);
 const CALLBACK_GAS: Gas = Gas::from_tgas(10);
@@ -110,9 +110,9 @@ pub struct Veltron {
     treasury_balance: u128,
     safety_reserve: u128,
     next_transfer_id: u64,
-    commitments: BTreeMap<String, Commitment>,
-    pending: BTreeMap<u64, PendingTransfer>,
-    settlement_pending: BTreeMap<String, bool>,
+    commitments: TreeMap<String, Commitment>,
+    pending: TreeMap<u64, PendingTransfer>,
+    settlement_pending: TreeMap<String, bool>,
     balance_audit_pending: bool,
     paused: bool,
     observed_token_balance: Option<u128>,
@@ -146,9 +146,9 @@ impl Veltron {
             treasury_balance: 0,
             safety_reserve: safety_reserve.0,
             next_transfer_id: 0,
-            commitments: BTreeMap::new(),
-            pending: BTreeMap::new(),
-            settlement_pending: BTreeMap::new(),
+            commitments: TreeMap::new(b"veltron_commitments"),
+            pending: TreeMap::new(b"veltron_pending"),
+            settlement_pending: TreeMap::new(b"veltron_settlement_pending"),
             balance_audit_pending: false,
             paused: false,
             observed_token_balance: None,
@@ -200,10 +200,10 @@ impl Veltron {
         require!(recipient_id != env::current_account_id(), "Commitment recipient cannot be treasury");
         require!(recipient_id != self.token_id, "Commitment recipient cannot be token contract");
         require!(!self.commitments.contains_key(&id), "Commitment already exists");
-        require!(self.commitments.len() < MAX_COMMITMENTS, "Maximum active commitments reached");
+        require!(self.commitments.len() < MAX_COMMITMENTS as u64, "Maximum active commitments reached");
         require!(amount.0 > 0, "Commitment amount must be positive");
         require!(description.len() <= MAX_DESCRIPTION_LENGTH, "Description is too long");
-        self.commitments.insert(id.clone(), Commitment {
+        self.commitments.insert(&id, &Commitment {
             id,
             recipient_id,
             amount: amount.0,
@@ -224,13 +224,14 @@ impl Veltron {
         require!(description.len() <= 256, "Description is too long");
         require!(recipient_id != env::current_account_id(), "Commitment recipient cannot be treasury");
         require!(recipient_id != self.token_id, "Commitment recipient cannot be token contract");
-        require!(!self.settlement_pending.get(&id).copied().unwrap_or(false),
+        require!(!self.settlement_pending.get(&id).unwrap_or(false),
             "Cannot update a commitment while settlement is pending");
-        let commitment = self.commitments.get_mut(&id)
+        let mut commitment = self.commitments.get(&id)
             .unwrap_or_else(|| env::panic_str("Commitment not found"));
         commitment.recipient_id = recipient_id;
         commitment.amount = amount.0;
         commitment.description = description;
+        self.commitments.insert(&id, &commitment);
         self.assert_solvent();
     }
 
@@ -297,7 +298,7 @@ impl Veltron {
             .unwrap_or_else(|| env::panic_str("Commitment not found"))
             .clone();
         require!(commitment.amount <= self.treasury_balance, "Treasury balance is insufficient");
-        self.settlement_pending.insert(id.clone(), true);
+        self.settlement_pending.insert(&id, &true);
         self.start_transfer(
             commitment.amount,
             PendingKind::CommitmentSettlement { commitment_id: id },
@@ -390,19 +391,19 @@ impl Veltron {
         let limit = limit.min(MAX_COMMITMENT_PAGE_SIZE) as usize;
         let mut commitments: Vec<CommitmentView> = match from_id {
             Some(cursor) => self.commitments
-                .range((std::ops::Bound::Excluded(cursor), std::ops::Bound::Unbounded))
+                .iter_from(cursor)
                 .take(limit + 1)
                 .map(|(_, c)| CommitmentView {
                     id: c.id.clone(),
                     recipient_id: c.recipient_id.clone(),
                     amount: U128(c.amount),
                     description: c.description.clone(),
-                    settlement_pending: self.settlement_pending.get(&c.id).copied().unwrap_or(false),
+                    settlement_pending: self.settlement_pending.get(&c.id).unwrap_or(false),
                 })
                 .collect(),
-            None => self.commitments.values()
+            None => self.commitments.iter()
                 .take(limit + 1)
-                .map(|c| CommitmentView {
+                .map(|(_, c)| CommitmentView {
                     id: c.id.clone(),
                     recipient_id: c.recipient_id.clone(),
                     amount: U128(c.amount),
@@ -426,7 +427,7 @@ impl Veltron {
     /// Returns the bounded in-flight transfer list, including creation timestamps.
     /// A long-lived entry is a monitoring signal, not proof that the token transfer failed.
     pub fn get_pending_transfers(&self) -> Vec<PendingTransferView> {
-        self.pending.values().map(|p| PendingTransferView {
+        self.pending.iter().map(|(_, p)| PendingTransferView {
             id: U64(p.id),
             amount: U128(p.amount),
             kind: p.kind.clone(),
@@ -476,7 +477,7 @@ impl Veltron {
     }
 
     fn pending_discretionary_total(&self) -> u128 {
-        self.pending.values().fold(0u128, |sum, p| {
+        self.pending.iter().fold(0u128, |sum, (_, p)| {
             if matches!(p.kind, PendingKind::Discretionary { .. }) {
                 sum.checked_add(p.amount).unwrap_or_else(|| env::panic_str("Pending total overflow"))
             } else {
@@ -486,7 +487,7 @@ impl Veltron {
     }
 
     fn active_commitment_total(&self) -> u128 {
-        self.commitments.values().fold(0u128, |sum, c| {
+        self.commitments.iter().fold(0u128, |sum, (_, c)| {
             sum.checked_add(c.amount).unwrap_or_else(|| env::panic_str("Commitment total overflow"))
         })
     }
@@ -518,7 +519,7 @@ impl Veltron {
 
     fn start_transfer(&mut self, amount: u128, kind: PendingKind) -> Promise {
         require!(!self.balance_audit_pending, "Token balance audit in progress");
-        require!(self.pending.len() < MAX_PENDING_TRANSFERS, "Maximum pending transfers reached");
+        require!(self.pending.len() < MAX_PENDING_TRANSFERS as u64, "Maximum pending transfers reached");
         self.invalidate_balance_audit();
         let id = self.next_transfer_id;
         self.next_transfer_id = self.next_transfer_id.checked_add(1)
@@ -531,7 +532,7 @@ impl Veltron {
                 (c.recipient_id.clone(), Some(format!("VELTRON commitment {}", commitment_id)))
             }
         };
-        self.pending.insert(id, PendingTransfer {
+        self.pending.insert(&id, &PendingTransfer {
             id,
             amount,
             kind,
