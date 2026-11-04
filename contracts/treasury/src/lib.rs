@@ -104,6 +104,7 @@ pub struct Veltron {
     pending: BTreeMap<u64, PendingTransfer>,
     settlement_pending: BTreeMap<String, bool>,
     balance_audit_pending: bool,
+    paused: bool,
     observed_token_balance: Option<u128>,
     ledger_balance_at_observation: Option<u128>,
     balance_observed_at_ns: Option<u64>,
@@ -139,6 +140,7 @@ impl Veltron {
             pending: BTreeMap::new(),
             settlement_pending: BTreeMap::new(),
             balance_audit_pending: false,
+            paused: false,
             observed_token_balance: None,
             ledger_balance_at_observation: None,
             balance_observed_at_ns: None,
@@ -229,6 +231,17 @@ impl Veltron {
         self.commitments.remove(&id).unwrap_or_else(|| env::panic_str("Commitment not found"));
     }
 
+    /// Emergency circuit breaker for new outgoing treasury transfers.
+    pub fn set_paused(&mut self, paused: bool) {
+        self.assert_owner();
+        self.paused = paused;
+        env::log_str(if paused { "VELTRON_PAUSED" } else { "VELTRON_UNPAUSED" });
+    }
+
+    pub fn get_pause_status(&self) -> bool {
+        self.paused
+    }
+
     pub fn set_safety_reserve(&mut self, amount: U128) {
         self.assert_owner();
         self.safety_reserve = amount.0;
@@ -253,6 +266,7 @@ impl Veltron {
         memo: Option<String>,
     ) -> Promise {
         require!(env::predecessor_account_id() == self.agent_id, "Only the authorized agent");
+        require!(!self.paused, "Treasury is paused");
         require!(amount.0 > 0, "Payment amount must be positive");
         require!(amount.0 <= self.max_per_transaction, "Per-transaction limit exceeded");
         require!(recipient_id != env::current_account_id(), "Cannot pay treasury to itself");
@@ -266,6 +280,7 @@ impl Veltron {
     /// Owner settles an existing obligation to its pre-committed recipient.
     pub fn settle_commitment(&mut self, id: String) -> Promise {
         self.assert_owner();
+        require!(!self.paused, "Treasury is paused");
         require!(!self.settlement_pending.get(&id).copied().unwrap_or(false),
             "Settlement already pending");
         let commitment = self.commitments.get(&id)
