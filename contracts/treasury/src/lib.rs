@@ -1353,6 +1353,7 @@ mod tests {
     #[should_panic(expected = "Only the treasury owner")]
     fn agent_cannot_update_commitment() {
         let mut contract = setup("owner.near");
+        contract.treasury_balance = 1_000;
         contract.create_commitment(
             "protected".to_string(),
             account("vendor.near"),
@@ -1374,6 +1375,7 @@ mod tests {
     #[should_panic(expected = "Only the treasury owner")]
     fn agent_cannot_cancel_commitment() {
         let mut contract = setup("owner.near");
+        contract.treasury_balance = 1_000;
         contract.create_commitment(
             "protected".to_string(),
             account("vendor.near"),
