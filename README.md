@@ -21,17 +21,22 @@ The contract—not the AI agent or frontend—is the authority for payment decis
 
 ## MVP implementation
 
-The first Rust contract crate is in `contracts/treasury`.
+The Rust treasury contract is in `contracts/treasury`; the NEP-141 test token is in `contracts/test-token`.
 
 - One configured NEP-141 fungible token.
-- Owner-managed commitments with fixed recipients.
+- Deposits credited through the configured token's `ft_transfer_call` receiver.
+- Owner-managed commitments with fixed recipients and bounded pagination.
 - Owner-managed safety reserve and agent transaction limit.
 - Agent-initiated discretionary payments.
 - Owner-initiated commitment settlement.
 - Asynchronous transfer callbacks; pending discretionary payments remain reserved until confirmed.
-- Unit tests for the initial accounting and reservation rules.
+- Emergency pause for new outgoing transfers and commitment settlements.
+- Read-only token balance audit and guarded reconciliation of observed surplus.
+- Unit and NEAR Sandbox integration tests for accounting, permissions, transfers, failures, retries, and callback behavior.
 
 Read [the contract design and limitations](docs/CONTRACT-DESIGN.md) before using the MVP.
+
+For a controlled testnet preparation and verification process, see the [testnet deployment checklist](docs/TESTNET-DEPLOYMENT-CHECKLIST.md). It is a checklist, not authorization to deploy or use real funds.
 
 ## Example
 
@@ -61,10 +66,30 @@ This is an early hackathon MVP under active development. It has not been audited
 
 ## Local contract checks
 
-From the repository root, run:
+Install the Rust toolchain and the `wasm32-unknown-unknown` target, then run these commands from the repository root:
+
+Build the treasury WebAssembly contract:
+
+```bash
+cargo build --release -p veltron-treasury --target wasm32-unknown-unknown
+```
+
+Build the test-token WebAssembly contract:
+
+```bash
+cargo build --release -p veltron-test-token --target wasm32-unknown-unknown
+```
+
+Run the complete workspace and NEAR Sandbox integration tests:
+
+```bash
+cargo test --workspace
+```
+
+For a faster treasury-only test run:
 
 ```bash
 cargo test -p veltron-treasury
 ```
 
-A GitHub Actions workflow also runs the contract tests on relevant pushes and pull requests.
+GitHub Actions runs both WebAssembly builds and the full workspace/Sandbox test suite on relevant pushes and pull requests. A passing CI run verifies that commit's build and tests; it is not a security audit or deployment approval.
