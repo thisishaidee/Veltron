@@ -26,6 +26,15 @@ Pending discretionary transfers are subtracted separately because NEAR cross-con
 - `get_pending_transfers` exposes the current bounded in-flight list and timestamps. An old entry is an alert for investigation, not proof of failure: the token transfer may have succeeded even if the callback did not complete.
 - The contract allows at most 64 pending transfers. New outgoing transfers are rejected at the cap; existing callbacks remain able to clear entries normally.
 - There is deliberately no owner force-clear or timeout-based release. Funds remain reserved until the real transfer outcome is resolved. Operational recovery for a genuinely missing callback requires inspecting the token contract and chain receipts, then a separately designed, evidence-based procedure.
+- A pending transfer that remains unresolved consumes one of the 64 pending slots. If all slots are occupied, new outgoing transfers are blocked until existing callbacks complete or a separately reviewed recovery procedure is implemented. Do not clear a record based only on its age.
+
+## NEAR storage funding and operational liveness
+
+- Commitment records, commitment indexes, pending-transfer records, and settlement locks use persistent NEAR contract storage. Their storage cost is backed by the treasury contract account's NEAR balance.
+- The current MVP has no user-facing storage-deposit method, storage-balance accounting, or automatic top-up mechanism. The operator must fund the contract account with sufficient NEAR for storage staking and transaction execution before use, and monitor that balance during testnet operation.
+- If the contract cannot cover the storage required by a state-changing call, that call can fail. Do not assume a token transfer was submitted merely because an operator initiated a transaction; inspect the transaction outcome and resulting contract state.
+- Storage requirements depend on the number and encoded size of records. The 256 active-commitment and 64 pending-transfer caps bound collection growth, but they do not replace real storage-cost measurements on testnet.
+- Do not withdraw or otherwise consume NEAR needed to back persistent state. A production design should measure worst-case storage requirements and define an explicit funding, monitoring, and recovery policy before handling valuable assets.
 
 ## Emergency pause
 
