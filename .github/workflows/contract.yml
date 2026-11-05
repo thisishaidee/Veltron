@@ -5,12 +5,14 @@ on:
     paths:
       - "Cargo.toml"
       - "Cargo.lock"
+      - "rust-toolchain.toml"
       - "contracts/**"
       - ".github/workflows/contract.yml"
   pull_request:
     paths:
       - "Cargo.toml"
       - "Cargo.lock"
+      - "rust-toolchain.toml"
       - "contracts/**"
       - ".github/workflows/contract.yml"
   workflow_dispatch:
@@ -23,12 +25,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.99.1
         with:
           targets: wasm32-unknown-unknown
       - name: Build treasury WebAssembly contract
-        run: cargo build --release -p veltron-treasury --target wasm32-unknown-unknown
+        run: cargo build --locked --release -p veltron-treasury --target wasm32-unknown-unknown
       - name: Build test-token WebAssembly contract
-        run: cargo build --release -p veltron-test-token --target wasm32-unknown-unknown
+        run: cargo build --locked --release -p veltron-test-token --target wasm32-unknown-unknown
       - name: Run workspace and NEAR Sandbox integration tests
-        run: cargo test --workspace
+        run: cargo test --locked --workspace
