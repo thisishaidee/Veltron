@@ -1820,4 +1820,94 @@ mod tests {
         assert!(contract.get_pending_transfers().is_empty());
     }
 
+    #[test]
+    fn concurrent_commitment_settlements_and_discretionary_payment_preserve_accounting_across_mixed_callbacks() {
+        let mut contract = setup("owner.near");
+        contract.treasury_balance = 1_500;
+
+        contract.create_commitment(
+            "commitment-a".to_string(),
+            account("vendor-a.near"),
+            U128(300),
+            "First obligation".to_string(),
+        );
+        contract.create_commitment(
+            "commitment-b".to_string(),
+            account("vendor-b.near"),
+            U128(400),
+            "Second obligation".to_string(),
+        );
+
+        // The two commitments and reserve leave 700 spendable.
+        let mut agent_context = VMContextBuilder::new();
+        agent_context.predecessor_account_id(account("agent.near"));
+        testing_env!(agent_context.build());
+        contract.request_payment(account("discretionary-vendor.near"), U128(500), None);
+
+        // Both commitment settlements may be in flight at the same time as
+        // the discretionary payment. Each obligation remains reserved.
+        let mut owner_context = VMContextBuilder::new();
+        owner_context.predecessor_account_id(account("owner.near"));
+        testing_env!(owner_context.build());
+        contract.settle_commitment("commitment-a".to_string());
+        contract.settle_commitment("commitment-b".to_string());
+
+        let all_pending = contract.get_financial_position();
+        assert_eq!(all_pending.treasury_balance.0, 1_500);
+        assert_eq!(all_pending.active_commitments.0, 700);
+        assert_eq!(all_pending.pending_discretionary.0, 500);
+        assert_eq!(all_pending.spendable_balance.0, 200);
+        assert_eq!(contract.get_pending_transfers().len(), 3);
+
+        callback_context();
+
+        // The second commitment succeeds first. Only that obligation is removed.
+        contract.on_transfer_complete(2, Ok(()));
+        let after_second_commitment = contract.get_financial_position();
+        assert_eq!(after_second_commitment.treasury_balance.0, 1_100);
+        assert_eq!(after_second_commitment.active_commitments.0, 300);
+        assert_eq!(after_second_commitment.pending_discretionary.0, 500);
+        assert_eq!(after_second_commitment.spendable_balance.0, 200);
+
+        // The discretionary payment succeeds next, independently of the
+        // still-pending first commitment settlement.
+        contract.on_transfer_complete(0, Ok(()));
+        let after_discretionary = contract.get_financial_position();
+        assert_eq!(after_discretionary.treasury_balance.0, 600);
+        assert_eq!(after_discretionary.active_commitments.0, 300);
+        assert_eq!(after_discretionary.pending_discretionary.0, 0);
+        assert_eq!(after_discretionary.spendable_balance.0, 200);
+
+        // The first commitment fails. It remains reserved and becomes retryable.
+        contract.on_transfer_complete(1, Err(PromiseError::Failed));
+        let after_failure = contract.get_financial_position();
+        assert_eq!(after_failure.treasury_balance.0, 600);
+        assert_eq!(after_failure.active_commitments.0, 300);
+        assert_eq!(after_failure.pending_discretionary.0, 0);
+        assert_eq!(after_failure.spendable_balance.0, 200);
+        assert!(contract.get_pending_transfers().is_empty());
+
+        let remaining = contract.get_commitments(None, None).commitments;
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].id, "commitment-a");
+        assert!(!remaining[0].settlement_pending);
+
+        // Retrying the failed obligation must still succeed without changing
+        // the amount or recipient fixed in the original commitment.
+        let mut owner_context = VMContextBuilder::new();
+        owner_context.predecessor_account_id(account("owner.near"));
+        testing_env!(owner_context.build());
+        contract.settle_commitment("commitment-a".to_string());
+        callback_context();
+        contract.on_transfer_complete(3, Ok(()));
+
+        let final_position = contract.get_financial_position();
+        assert_eq!(final_position.treasury_balance.0, 300);
+        assert_eq!(final_position.active_commitments.0, 0);
+        assert_eq!(final_position.pending_discretionary.0, 0);
+        assert_eq!(final_position.spendable_balance.0, 200);
+        assert!(contract.get_commitments(None, None).commitments.is_empty());
+        assert!(contract.get_pending_transfers().is_empty());
+    }
+
 }
