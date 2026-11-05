@@ -1254,3 +1254,105 @@ async fn sandbox_commitment_cancellation_and_settlement_release_storage() -> any
 
     Ok(())
 }
+
+
+#[tokio::test]
+async fn sandbox_repeated_commitment_create_cancel_does_not_accumulate_storage() -> anyhow::Result<()> {
+    let worker = near_workspaces::sandbox().await?;
+    let owner = worker.dev_create_account().await?;
+    let agent = worker.dev_create_account().await?;
+    let vendor = worker.dev_create_account().await?;
+
+    let token = worker.dev_deploy(TOKEN_WASM).await?;
+    token
+        .call("new")
+        .args_json(json!({
+            "owner_id": owner.id(),
+            "total_supply": "10000",
+            "metadata": {
+                "spec": "ft-1.0.0",
+                "name": "VELTRON Test Token",
+                "symbol": "VTT",
+                "decimals": 6
+            }
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    let treasury = worker.dev_deploy(TREASURY_WASM).await?;
+    treasury
+        .call("new")
+        .args_json(json!({
+            "owner_id": owner.id(),
+            "token_id": token.id(),
+            "agent_id": agent.id(),
+            "max_per_transaction": "500",
+            "safety_reserve": "0"
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    register_token_account(&owner, &token, treasury.id().as_str()).await?;
+    owner
+        .call(token.id(), "ft_transfer_call")
+        .args_json(json!({
+            "receiver_id": treasury.id(),
+            "amount": "1000",
+            "memo": "Fund repeated commitment storage test",
+            "msg": ""
+        }))
+        .deposit(NearToken::from_yoctonear(1))
+        .transact()
+        .await?
+        .into_result()?;
+
+    let baseline_storage = treasury.view_account().await?.storage_usage;
+    let commitment_id = "reusable-storage-cycle";
+    let description = "d".repeat(256);
+
+    for cycle in 0..25 {
+        owner
+            .call(treasury.id(), "create_commitment")
+            .args_json(json!({
+                "id": commitment_id,
+                "recipient_id": vendor.id(),
+                "amount": "1",
+                "description": description
+            }))
+            .transact()
+            .await?
+            .into_result()?;
+
+        let after_create = treasury.view_account().await?.storage_usage;
+        assert!(
+            after_create > baseline_storage,
+            "cycle {cycle}: creating a commitment should increase storage"
+        );
+
+        owner
+            .call(treasury.id(), "cancel_commitment")
+            .args_json(json!({ "id": commitment_id }))
+            .transact()
+            .await?
+            .into_result()?;
+
+        let after_cancel = treasury.view_account().await?.storage_usage;
+        println!(
+            "Commitment storage cycle {cycle}: baseline={baseline_storage}, after_create={after_create}, after_cancel={after_cancel}"
+        );
+        assert!(
+            after_cancel <= baseline_storage,
+            "cycle {cycle}: storage grew after cancellation (baseline {baseline_storage}, current {after_cancel})"
+        );
+
+        let position = view_json(&treasury, "get_financial_position", json!({})).await?;
+        let commitments =
+            view_json(&treasury, "get_commitments", json!({ "from_id": null, "limit": 50 })).await?;
+        assert_eq!(position["active_commitments"], "0");
+        assert_eq!(commitments["commitments"].as_array().unwrap().len(), 0);
+    }
+
+    Ok(())
+}
