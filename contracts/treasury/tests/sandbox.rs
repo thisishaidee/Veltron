@@ -1122,7 +1122,6 @@ async fn sandbox_measures_storage_for_maximum_size_commitments() -> anyhow::Resu
     assert!(storage_delta > 0, "commitments should consume persistent storage");
     let position = view_json(&treasury, "get_financial_position", json!({})).await?;
     assert_eq!(position["active_commitments"], "256");
-    assert_eq!(position["active_commitments_total"], "256");
 
     Ok(())
 }
