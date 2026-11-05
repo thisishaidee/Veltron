@@ -1581,6 +1581,35 @@ mod tests {
     }
 
     #[test]
+    fn failed_audit_cannot_restore_snapshot_invalidated_by_deposit() {
+        let mut contract = setup("token.near");
+        contract.treasury_balance = 700;
+        contract.observed_token_balance = Some(900);
+        contract.ledger_balance_at_observation = Some(700);
+        contract.balance_observed_at_ns = Some(123);
+
+        contract.ft_on_transfer(
+            account("depositor.near"),
+            U128(50),
+            String::new(),
+        );
+        assert_eq!(contract.treasury_balance, 750);
+        assert_eq!(contract.observed_token_balance, None);
+        assert_eq!(contract.ledger_balance_at_observation, None);
+        assert_eq!(contract.balance_observed_at_ns, None);
+
+        contract.balance_audit_pending = true;
+        callback_context();
+        contract.on_balance_audit_complete(Err(PromiseError::Failed));
+
+        let audit = contract.get_token_balance_audit();
+        assert!(!audit.audit_pending);
+        assert_eq!(audit.observed_token_balance, None);
+        assert_eq!(audit.ledger_balance_at_observation, None);
+        assert_eq!(audit.observed_at_ns, None);
+    }
+
+    #[test]
     fn outgoing_transfer_invalidates_previous_balance_audit() {
         let mut contract = setup("agent.near");
         contract.treasury_balance = 1_000;
