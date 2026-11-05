@@ -1502,6 +1502,41 @@ mod tests {
 
 
     #[test]
+    fn successful_balance_audit_records_token_and_ledger_snapshot() {
+        let mut contract = setup("owner.near");
+        contract.treasury_balance = 700;
+        contract.balance_audit_pending = true;
+
+        callback_context();
+        contract.on_balance_audit_complete(Ok(U128(900)));
+
+        let audit = contract.get_token_balance_audit();
+        assert!(!audit.audit_pending);
+        assert_eq!(audit.observed_token_balance, Some(U128(900)));
+        assert_eq!(audit.ledger_balance_at_observation, Some(U128(700)));
+        assert_eq!(audit.observed_at_ns, Some(U64(env::block_timestamp())));
+        assert_eq!(contract.get_financial_position().treasury_balance, U128(700));
+    }
+
+    #[test]
+    fn failed_balance_audit_clears_pending_and_preserves_last_successful_snapshot() {
+        let mut contract = setup("owner.near");
+        contract.observed_token_balance = Some(900);
+        contract.ledger_balance_at_observation = Some(700);
+        contract.balance_observed_at_ns = Some(123);
+        contract.balance_audit_pending = true;
+
+        callback_context();
+        contract.on_balance_audit_complete(Err(PromiseError::Failed));
+
+        let audit = contract.get_token_balance_audit();
+        assert!(!audit.audit_pending);
+        assert_eq!(audit.observed_token_balance, Some(U128(900)));
+        assert_eq!(audit.ledger_balance_at_observation, Some(U128(700)));
+        assert_eq!(audit.observed_at_ns, Some(U64(123)));
+    }
+
+    #[test]
     #[should_panic(expected = "Reconciliation amount must be positive")]
     fn rejects_zero_surplus_reconciliation() {
         let mut contract = setup("owner.near");
