@@ -66,30 +66,30 @@ This is an early hackathon MVP under active development. It has not been audited
 
 ## Local contract checks
 
-Install the Rust toolchain and the `wasm32-unknown-unknown` target, then run these commands from the repository root:
+Install the pinned Rust toolchain from `rust-toolchain.toml` and the `wasm32-unknown-unknown` target, then run these commands from the repository root. The `--locked` flag ensures Cargo uses the committed dependency lockfile.
 
 Build the treasury WebAssembly contract:
 
 ```bash
-cargo build --release -p veltron-treasury --target wasm32-unknown-unknown
+cargo build --locked --release -p veltron-treasury --target wasm32-unknown-unknown
 ```
 
 Build the test-token WebAssembly contract:
 
 ```bash
-cargo build --release -p veltron-test-token --target wasm32-unknown-unknown
+cargo build --locked --release -p veltron-test-token --target wasm32-unknown-unknown
 ```
 
 Run the complete workspace and NEAR Sandbox integration tests:
 
 ```bash
-cargo test --workspace
+cargo test --locked --workspace
 ```
 
 For a faster treasury-only test run:
 
 ```bash
-cargo test -p veltron-treasury
+cargo test --locked -p veltron-treasury
 ```
 
-GitHub Actions runs both WebAssembly builds and the full workspace/Sandbox test suite on relevant pushes and pull requests. A passing CI run verifies that commit's build and tests; it is not a security audit or deployment approval.
+GitHub Actions runs both WebAssembly builds and the full workspace/Sandbox test suite on relevant pushes and pull requests. Successful runs also calculate SHA-256 hashes and upload the two release WebAssembly files with a hash report as a 14-day workflow artifact. A passing CI run verifies that commit's build and tests; it is not a security audit or deployment approval.
