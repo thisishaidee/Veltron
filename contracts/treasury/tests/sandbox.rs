@@ -1125,3 +1125,132 @@ async fn sandbox_measures_storage_for_maximum_size_commitments() -> anyhow::Resu
 
     Ok(())
 }
+
+
+#[tokio::test]
+async fn sandbox_commitment_cancellation_and_settlement_release_storage() -> anyhow::Result<()> {
+    let worker = near_workspaces::sandbox().await?;
+    let owner = worker.dev_create_account().await?;
+    let agent = worker.dev_create_account().await?;
+    let vendor = worker.dev_create_account().await?;
+
+    let token = worker.dev_deploy(TOKEN_WASM).await?;
+    token
+        .call("new")
+        .args_json(json!({
+            "owner_id": owner.id(),
+            "total_supply": "10000",
+            "metadata": {
+                "spec": "ft-1.0.0",
+                "name": "VELTRON Test Token",
+                "symbol": "VTT",
+                "decimals": 6
+            }
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    let treasury = worker.dev_deploy(TREASURY_WASM).await?;
+    treasury
+        .call("new")
+        .args_json(json!({
+            "owner_id": owner.id(),
+            "token_id": token.id(),
+            "agent_id": agent.id(),
+            "max_per_transaction": "500",
+            "safety_reserve": "0"
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    register_token_account(&owner, &token, treasury.id().as_str()).await?;
+    register_token_account(&owner, &token, vendor.id().as_str()).await?;
+
+    owner
+        .call(token.id(), "ft_transfer_call")
+        .args_json(json!({
+            "receiver_id": treasury.id(),
+            "amount": "1000",
+            "memo": "Fund commitment storage lifecycle test",
+            "msg": ""
+        }))
+        .deposit(NearToken::from_yoctonear(1))
+        .transact()
+        .await?
+        .into_result()?;
+
+    let storage_baseline = treasury.view_account().await?.storage_usage;
+    let description = "d".repeat(256);
+
+    owner
+        .call(treasury.id(), "create_commitment")
+        .args_json(json!({
+            "id": "cancel-storage-record",
+            "recipient_id": vendor.id(),
+            "amount": "200",
+            "description": description
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    let after_cancelled_commitment_created =
+        treasury.view_account().await?.storage_usage;
+
+    owner
+        .call(treasury.id(), "cancel_commitment")
+        .args_json(json!({ "id": "cancel-storage-record" }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    let after_cancellation = treasury.view_account().await?.storage_usage;
+    println!("Storage baseline before commitment: {storage_baseline} bytes");
+    println!(
+        "Storage after commitment creation: {after_cancelled_commitment_created} bytes"
+    );
+    println!("Storage after cancellation: {after_cancellation} bytes");
+    assert!(
+        after_cancellation < after_cancelled_commitment_created,
+        "cancelling a commitment should release its record and index storage"
+    );
+
+    owner
+        .call(treasury.id(), "create_commitment")
+        .args_json(json!({
+            "id": "settle-storage-record",
+            "recipient_id": vendor.id(),
+            "amount": "200",
+            "description": description
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    let before_settlement = treasury.view_account().await?.storage_usage;
+
+    let settlement = owner
+        .call(treasury.id(), "settle_commitment")
+        .args_json(json!({ "id": "settle-storage-record" }))
+        .max_gas()
+        .transact()
+        .await?;
+    settlement.into_result()?;
+
+    let after_settlement = treasury.view_account().await?.storage_usage;
+    println!("Storage before successful settlement: {before_settlement} bytes");
+    println!("Storage after successful settlement callback: {after_settlement} bytes");
+    assert!(
+        after_settlement < before_settlement,
+        "successful settlement should release commitment, index, lock and pending-transfer storage"
+    );
+
+    let position = view_json(&treasury, "get_financial_position", json!({})).await?;
+    let pending = view_json(&treasury, "get_pending_transfers", json!({})).await?;
+    assert_eq!(position["active_commitments"], "0");
+    assert_eq!(pending, json!([]));
+
+    Ok(())
+}
