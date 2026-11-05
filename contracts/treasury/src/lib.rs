@@ -1620,6 +1620,41 @@ mod tests {
     }
 
     #[test]
+    fn failed_commitment_callback_releases_settlement_lock_while_paused() {
+        let mut contract = setup("owner.near");
+        contract.treasury_balance = 1_000;
+        contract.create_commitment(
+            "paused-retry".to_string(),
+            account("vendor.near"),
+            U128(200),
+            "Retry after emergency pause".to_string(),
+        );
+        contract.settle_commitment("paused-retry".to_string());
+
+        let mut owner_context = VMContextBuilder::new();
+        owner_context.current_account_id(account("treasury.near"));
+        owner_context.predecessor_account_id(account("owner.near"));
+        testing_env!(owner_context.build());
+        contract.set_paused(true);
+
+        callback_context();
+        contract.on_transfer_complete(0, Err(PromiseError::Failed));
+
+        let position = contract.get_financial_position();
+        assert_eq!(position.treasury_balance.0, 1_000);
+        assert_eq!(position.active_commitments.0, 200);
+        assert_eq!(position.pending_discretionary.0, 0);
+        assert_eq!(position.spendable_balance.0, 700);
+        assert!(contract.get_pending_transfers().is_empty());
+        assert!(contract.get_pause_status());
+
+        let commitments = contract.get_commitments(None, None).commitments;
+        assert_eq!(commitments.len(), 1);
+        assert_eq!(commitments[0].id, "paused-retry");
+        assert!(!commitments[0].settlement_pending);
+    }
+
+    #[test]
     fn accepted_deposit_is_still_credited_while_paused() {
         let mut contract = setup("owner.near");
         contract.paused = true;
