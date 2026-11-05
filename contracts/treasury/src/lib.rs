@@ -1040,6 +1040,53 @@ mod tests {
     }
 
     #[test]
+    fn agent_can_request_payment_at_exact_transaction_limit() {
+        let mut contract = setup("agent.near");
+        contract.treasury_balance = 1_000;
+
+        contract.request_payment(account("vendor.near"), U128(500), None);
+
+        let pending = contract.get_pending_transfers();
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].amount.0, 500);
+        assert_eq!(contract.get_financial_position().pending_discretionary.0, 500);
+        assert_eq!(contract.get_financial_position().spendable_balance.0, 400);
+    }
+
+    #[test]
+    #[should_panic(expected = "Only the treasury owner")]
+    fn agent_cannot_change_agent_or_spending_limit() {
+        let mut contract = setup("agent.near");
+        contract.set_agent(account("attacker.near"), U128(10_000));
+    }
+
+    #[test]
+    #[should_panic(expected = "Only the authorized agent")]
+    fn rotated_out_agent_cannot_request_payment() {
+        let mut contract = setup("owner.near");
+        contract.treasury_balance = 1_000;
+        contract.set_agent(account("new-agent.near"), U128(300));
+
+        let mut former_agent_context = VMContextBuilder::new();
+        former_agent_context.predecessor_account_id(account("agent.near"));
+        testing_env!(former_agent_context.build());
+        contract.request_payment(account("vendor.near"), U128(50), None);
+    }
+
+    #[test]
+    #[should_panic(expected = "Per-transaction limit exceeded")]
+    fn reduced_agent_limit_applies_to_next_payment() {
+        let mut contract = setup("owner.near");
+        contract.treasury_balance = 1_000;
+        contract.set_agent(account("agent.near"), U128(200));
+
+        let mut agent_context = VMContextBuilder::new();
+        agent_context.predecessor_account_id(account("agent.near"));
+        testing_env!(agent_context.build());
+        contract.request_payment(account("vendor.near"), U128(201), None);
+    }
+
+    #[test]
     #[should_panic(expected = "Per-transaction limit exceeded")]
     fn agent_cannot_exceed_per_transaction_limit() {
         let mut contract = setup("agent.near");
