@@ -579,7 +579,7 @@ impl Veltron {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use near_sdk::test_utils::VMContextBuilder;
+    use near_sdk::test_utils::{get_logs, VMContextBuilder};
     use near_sdk::testing_env;
 
     fn account(value: &str) -> AccountId {
@@ -1759,6 +1759,9 @@ mod tests {
         assert_eq!(pending.len(), 1);
         assert_eq!(pending[0].created_at_ns, U64(123_456));
         assert_eq!(pending[0].amount, U128(100));
+        assert!(get_logs().iter().any(|log| {
+            log == "VELTRON_TRANSFER_STARTED id=0 amount=100 recipient=vendor.near kind=discretionary"
+        }));
     }
 
     #[test]
