@@ -778,6 +778,56 @@ mod tests {
     }
 
     #[test]
+    fn commitment_id_can_be_reused_after_cancel_and_successful_settlement() {
+        let mut contract = setup("owner.near");
+        contract.treasury_balance = 2_000;
+
+        contract.create_commitment(
+            "reusable".to_string(),
+            account("first-vendor.near"),
+            U128(200),
+            "First obligation".to_string(),
+        );
+        contract.cancel_commitment("reusable".to_string());
+
+        assert_eq!(contract.get_financial_position().active_commitments.0, 0);
+        assert!(contract.get_commitments(None, None).commitments.is_empty());
+
+        // Cancellation removes both the record and active index entry.
+        contract.create_commitment(
+            "reusable".to_string(),
+            account("second-vendor.near"),
+            U128(300),
+            "Second obligation".to_string(),
+        );
+        contract.settle_commitment("reusable".to_string());
+        callback_context();
+        contract.on_transfer_complete(0, Ok(()));
+
+        assert_eq!(contract.get_financial_position().active_commitments.0, 0);
+        assert!(contract.get_commitments(None, None).commitments.is_empty());
+
+        // Successful settlement also frees the identifier for a new obligation.
+        let mut owner_context = VMContextBuilder::new();
+        owner_context.predecessor_account_id(account("owner.near"));
+        testing_env!(owner_context.build());
+        contract.create_commitment(
+            "reusable".to_string(),
+            account("third-vendor.near"),
+            U128(100),
+            "Third obligation".to_string(),
+        );
+
+        let commitments = contract.get_commitments(None, None).commitments;
+        assert_eq!(commitments.len(), 1);
+        assert_eq!(commitments[0].id, "reusable");
+        assert_eq!(commitments[0].recipient_id, account("third-vendor.near"));
+        assert_eq!(commitments[0].amount.0, 100);
+        assert!(!commitments[0].settlement_pending);
+        assert_eq!(contract.get_financial_position().active_commitments.0, 100);
+    }
+
+    #[test]
     fn commitments_are_returned_in_bounded_cursor_pages() {
         let mut contract = setup("owner.near");
         contract.treasury_balance = 10_000;
