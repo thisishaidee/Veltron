@@ -32,5 +32,21 @@ jobs:
         run: cargo build --locked --release -p veltron-treasury --target wasm32-unknown-unknown
       - name: Build test-token WebAssembly contract
         run: cargo build --locked --release -p veltron-test-token --target wasm32-unknown-unknown
+      - name: Calculate WebAssembly SHA-256 hashes
+        run: |
+          sha256sum \
+            target/wasm32-unknown-unknown/release/veltron_treasury.wasm \
+            target/wasm32-unknown-unknown/release/veltron_test_token.wasm \
+            | tee wasm-sha256.txt
+      - name: Upload release WebAssembly artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: veltron-wasm-${{ github.sha }}
+          path: |
+            target/wasm32-unknown-unknown/release/veltron_treasury.wasm
+            target/wasm32-unknown-unknown/release/veltron_test_token.wasm
+            wasm-sha256.txt
+          if-no-files-found: error
+          retention-days: 14
       - name: Run workspace and NEAR Sandbox integration tests
         run: cargo test --locked --workspace
