@@ -550,12 +550,20 @@ impl Veltron {
                 (c.recipient_id.clone(), Some(format!("VELTRON commitment {}", commitment_id)))
             }
         };
+        let transfer_kind = match &kind {
+            PendingKind::Discretionary { .. } => "discretionary",
+            PendingKind::CommitmentSettlement { .. } => "commitment_settlement",
+        };
         self.pending.insert(&id, &PendingTransfer {
             id,
             amount,
             kind,
             created_at_ns: env::block_timestamp(),
         });
+        env::log_str(&format!(
+            "VELTRON_TRANSFER_STARTED id={} amount={} recipient={} kind={}",
+            id, amount, recipient_id, transfer_kind
+        ));
         ext_ft::ext(self.token_id.clone())
             .with_attached_deposit(NearToken::from_yoctonear(1))
             .with_static_gas(FT_TRANSFER_GAS)
