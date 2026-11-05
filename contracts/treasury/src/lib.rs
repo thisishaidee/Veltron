@@ -1338,6 +1338,72 @@ mod tests {
     }
 
     #[test]
+    #[should_panic(expected = "Only the treasury owner")]
+    fn agent_cannot_create_commitment() {
+        let mut contract = setup("agent.near");
+        contract.create_commitment(
+            "unauthorized".to_string(),
+            account("vendor.near"),
+            U128(100),
+            "Unauthorized".to_string(),
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "Only the treasury owner")]
+    fn agent_cannot_update_commitment() {
+        let mut contract = setup("owner.near");
+        contract.create_commitment(
+            "protected".to_string(),
+            account("vendor.near"),
+            U128(100),
+            "Protected".to_string(),
+        );
+        let mut agent_context = VMContextBuilder::new();
+        agent_context.predecessor_account_id(account("agent.near"));
+        testing_env!(agent_context.build());
+        contract.update_commitment(
+            "protected".to_string(),
+            account("attacker.near"),
+            U128(1),
+            "Changed".to_string(),
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "Only the treasury owner")]
+    fn agent_cannot_cancel_commitment() {
+        let mut contract = setup("owner.near");
+        contract.create_commitment(
+            "protected".to_string(),
+            account("vendor.near"),
+            U128(100),
+            "Protected".to_string(),
+        );
+        let mut agent_context = VMContextBuilder::new();
+        agent_context.predecessor_account_id(account("agent.near"));
+        testing_env!(agent_context.build());
+        contract.cancel_commitment("protected".to_string());
+    }
+
+    #[test]
+    #[should_panic(expected = "Only the treasury owner")]
+    fn agent_cannot_settle_commitment() {
+        let mut contract = setup("owner.near");
+        contract.treasury_balance = 1_000;
+        contract.create_commitment(
+            "protected".to_string(),
+            account("vendor.near"),
+            U128(100),
+            "Protected".to_string(),
+        );
+        let mut agent_context = VMContextBuilder::new();
+        agent_context.predecessor_account_id(account("agent.near"));
+        testing_env!(agent_context.build());
+        contract.settle_commitment("protected".to_string());
+    }
+
+    #[test]
     fn owner_can_cancel_commitment_and_release_reservation() {
         let mut contract = setup("owner.near");
         contract.treasury_balance = 1_000;
