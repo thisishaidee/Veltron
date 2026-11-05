@@ -1028,4 +1028,101 @@ async fn sandbox_deposit_invalidates_prior_surplus_audit() -> anyhow::Result<()>
     Ok(())
 }
 
+#[tokio::test]
+async fn sandbox_measures_storage_for_maximum_size_commitments() -> anyhow::Result<()> {
+    let worker = near_workspaces::sandbox().await?;
+    let owner = worker.dev_create_account().await?;
+    let agent = worker.dev_create_account().await?;
 
+    let token = worker.dev_deploy(TOKEN_WASM).await?;
+    token
+        .call("new")
+        .args_json(json!({
+            "owner_id": owner.id(),
+            "total_supply": "10000",
+            "metadata": {
+                "spec": "ft-1.0.0",
+                "name": "VELTRON Test Token",
+                "symbol": "VTT",
+                "decimals": 6
+            }
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    let treasury = worker.dev_deploy(TREASURY_WASM).await?;
+    treasury
+        .call("new")
+        .args_json(json!({
+            "owner_id": owner.id(),
+            "token_id": token.id(),
+            "agent_id": agent.id(),
+            "max_per_transaction": "500",
+            "safety_reserve": "0"
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    register_token_account(&owner, &token, treasury.id().as_str()).await?;
+
+    owner
+        .call(token.id(), "ft_transfer_call")
+        .args_json(json!({
+            "receiver_id": treasury.id(),
+            "amount": "1000",
+            "memo": "Fund maximum commitment storage measurement",
+            "msg": ""
+        }))
+        .deposit(NearToken::from_yoctonear(1))
+        .transact()
+        .await?
+        .into_result()?;
+
+    // Measure after deployment, initialization, token registration and funding,
+    // so the delta isolates storage added by the commitment records and index.
+    let storage_before = treasury.view_account().await?.storage_usage;
+
+    // 64-byte unique IDs, 64-byte valid recipient AccountId, and 256-byte
+    // descriptions exercise the configured maximum input sizes.
+    let recipient_id = format!("{}.near", "a".repeat(59));
+    let description = "d".repeat(256);
+
+    for index in 0..256 {
+        let id = format!("{index:03}{}", "i".repeat(61));
+        assert_eq!(id.len(), 64);
+
+        owner
+            .call(treasury.id(), "create_commitment")
+            .args_json(json!({
+                "id": id,
+                "recipient_id": recipient_id,
+                "amount": "1",
+                "description": description
+            }))
+            .transact()
+            .await?
+            .into_result()?;
+    }
+
+    let storage_after = treasury.view_account().await?.storage_usage;
+    let storage_delta = storage_after
+        .checked_sub(storage_before)
+        .expect("storage usage should not decrease after adding commitments");
+
+    println!("Storage before 256 maximum-size commitments: {storage_before} bytes");
+    println!("Storage after 256 maximum-size commitments: {storage_after} bytes");
+    println!("Storage added by 256 maximum-size commitments: {storage_delta} bytes");
+    println!(
+        "Average added storage per maximum-size commitment: {:.2} bytes",
+        storage_delta as f64 / 256.0
+    );
+
+    assert!(storage_delta > 0, "commitments should consume persistent storage");
+    let position = view_json(&treasury, "get_financial_position", json!({})).await?;
+    assert_eq!(position["active_commitments"], "256");
+    assert_eq!(position["active_commitments_total"], "256");
+
+    Ok(())
+}
