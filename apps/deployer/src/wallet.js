@@ -14,7 +14,8 @@ const account = document.querySelector("#wallet-account");
 const network = document.querySelector("#wallet-network");
 const rpcNetwork = document.querySelector("#rpc-network");
 
-let connector;\nlet connectedAccountId;
+let connector;
+let connectedAccountId;
 
 function showStatus(message) {
   status.textContent = message;
@@ -270,7 +271,8 @@ tokenCheckButton.addEventListener("click", verifyTokenContractReadOnly);
 
 const deployButton = document.querySelector("#deploy-token-contract");
 const deployNetworkConfirmation = document.querySelector("#confirm-testnet-network");
-const deployStatus = document.querySelector("#deployment-execution-status");\nconst verifyDeployedCodeButton = document.querySelector("#verify-deployed-code");
+const deployStatus = document.querySelector("#deployment-execution-status");
+const verifyDeployedCodeButton = document.querySelector("#verify-deployed-code");
 
 function formatYoctoNear(value) {
   const amount = BigInt(value);
