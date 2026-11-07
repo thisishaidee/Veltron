@@ -17,7 +17,6 @@ async function initializeWalletConnection() {
 
   try {
     connector = new NearConnector({
-      network: "testnet",
       features: { testnet: true },
       footerBranding: null
     });
@@ -26,12 +25,13 @@ async function initializeWalletConnection() {
       const accountId = event?.accounts?.[0]?.accountId;
       if (!accountId) {
         account.textContent = "Unavailable";
+        network.textContent = "Not verified";
         showStatus("Wallet connected, but no account ID was returned.");
         return;
       }
 
       account.textContent = accountId;
-      network.textContent = "NEAR Testnet";
+      network.textContent = "Testnet-compatible wallet selected; active network not independently verified";
       showStatus("Wallet connected. Read-only mode: no transaction actions are enabled.");
       connectButton.disabled = false;
     });
@@ -45,7 +45,7 @@ async function initializeWalletConnection() {
 
     await connector.whenManifestLoaded;
     connectButton.disabled = false;
-    showStatus("Ready. Connect a wallet to NEAR Testnet.");
+    showStatus("Ready. Choose a wallet that supports NEAR Testnet.");
   } catch (error) {
     connectButton.disabled = true;
     showStatus("Wallet connector could not initialize. Reload and try again.");
