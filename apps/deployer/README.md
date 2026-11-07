@@ -13,7 +13,7 @@ This directory contains a browser-only Testnet deployer with artifact verificati
 - Uses NEAR Connect's `wallet.signAndSendTransaction` API with one `DeployContract` action only after fresh checks and an explicit user click. Meteor must display the exact request for the user to inspect and approve.
 
 ## What it deliberately does not do
-- It does not request a signed message or transaction.
+- It does not request a signed message.
 - It does not sign or submit transactions.
 - It does not deploy or initialize either contract.
 - It does not infer `DeployContract` support from a successful connection or from the connector exposing a generic transaction method.
