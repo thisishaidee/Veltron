@@ -17,6 +17,7 @@ This directory contains a static, browser-only artifact preflight page and a rea
 - It does not sign or submit transactions.
 - It does not deploy or initialize either contract.
 - It does not infer `DeployContract` support from a successful connection or from the connector exposing a generic transaction method.
+- CI performs a source-level check against an immutable snapshot of Meteor's published NEAR Connect executor. This verifies the upstream conversion path in that snapshot, not the currently served mutable executor or a live wallet signature.
 - It does not accept private keys or seed phrases.
 - A matching hash is file identity verification only, not a security audit.
 - RPC verification confirms only the configured VELTRON RPC endpoint; it does not prove the wallet's active network.
@@ -41,3 +42,15 @@ This is an initial preflight stage, not a deployment tool. Wallet connection doe
 The page also displays a **non-executable** review of the proposed test-token deployment followed by a separate initialization step. It shows the target account, DeployContract action, expected WASM SHA-256, and proposed initializer arguments. Gas and attached deposit remain explicitly unresolved pending independent calculation and review.
 
 This preview adds no signing or transaction-submission capability. Do not treat the displayed sequence as authorization to deploy. Before implementation of any signing flow, independently verify the wallet's active network, target account state, artifact hash, protocol gas/deposit requirements, and exact transaction shown by the wallet. After deployment, verify the on-chain code hash before preparing a separate initialization transaction.
+
+
+## Meteor wallet executor source check
+
+The NEAR Connect manifest inspected on 2026-11-07 lists Meteor Wallet executor version `1.1.1` at a mutable URL under the `data-storage` branch of `Meteor-Wallet/meteor_wallet_sdk`. That branch pointed to commit `ef1be35fc3712f2de60a7563aed543d78e73f763` when inspected.
+
+The `test:executor` CI check downloads the executor source from that immutable commit and verifies that:
+- the `DeployContract` selector action is converted with `actionCreators.deployContract(code)`;
+- the single-transaction method maps actions through that converter; and
+- the multi-transaction method maps each transaction's actions through that converter.
+
+This is a source-level compatibility regression check only. It does not execute the executor, verify the currently served mutable branch, prove the user's live wallet app runs this exact revision, or send/sign a transaction. A real wallet preview and independent review remain mandatory before any deployment.
