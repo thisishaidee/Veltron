@@ -93,4 +93,4 @@ except RuntimeError as exc:
         print("Deployed contract code: absent (RPC reports no contract code)")
     else:
         raise
-\nprint("No transaction was constructed, signed, or submitted.")
+print("No transaction was constructed, signed, or submitted.")
