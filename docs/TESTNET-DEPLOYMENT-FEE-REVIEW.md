@@ -51,6 +51,16 @@ Read from the official NEAR Testnet RPC, using a recent finalized block:
 
 The live RPC values have **not** been retrieved and independently recorded in this review. Therefore no numeric deployment fee is claimed here.
 
+## Sandbox initializer measurement
+
+CI run [42385473935](https://github.com/thisishaidee/Veltron/actions/runs/42385473935) completed successfully after enabling captured test output. The test deployed the exact test-token WASM in NEAR Sandbox and called `new` with the approved token metadata, owner and raw supply.
+
+- Aggregate initializer receipt gas burnt: **2,043,249,965,121 gas units** (**2.043249965121 Tgas**).
+- Test: `sandbox_measures_approved_token_initializer_and_verifies_supply` — passed.
+- Post-initialization views verified metadata, total supply and owner balance.
+
+This is an observed Sandbox execution measurement, not a Testnet fee quote or a final prepaid-gas setting. A gas limit must include a justified margin and be checked against current Testnet protocol limits and the actual wallet transaction display. No limit is approved by this measurement alone.
+
 ## Step 2 — Initialize token
 
 Initialization is a separate FunctionCall:
