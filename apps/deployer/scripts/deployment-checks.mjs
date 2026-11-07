@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import {
   TOKEN_ACCOUNT,
   buildDeployContractAction,
@@ -72,4 +73,10 @@ test("requests exactly one DeployContract transaction for the token account", as
   assert.equal(request.actions.length, 1);
   assert.equal(request.actions[0].type, "DeployContract");
   assert.equal(request.actions[0].params.code, bytes);
+});
+
+test("persists the connected signer ID for preflight and clears it on reset", () => {
+  const walletSource = readFileSync(new URL("../src/wallet.js", import.meta.url), "utf8");
+  assert.match(walletSource, /connectedAccountId = accountId;/);
+  assert.match(walletSource, /function resetWalletDetails\(\)\s*\{\s*connectedAccountId = undefined;/);
 });
