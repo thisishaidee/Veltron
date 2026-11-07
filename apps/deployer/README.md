@@ -14,8 +14,8 @@ This directory contains a browser-only Testnet deployer with artifact verificati
 
 ## What it deliberately does not do
 - It does not request a signed message.
-- It does not sign or submit transactions.
-- It does not deploy or initialize either contract.
+- It never signs or submits automatically; only an explicit user action can open the wallet's approval flow.
+- It does not deploy the treasury contract or initialize either contract.
 - It does not infer `DeployContract` support from a successful connection or from the connector exposing a generic transaction method.
 - CI performs a source-level check against an immutable snapshot of Meteor's published NEAR Connect executor. This verifies the upstream conversion path in that snapshot, not the currently served mutable executor or a live wallet signature.
 - It does not accept private keys or seed phrases.
@@ -30,21 +30,14 @@ This directory contains a browser-only Testnet deployer with artifact verificati
 4. Continue only if both hashes match.
 5. Confirm the VELTRON RPC endpoint reports Testnet. This is not wallet-network verification.
 6. Connect the intended testnet wallet. The account ID is displayed, but active network remains explicitly unverified at this stage.
-7. Treat deployment-action support as unverified until that exact wallet/browser combination is independently confirmed. Do not use a real deployment transaction as a capability probe.
+7. If using the deployment control, confirm Testnet in Meteor itself, inspect the exact wallet prompt, and reject any unexpected signer, receiver, network, or action.
 
 ## Updating the reference
 After any contract-source or build-configuration change, update expected hashes only from a fresh successful CI run on the exact reviewed commit. Never copy hashes from a local build or an older artifact.
 
-This is an initial preflight stage, not a deployment tool. Wallet connection does not certify the active network, contract safety, or authorize deployment.
+Wallet connection does not certify the active network or contract safety. The deployment control performs fresh read-only checks and then requests a single user-approved Testnet transaction; it is not authorization for mainnet or real-fund use.
 
-## Deployment transaction review preview
-
-The page also displays a **non-executable** review of the proposed test-token deployment followed by a separate initialization step. It shows the target account, DeployContract action, expected WASM SHA-256, and proposed initializer arguments. Gas and attached deposit remain explicitly unresolved pending independent calculation and review.
-
-This preview adds no signing or transaction-submission capability. Do not treat the displayed sequence as authorization to deploy. Before implementation of any signing flow, independently verify the wallet's active network, target account state, artifact hash, protocol gas/deposit requirements, and exact transaction shown by the wallet. After deployment, verify the on-chain code hash before preparing a separate initialization transaction.
-
-
-## Meteor wallet executor source check
+## Deployment review and approval\n\nThe page offers one user-initiated test-token deployment after fresh checks. It does not expose initialization or treasury deployment. See the detailed gate sequence below.\n\n\n## Meteor wallet executor source check
 
 The NEAR Connect manifest inspected on 2026-11-07 lists Meteor Wallet executor version `1.1.1` at a mutable URL under the `data-storage` branch of `Meteor-Wallet/meteor_wallet_sdk`. That branch pointed to commit `ef1be35fc3712f2de60a7563aed543d78e73f763` when inspected.
 
