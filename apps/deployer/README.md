@@ -22,7 +22,7 @@ This directory contains a static, browser-only artifact preflight page and a rea
 
 ## How to use
 1. Open the workflow run for commit `4a2973e8bbe801c7729a2a72d993bc8526ec60f7`.
-2. Download the `veltron-wasm-4a2973e8bbe801c7729a2a72d993bc8526ec60f7` artifact.
+2. Download the `veltron-wasm-930dfc02d70b0a429535486ec1f3ec8f0a1abb3a` artifact.
 3. Extract it and select `veltron_treasury.wasm` and `veltron_test_token.wasm` on the page.
 4. Continue only if both hashes match.
 5. Confirm the VELTRON RPC endpoint reports Testnet. This is not wallet-network verification.
