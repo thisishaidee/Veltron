@@ -4042,8 +4042,12 @@ checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 name = "veltron-test-token"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "near-contract-standards",
  "near-sdk",
+ "near-workspaces",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]
