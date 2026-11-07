@@ -23,18 +23,19 @@ config = rpc("EXPERIMENTAL_protocol_config", {"block_id": height}, "protocol-con
 runtime = config["runtime_config"]
 costs = runtime["transaction_costs"]
 action = costs["action_creation_config"]
-base = int(action["deploy_contract_cost"]["send_sir"])
-per_byte = int(action["deploy_contract_cost_per_byte"]["send_sir"])
-deploy_gas = base + WASM_BYTES * per_byte
-deploy_yocto = deploy_gas * gas_price
+# DeployContract requires the transaction predecessor/signer to equal the receiver.
+# This preflight therefore models veltron-token.testnet signing for itself.
 base_fee = action["deploy_contract_cost"]
 per_byte_fee = action["deploy_contract_cost_per_byte"]
-deploy_send_not_sir = int(base_fee["send_not_sir"]) + WASM_BYTES * int(per_byte_fee["send_not_sir"])
+base = int(base_fee["send_sir"])
+per_byte = int(per_byte_fee["send_sir"])
+deploy_gas = base + WASM_BYTES * per_byte
+deploy_yocto = deploy_gas * gas_price
 deploy_execution = int(base_fee["execution"]) + WASM_BYTES * int(per_byte_fee["execution"])
 receipt_config = costs["action_receipt_creation_config"]
-receipt_send_not_sir = int(receipt_config["send_not_sir"])
+receipt_send_sir = int(receipt_config["send_sir"])
 receipt_execution = int(receipt_config["execution"])
-transaction_fee_gas = receipt_send_not_sir + deploy_send_not_sir + receipt_execution + deploy_execution
+transaction_fee_gas = receipt_send_sir + deploy_gas + receipt_execution + deploy_execution
 transaction_fee_yocto = transaction_fee_gas * gas_price
 storage_per_byte = int(runtime["storage_amount_per_byte"])
 
@@ -45,12 +46,13 @@ print(f"Protocol version: {config.get('protocol_version', 'not returned')}")
 print(f"Gas price: {gas_price} yoctoNEAR/gas")
 print(f"Token WASM bytes: {WASM_BYTES}")
 print(f"Expected token WASM SHA-256: {EXPECTED_SHA256}")
+print(f"Modeled signer: {TARGET_ACCOUNT} (must equal DeployContract receiver)")
 print(f"DeployContract base send_sir: {base} gas")
 print(f"DeployContract per-byte send_sir: {per_byte} gas/byte")
-print(f"DeployContract action fee: {deploy_gas} gas")
-print(f"DeployContract action fee at sampled gas price: {deploy_yocto} yoctoNEAR")
-print(f"DeployContract action fee in NEAR: {deploy_yocto / 10**24:.12f} NEAR")
-print(f"One-action transaction fee gas (receipt send+execution; DeployContract send+execution): {transaction_fee_gas} gas")
+print(f"DeployContract action send fee: {deploy_gas} gas")
+print(f"DeployContract action send fee at sampled gas price: {deploy_yocto} yoctoNEAR")
+print(f"DeployContract action send fee in NEAR: {deploy_yocto / 10**24:.12f} NEAR")
+print(f"One-action transaction fee gas (self-addressed receipt send+execution; DeployContract send+execution): {transaction_fee_gas} gas")
 print(f"One-action transaction fee at sampled gas price: {transaction_fee_yocto} yoctoNEAR ({transaction_fee_yocto / 10**24:.12f} NEAR)")
 print("Note: excludes signature-verification gas if the signing key type requires it; no wallet key type is assumed.")
 print(f"Runtime storage amount per byte: {storage_per_byte} yoctoNEAR/byte")
@@ -60,7 +62,7 @@ print("Transaction cost config keys:", ", ".join(sorted(costs.keys())))
 storage_config = costs.get("storage_usage_config", {})
 print("Storage usage config (record metadata only):", json.dumps(storage_config, sort_keys=True))
 print("Action receipt creation config:", json.dumps(receipt_config, sort_keys=True))
-print("IMPORTANT: This is the DeployContract action fee component only, not a final all-in transaction quote.")
+print("IMPORTANT: This is a one-action fee estimate for a self-addressed DeployContract transaction only; it excludes signature verification and any separate initialization transaction.")
 
 # Read-only target-account state at the same finalized block.
 TARGET_ACCOUNT = "veltron-token.testnet"
