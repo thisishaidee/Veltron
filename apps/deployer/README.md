@@ -16,8 +16,8 @@ This directory contains a browser-only Testnet deployer with artifact verificati
 - It does not request a signed message.
 - It never signs or submits automatically; only an explicit user action can open the wallet's approval flow.
 - It does not deploy the treasury contract or initialize either contract.
-- It does not infer `DeployContract` support from a successful connection or from the connector exposing a generic transaction method.
-- CI performs a source-level check against an immutable snapshot of Meteor's published NEAR Connect executor. This verifies the upstream conversion path in that snapshot, not the currently served mutable executor or a live wallet signature.
+- It does not treat a successful connection or CI source check as proof that the live wallet session will approve the action.
+- CI checks both a pinned Meteor executor snapshot and the live manifest/executor source at test time. This is compatibility evidence, not proof of a live wallet signature.
 - It does not accept private keys or seed phrases.
 - A matching hash is file identity verification only, not a security audit.
 - RPC verification confirms only the configured VELTRON RPC endpoint; it does not prove the wallet's active network.
