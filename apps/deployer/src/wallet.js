@@ -195,11 +195,21 @@ async function verifyTokenContractReadOnly() {
     });
 
     tokenCheckStatus.textContent = "Account found. Checking for deployed contract code…";
-    const code = await nearRpc("query", {
-      request_type: "view_code",
-      finality: "final",
-      account_id: "veltron-token.testnet"
-    });
+    let code;
+    try {
+      code = await nearRpc("query", {
+        request_type: "view_code",
+        finality: "final",
+        account_id: "veltron-token.testnet"
+      });
+    } catch (error) {
+      const message = String(error?.message || error || "");
+      if (/contract code for contract ID .* has never been observed/i.test(message)) {
+        code = null;
+      } else {
+        throw error;
+      }
+    }
 
     if (!code || !code.code_base64) {
       tokenCheckStatus.textContent =
