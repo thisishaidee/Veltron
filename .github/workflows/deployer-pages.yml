@@ -1,0 +1,54 @@
+name: Publish VELTRON deployer frontend
+
+on:
+  push:
+    branches:
+      - build/commitment-lock-contract
+    paths:
+      - "apps/deployer/**"
+      - ".github/workflows/deployer-pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Install pinned wallet connector and bundler
+        working-directory: apps/deployer
+        run: npm install --no-save --package-lock=false esbuild@0.25.11 @hot-labs/near-connect@0.11.4
+      - name: Build wallet connector bundle
+        working-directory: apps/deployer
+        run: npm run build
+      - name: Assemble project-site files
+        run: |
+          mkdir -p _site/dist
+          cp apps/deployer/index.html _site/index.html
+          cp apps/deployer/dist/wallet.js _site/dist/wallet.js
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy frontend to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
