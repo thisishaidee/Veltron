@@ -17,6 +17,7 @@ function initializeWalletConnection() {
 
   try {
     connector = new NearConnector({
+      network: "testnet",
       features: { testnet: true },
       footerBranding: null
     });
@@ -31,7 +32,7 @@ function initializeWalletConnection() {
       }
 
       account.textContent = accountId;
-      network.textContent = "Testnet-compatible wallet selected; active network not independently verified";
+      network.textContent = "Testnet (configured)";
       showStatus("Wallet connected. Read-only mode: no transaction actions are enabled.");
       connectButton.disabled = false;
     });
