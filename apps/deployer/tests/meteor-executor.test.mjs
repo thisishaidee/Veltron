@@ -25,7 +25,7 @@ function assertDeployContractSupport(source, label) {
 
   assert.match(
     source,
-    /this\.signAndSendTransactions=async \w+=>[\s\S]{0,2500}?actions\.map\(\w+=>convertSelectorActionToNearAction\(\w+)\)/,
+    /this\.signAndSendTransactions=async \w+=>[\s\S]{0,2500}?actions\.map\(\w+=>convertSelectorActionToNearAction\(\w+\)\)/,
     label + " multi-transaction path must use the DeployContract-capable converter",
   );
 }
