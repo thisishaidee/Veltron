@@ -7,13 +7,15 @@ on:
       - "Cargo.lock"
       - "rust-toolchain.toml"
       - "contracts/**"
-      - ".github/workflows/contract.yml"\n      - "scripts/testnet_fee_preflight.py"
+      - "scripts/testnet_fee_preflight.py"
+      - ".github/workflows/contract.yml"
   pull_request:
     paths:
       - "Cargo.toml"
       - "Cargo.lock"
       - "rust-toolchain.toml"
       - "contracts/**"
+      - "scripts/testnet_fee_preflight.py"
       - ".github/workflows/contract.yml"
   workflow_dispatch:
 
@@ -50,3 +52,5 @@ jobs:
           retention-days: 14
       - name: Run workspace and NEAR Sandbox integration tests
         run: cargo test --locked --workspace -- --nocapture
+      - name: Read current NEAR Testnet deployment fee parameters
+        run: python3 scripts/testnet_fee_preflight.py
