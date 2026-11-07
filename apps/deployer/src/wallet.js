@@ -282,9 +282,7 @@ function formatYoctoNear(value) {
 }
 
 async function readDeploymentPreflight(file) {
-  const endpoints = await getVerifiedRpcEndpoints();
-  const endpoint = endpoints[0];
-  const statusResult = await rpcRequest(endpoint, "status", [], 12000);
+  const statusResult = await nearRpc("status", []);
   if (statusResult.chain_id !== "testnet") throw new Error("RPC no longer confirms NEAR Testnet.");
 
   const wasmBytes = new Uint8Array(await file.arrayBuffer());
@@ -296,20 +294,20 @@ async function readDeploymentPreflight(file) {
     throw new Error("WASM SHA-256 mismatch. The selected file is not the recorded CI artifact.");
   }
 
-  const block = await rpcRequest(endpoint, "block", { finality: "final" }, 12000);
-  const config = await rpcRequest(endpoint, "EXPERIMENTAL_protocol_config", { block_id: block.header.height }, 12000);
-  const accountInfo = await rpcRequest(endpoint, "query", {
+  const block = await nearRpc("block", { finality: "final" });
+  const config = await nearRpc("EXPERIMENTAL_protocol_config", { block_id: block.header.height });
+  const accountInfo = await nearRpc("query", {
     request_type: "view_account",
     finality: "final",
     account_id: TOKEN_ACCOUNT
-  }, 12000);
+  });
 
   try {
-    const deployed = await rpcRequest(endpoint, "query", {
+    const deployed = await nearRpc("query", {
       request_type: "view_code",
       finality: "final",
       account_id: TOKEN_ACCOUNT
-    }, 12000);
+    });
     if (deployed?.code_base64) {
       throw new Error("STOP: contract code already exists at " + TOKEN_ACCOUNT + ". Do not overwrite it.");
     }
@@ -349,12 +347,11 @@ async function readDeploymentPreflight(file) {
 }
 
 async function verifyDeployedTokenCode() {
-  const endpoints = await getVerifiedRpcEndpoints();
-  const result = await rpcRequest(endpoints[0], "query", {
+  const result = await nearRpc("query", {
     request_type: "view_code",
     finality: "final",
     account_id: TOKEN_ACCOUNT
-  }, 12000);
+  });
   if (!result?.code_base64) throw new Error("No deployed code is visible at the finalized block yet.");
   const binary = Uint8Array.from(atob(result.code_base64), character => character.charCodeAt(0));
   const actualHash = await sha256Hex(binary);
