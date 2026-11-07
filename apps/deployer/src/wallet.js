@@ -162,9 +162,9 @@ async function verifyTokenContractReadOnly() {
     if (!Number.isInteger(decimals) || decimals < 0 || decimals > 24) {
       throw new Error("Token returned invalid decimals metadata.");
     }
-    const scale = 10 ** decimals;
-    const cap = 100 * scale;
-    const reserve = 200 * scale;
+    const scale = 10n ** BigInt(decimals);
+    const cap = (100n * scale).toString();
+    const reserve = (200n * scale).toString();
     tokenCheckStatus.textContent =
       "CONTRACT CODE FOUND — NEP-141 metadata verified. Token: " + name +
       " (" + symbol + "), decimals: " + decimals +
