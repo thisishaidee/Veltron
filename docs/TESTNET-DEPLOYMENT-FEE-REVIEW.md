@@ -59,7 +59,7 @@ CI run [42385473935](https://github.com/thisishaidee/Veltron/actions/runs/423854
 - Test: `sandbox_measures_approved_token_initializer_and_verifies_supply` — passed.
 - Post-initialization views verified metadata, total supply and owner balance.
 
-This is an observed Sandbox execution measurement, not a Testnet fee quote or a final prepaid-gas setting. A gas limit must include a justified margin and be checked against current Testnet protocol limits and the actual wallet transaction display. No limit is approved by this measurement alone.
+This is an observed Sandbox execution measurement, not a Testnet fee quote or a final prepaid-gas setting. A provisional candidate for review is **3 Tgas**: this is approximately 47% headroom above the measured 2.04325 Tgas. It is not yet approved for use. Before adopting it, confirm current Testnet transaction/function-call gas limits and ensure the exact Meteor transaction preview accepts and displays 3 Tgas. If the current protocol limit or wallet behavior differs, stop and recalculate. This Sandbox measurement is a benchmark; it does not guarantee identical Testnet execution.
 
 ## Step 2 — Initialize token
 
@@ -69,7 +69,7 @@ Initialization is a separate FunctionCall:
 - Method: `new`
 - Attached deposit: **0 NEAR**, consistent with the current initializer not being payable. Verify the compiled contract/source and exact wallet transaction before approval.
 - Arguments: use the exact reviewed JSON in the deployer preview.
-- Prepaid gas: must be selected from a reproducible execution estimate and then checked against the current Testnet protocol limit and wallet display. The initializer's actual execution gas has not yet been measured on Testnet.
+- Prepaid gas: provisional candidate **3 Tgas**, pending verification against current Testnet protocol limits and the exact Meteor transaction preview. The 2.04325 Tgas figure is from Sandbox, not Testnet.
 
 A generic `100 Tgas` value is not evidence that this initializer needs or should receive that amount. First run the initializer in NEAR Sandbox against the exact WASM and arguments, record gas burnt/used, and select a justified safety margin that remains within current protocol limits. Then independently validate the transaction parameters before any wallet prompt.
 
