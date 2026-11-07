@@ -4,6 +4,7 @@ const connectButton = document.querySelector("#connect-wallet");
 const status = document.querySelector("#wallet-status");
 const account = document.querySelector("#wallet-account");
 const network = document.querySelector("#wallet-network");
+const rpcNetwork = document.querySelector("#rpc-network");
 
 let connector;
 
@@ -14,6 +15,32 @@ function showStatus(message) {
 function resetWalletDetails() {
   account.textContent = "Not connected";
   network.textContent = "Not independently verified";
+}
+
+async function verifyRpcNetwork() {
+  rpcNetwork.textContent = "Checking configured NEAR RPC…";
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+
+  try {
+    const response = await fetch("https://rpc.testnet.near.org", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: "veltron-network-check", method: "status", params: [] }),
+      signal: controller.signal
+    });
+    if (!response.ok) throw new Error("RPC request failed");
+    const payload = await response.json();
+    const chainId = payload?.result?.chain_id;
+    rpcNetwork.textContent = chainId === "testnet"
+      ? "Testnet verified (VELTRON RPC endpoint)"
+      : "Unverified — RPC did not identify NEAR Testnet";
+  } catch (error) {
+    rpcNetwork.textContent = "Unverified — configured NEAR RPC could not be checked";
+    console.error("VELTRON NEAR RPC network check failed", error);
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function handleWalletSignIn(event) {
@@ -37,6 +64,7 @@ function initializeWalletConnection() {
   connectButton.disabled = true;
   showStatus("Preparing supported wallet options…");
   resetWalletDetails();
+  verifyRpcNetwork();
 
   try {
     connector = new NearConnector({
@@ -70,7 +98,6 @@ connectButton.addEventListener("click", async () => {
 
   try {
     await connector.connect();
-    // The wallet:signIn event updates the connected account.
   } catch (error) {
     showStatus("Connection was not completed. You can try again.");
     console.error("VELTRON wallet connection failed", error);
