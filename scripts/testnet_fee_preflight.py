@@ -27,6 +27,16 @@ base = int(action["deploy_contract_cost"]["send_sir"])
 per_byte = int(action["deploy_contract_cost_per_byte"]["send_sir"])
 deploy_gas = base + WASM_BYTES * per_byte
 deploy_yocto = deploy_gas * gas_price
+base_fee = action["deploy_contract_cost"]
+per_byte_fee = action["deploy_contract_cost_per_byte"]
+deploy_send_not_sir = int(base_fee["send_not_sir"]) + WASM_BYTES * int(per_byte_fee["send_not_sir"])
+deploy_execution = int(base_fee["execution"]) + WASM_BYTES * int(per_byte_fee["execution"])
+receipt_config = costs["action_receipt_creation_config"]
+receipt_send_not_sir = int(receipt_config["send_not_sir"])
+receipt_execution = int(receipt_config["execution"])
+transaction_fee_gas = receipt_send_not_sir + deploy_send_not_sir + receipt_execution + deploy_execution
+transaction_fee_yocto = transaction_fee_gas * gas_price
+storage_per_byte = int(runtime["storage_amount_per_byte"])
 
 print("VELTRON READ-ONLY NEAR TESTNET FEE PREFLIGHT")
 print(f"RPC endpoint: {RPC}")
@@ -40,21 +50,16 @@ print(f"DeployContract per-byte send_sir: {per_byte} gas/byte")
 print(f"DeployContract action fee: {deploy_gas} gas")
 print(f"DeployContract action fee at sampled gas price: {deploy_yocto} yoctoNEAR")
 print(f"DeployContract action fee in NEAR: {deploy_yocto / 10**24:.12f} NEAR")
+print(f"One-action transaction fee gas (receipt send+execution; DeployContract send+execution): {transaction_fee_gas} gas")
+print(f"One-action transaction fee at sampled gas price: {transaction_fee_yocto} yoctoNEAR ({transaction_fee_yocto / 10**24:.12f} NEAR)")
+print("Note: excludes signature-verification gas if the signing key type requires it; no wallet key type is assumed.")
+print(f"Runtime storage amount per byte: {storage_per_byte} yoctoNEAR/byte")
+print(f"Code-byte storage reserve estimate: {WASM_BYTES * storage_per_byte} yoctoNEAR ({WASM_BYTES * storage_per_byte / 10**24:.9f} NEAR)")
 print("Action creation config keys:", ", ".join(sorted(action.keys())))
 print("Transaction cost config keys:", ", ".join(sorted(costs.keys())))
 storage_config = costs.get("storage_usage_config", {})
-print("Storage usage config:", json.dumps(storage_config, sort_keys=True))
-if "storage_amount_per_byte" in storage_config:
-    storage_per_byte = int(storage_config["storage_amount_per_byte"])
-    storage_stake = WASM_BYTES * storage_per_byte
-    print(f"Code storage stake estimate: {storage_stake} yoctoNEAR ({storage_stake / 10**24:.9f} NEAR)")
-else:
-    print("Code storage stake estimate: unavailable; storage_amount_per_byte not found.")
-receipt_config = costs.get("action_receipt_creation_config")
-if receipt_config is not None:
-    print("Action receipt creation config:", json.dumps(receipt_config, sort_keys=True))
-else:
-    print("Action receipt creation config: not present under transaction_costs; inspect full runtime config before treating the action fee as an all-in transaction quote.")
+print("Storage usage config (record metadata only):", json.dumps(storage_config, sort_keys=True))
+print("Action receipt creation config:", json.dumps(receipt_config, sort_keys=True))
 print("IMPORTANT: This is the DeployContract action fee component only, not a final all-in transaction quote.")
 
 # Read-only target-account state at the same finalized block.
@@ -72,7 +77,13 @@ print(f"Target account: {TARGET_ACCOUNT}")
 print(f"Account balance: {int(account['amount'])} yoctoNEAR")
 print(f"Account balance: {int(account['amount']) / 10**24:.9f} NEAR")
 print(f"Account locked balance: {int(account.get('locked', '0'))} yoctoNEAR")
-print(f"Account storage usage: {account.get('storage_usage', 'not returned')} bytes")
+current_storage = int(account.get("storage_usage", 0))
+print(f"Account storage usage: {current_storage} bytes")
+projected_storage = current_storage + WASM_BYTES
+projected_reserve = projected_storage * storage_per_byte
+print(f"Approx. post-deploy storage usage (current + WASM bytes): {projected_storage} bytes")
+print(f"Approx. post-deploy minimum storage-backed balance: {projected_reserve} yoctoNEAR ({projected_reserve / 10**24:.9f} NEAR)")
+print("This is a projection; confirm actual storage_usage and amount after deployment before any later action.")
 try:
     code_result = query_account("view_code")
     code_b64 = code_result.get("code_base64", "")
