@@ -271,6 +271,18 @@ tokenCheckButton.addEventListener("click", verifyTokenContractReadOnly);
 
 const deployButton = document.querySelector("#deploy-token-contract");
 const deployNetworkConfirmation = document.querySelector("#confirm-testnet-network");
+const networkConfirmationStatus = document.querySelector("#network-confirmation-status");
+let networkConfirmedByUser = false;
+deployNetworkConfirmation.addEventListener("click", () => {
+  networkConfirmedByUser = !networkConfirmedByUser;
+  deployNetworkConfirmation.setAttribute("aria-pressed", String(networkConfirmedByUser));
+  deployNetworkConfirmation.textContent = networkConfirmedByUser
+    ? "Confirmed: Meteor Wallet displays NEAR Testnet — tap to undo"
+    : "Confirm: Meteor Wallet displays NEAR Testnet";
+  networkConfirmationStatus.textContent = networkConfirmedByUser
+    ? "Testnet confirmation recorded on this page. Fresh preflight is still required; no transaction has been sent."
+    : "Not confirmed on this page. Tap the confirmation button only after checking Meteor Wallet.";
+});
 const deployStatus = document.querySelector("#deployment-execution-status");
 const verifyDeployedCodeButton = document.querySelector("#verify-deployed-code");
 
@@ -368,7 +380,7 @@ deployButton.addEventListener("click", async () => {
   try {
     if (!connector || !connectedAccountId) throw new Error("Connect the intended wallet first.");
     if (connectedAccountId !== TOKEN_ACCOUNT) throw new Error("Connected account must be " + TOKEN_ACCOUNT + ".");
-    if (!deployNetworkConfirmation.checked) throw new Error("Confirm that Meteor Wallet itself currently displays Testnet before continuing.");
+    if (!networkConfirmedByUser) throw new Error("Confirm that Meteor Wallet itself currently displays Testnet before continuing.");
     const file = document.querySelector("#token").files[0];
     if (!file) throw new Error("Select the verified veltron_test_token.wasm file first.");
 
