@@ -10,11 +10,13 @@ This directory contains a static, browser-only artifact preflight page and a rea
 - Reads the connected account ID from the wallet sign-in event.
 - Checks the configured VELTRON RPC endpoint with a read-only NEAR status request and reports Testnet only when the response says `chain_id: "testnet"`.
 - Keeps the wallet's active network separately labelled as not independently verified.
+- Explicitly reports deployment-action support as unverified; a successful connection is not proof that a wallet can sign and submit `DeployContract`.
 
 ## What it deliberately does not do
 - It does not request a signed message or transaction.
 - It does not sign or submit transactions.
 - It does not deploy or initialize either contract.
+- It does not infer `DeployContract` support from a successful connection or from the connector exposing a generic transaction method.
 - It does not accept private keys or seed phrases.
 - A matching hash is file identity verification only, not a security audit.
 - RPC verification confirms only the configured VELTRON RPC endpoint; it does not prove the wallet's active network.
@@ -27,6 +29,7 @@ This directory contains a static, browser-only artifact preflight page and a rea
 4. Continue only if both hashes match.
 5. Confirm the VELTRON RPC endpoint reports Testnet. This is not wallet-network verification.
 6. Connect the intended testnet wallet. The account ID is displayed, but active network remains explicitly unverified at this stage.
+7. Treat deployment-action support as unverified until that exact wallet/browser combination is independently confirmed. Do not use a real deployment transaction as a capability probe.
 
 ## Updating the reference
 After any contract-source or build-configuration change, update expected hashes only from a fresh successful CI run on the exact reviewed commit. Never copy hashes from a local build or an older artifact.
