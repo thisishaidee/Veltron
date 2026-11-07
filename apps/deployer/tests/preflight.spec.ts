@@ -97,5 +97,6 @@ test("deployment request remains gated until wallet connection and user Testnet 
   await expect(page.locator("#deploy-token-contract")).toBeDisabled();
   await expect(page.locator("#confirm-testnet-network")).not.toBeChecked();
   await expect(page.locator("#deployment-execution-status")).toContainText("Not ready");
+  await expect(page.locator("#verify-deployed-code")).toBeVisible();
   await expect(page.locator("#deployment-review")).toContainText("No initialization");
 });
