@@ -4,7 +4,9 @@ import test from "node:test";
 
 const EXECUTOR_COMMIT = "ef1be35fc3712f2de60a7563aed543d78e73f763";
 const EXECUTOR_URL =
-  \`https://raw.githubusercontent.com/Meteor-Wallet/meteor_wallet_sdk/\${EXECUTOR_COMMIT}/storage/meteor-near-connect-latest.js\`;
+  "https://raw.githubusercontent.com/Meteor-Wallet/meteor_wallet_sdk/" +
+  EXECUTOR_COMMIT +
+  "/storage/meteor-near-connect-latest.js";
 const LIVE_MANIFEST_URL =
   "https://raw.githubusercontent.com/Meteor-Wallet/near-connect/main/repository/manifest.json";
 
@@ -12,27 +14,27 @@ function assertDeployContractSupport(source, label) {
   assert.match(
     source,
     /case"DeployContract":\{const\{code:\w+\}=\w+\.params;return actionCreators\.deployContract\(\w+\)\}/,
-    \`\${label} must convert DeployContract into a NEAR deployContract action\`,
+    label + " must convert DeployContract into a NEAR deployContract action",
   );
 
   assert.match(
     source,
     /this\.signAndSendTransaction=async \w+=>[\s\S]{0,2500}?actions\.map\(\w+=>convertSelectorActionToNearAction\(\w+\)\)/,
-    \`\${label} single-transaction path must use the DeployContract-capable converter\`,
+    label + " single-transaction path must use the DeployContract-capable converter",
   );
 
   assert.match(
     source,
-    /this\.signAndSendTransactions=async \w+=>[\s\S]{0,2500}?actions\.map\(\w+=>convertSelectorActionToNearAction\(\w+\)\)/,
-    \`\${label} multi-transaction path must use the DeployContract-capable converter\`,
+    /this\.signAndSendTransactions=async \w+=>[\s\S]{0,2500}?actions\.map\(\w+=>convertSelectorActionToNearAction\(\w+)\)/,
+    label + " multi-transaction path must use the DeployContract-capable converter",
   );
 }
 
 async function fetchSource(url, label, minimumLength = 1_000_000) {
   const response = await fetch(url, { redirect: "error" });
-  assert.equal(response.ok, true, \`\${label} download failed: HTTP \${response.status}\`);
+  assert.equal(response.ok, true, label + " download failed: HTTP " + response.status);
   const source = await response.text();
-  assert.ok(source.length > minimumLength, \`\${label} is unexpectedly incomplete\`);
+  assert.ok(source.length > minimumLength, label + " is unexpectedly incomplete");
   return source;
 }
 
@@ -58,5 +60,5 @@ test("current NEAR Connect manifest points to a DeployContract-capable Meteor ex
   assertDeployContractSupport(source, "live Meteor executor");
 
   const sha256 = createHash("sha256").update(source).digest("hex");
-  console.log(\`Live Meteor executor SHA-256: \${sha256}\`);
+  console.log("Live Meteor executor SHA-256: " + sha256);
 });
