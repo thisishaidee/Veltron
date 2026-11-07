@@ -55,6 +55,8 @@
     <p>Wallet network: <strong id="wallet-network">Not independently verified</strong></p>
     <p>VELTRON RPC network: <strong id="rpc-network">Checking configured NEAR RPC…</strong></p>
     <p class="muted">RPC status verifies only VELTRON’s configured endpoint, not the wallet’s active network.</p>
+    <button id="verify-token-contract" type="button">Check token contract (read-only)</button>
+    <p id="token-contract-status" class="status" role="status" aria-live="polite">Not checked. This check only reads public Testnet contract information; it cannot sign or submit transactions.</p>
     <p class="muted">No signing, transfers, contract calls, deployment, or initialization are available in this stage. Disconnect from the wallet itself to end the session.</p>
   </div>
   <div class="panel">
