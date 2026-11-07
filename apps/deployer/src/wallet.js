@@ -22,6 +22,7 @@ function showStatus(message) {
 }
 
 function resetWalletDetails() {
+  connectedAccountId = undefined;
   account.textContent = "Not connected";
   network.textContent = "Not independently verified";
 }
@@ -109,6 +110,7 @@ function handleWalletSignIn(event) {
     return;
   }
 
+  connectedAccountId = accountId;
   account.textContent = accountId;
   deployButton.disabled = accountId !== TOKEN_ACCOUNT;
   network.textContent = "Not independently verified";
