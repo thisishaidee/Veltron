@@ -6,6 +6,7 @@ import urllib.request
 RPC = "https://rpc.testnet.near.org"
 WASM_BYTES = 325_106
 EXPECTED_SHA256 = "5d5041336cc8fc92cc9ca11fff1f0b1f7ead33c4826c6d12013f957ba1e7c95b"
+TARGET_ACCOUNT = "veltron-token.testnet"
 
 def rpc(method, params, request_id):
     body = json.dumps({"jsonrpc": "2.0", "id": request_id, "method": method, "params": params}).encode()
@@ -65,7 +66,6 @@ print("Action receipt creation config:", json.dumps(receipt_config, sort_keys=Tr
 print("IMPORTANT: This is a one-action fee estimate for a self-addressed DeployContract transaction only; it excludes signature verification and any separate initialization transaction.")
 
 # Read-only target-account state at the same finalized block.
-TARGET_ACCOUNT = "veltron-token.testnet"
 
 def query_account(request_type):
     return rpc("query", {
