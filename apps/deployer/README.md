@@ -35,3 +35,9 @@ This directory contains a static, browser-only artifact preflight page and a rea
 After any contract-source or build-configuration change, update expected hashes only from a fresh successful CI run on the exact reviewed commit. Never copy hashes from a local build or an older artifact.
 
 This is an initial preflight stage, not a deployment tool. Wallet connection does not certify the active network, contract safety, or authorize deployment.
+
+## Deployment transaction review preview
+
+The page also displays a **non-executable** review of the proposed test-token deployment followed by a separate initialization step. It shows the target account, DeployContract action, expected WASM SHA-256, and proposed initializer arguments. Gas and attached deposit remain explicitly unresolved pending independent calculation and review.
+
+This preview adds no signing or transaction-submission capability. Do not treat the displayed sequence as authorization to deploy. Before implementation of any signing flow, independently verify the wallet's active network, target account state, artifact hash, protocol gas/deposit requirements, and exact transaction shown by the wallet. After deployment, verify the on-chain code hash before preparing a separate initialization transaction.
