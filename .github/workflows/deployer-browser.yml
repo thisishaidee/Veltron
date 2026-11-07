@@ -20,7 +20,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   browser:
@@ -30,6 +30,8 @@ jobs:
         working-directory: apps/deployer
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@1.99.1
         with:
           targets: wasm32-unknown-unknown
@@ -42,8 +44,28 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
-      - name: Install pinned test runner
-        run: npm install --no-save --package-lock=false @playwright/test@1.56.1 esbuild@0.25.11 @hot-labs/near-connect@0.11.4
+      - name: Generate npm lockfile when missing
+        id: bootstrap
+        if: github.event_name == 'push'
+        run: |
+          if [ ! -f package-lock.json ]; then
+            npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add package-lock.json
+            git commit -m "chore(deployer): add reproducible npm lockfile"
+            echo "generated=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Push generated lockfile commit
+        if: steps.bootstrap.outputs.generated == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git -c http.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)" push origin "HEAD:${GITHUB_REF_NAME}"
+      - name: Install exact dependency tree
+        run: npm ci
+      - name: Verify pinned Meteor executor source without signing
+        run: npm run test:executor
       - name: Bundle the pinned wallet connector
         run: npm run build
       - name: Install Chromium

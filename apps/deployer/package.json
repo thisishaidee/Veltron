@@ -4,7 +4,8 @@
   "version": "0.1.0",
   "scripts": {
     "test:e2e": "playwright test",
-    "build": "esbuild src/wallet.js --bundle --format=esm --outfile=dist/wallet.js"
+    "build": "esbuild src/wallet.js --bundle --format=esm --outfile=dist/wallet.js",
+    "test:executor": "node --test tests/meteor-executor.test.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.56.1",
