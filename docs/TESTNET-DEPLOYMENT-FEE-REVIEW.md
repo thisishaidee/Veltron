@@ -1,6 +1,6 @@
 # VELTRON Testnet deployment fee and gas review
 
-Status: **calculation procedure documented; live numeric fee/gas values not yet approved**.
+Status: **live Testnet fee inputs captured; DeployContract action component calculated; all-in transaction cost and code-storage stake remain unverified**.
 
 This document is deliberately not a transaction recipe. It does not authorize deployment, initialization, or wallet signing.
 
@@ -49,17 +49,36 @@ Read from the official NEAR Testnet RPC, using a recent finalized block:
 4. Convert gas to yoctoNEAR using the returned gas price. Show both gas units and NEAR amount in the review.
 5. Repeat immediately before signing if the configuration/block has changed. Do not reuse a stale quote.
 
-The live RPC values have **not** been retrieved and independently recorded in this review. Therefore no numeric deployment fee is claimed here.
+### Captured read-only Testnet sample
+
+CI workflow run [42386873087](https://github.com/thisishaidee/Veltron/actions/runs/42386873087) completed successfully on 2026-11-07. The fee-preflight script queried the official Testnet RPC and recorded:
+
+- Finalized block height: **276650750**
+- Finalized block hash: `PNyChhp2PFfQnN57z72okHqvpk6v7b7APEueKuQA4rv`
+- Protocol version: **88**
+- Sampled gas price: **100,000,000 yoctoNEAR/gas**
+- DeployContract base `send_sir`: **184,765,750,000 gas**
+- DeployContract per-byte `send_sir`: **6,812,999 gas/byte**
+- Verified code size used in calculation: **325,106 bytes**
+- Calculated DeployContract action gas: **2,399,712,602,894 gas**
+- DeployContract action fee at sampled gas price: **239,971,260,289,400,000,000 yoctoNEAR = 0.000239971260 NEAR**
+- Action receipt creation configuration: **108,059,500,000 gas** for each of `execution`, `send_not_sir`, and `send_sir`; at the sampled gas price, one such configured fee corresponds to **0.000010805950 NEAR**.
+
+The receipt-creation configuration is recorded separately. Do not simply add one receipt fee and label the result the all-in transaction cost: the applicable receipt count and complete transaction/receipt path must be established for the actual submitted transaction. Other applicable costs and protocol behavior must also be checked.
+
+The returned `storage_usage_config` contained `num_bytes_account=100` and `num_extra_bytes_record=40`, but did **not** expose `storage_amount_per_byte`. Therefore this run cannot produce a reliable code-storage stake estimate. Do not infer the storage stake from those two fields.
+
+This is a sampled live configuration, not a guaranteed future quote. Re-read the finalized block and protocol configuration immediately before any wallet prompt. The numeric DeployContract action component is now reproducible from the recorded inputs, but **no final all-in deployment cost or required balance is approved**.
 
 ## Sandbox initializer measurement
 
-CI run [42385473935](https://github.com/thisishaidee/Veltron/actions/runs/42385473935) completed successfully after enabling captured test output. The test deployed the exact test-token WASM in NEAR Sandbox and called `new` with the approved token metadata, owner and raw supply.
+CI run [42386873087](https://github.com/thisishaidee/Veltron/actions/runs/42386873087) completed successfully. The current run repeated the exact token initializer measurement and verified its post-initialization views. The test deployed the exact test-token WASM in NEAR Sandbox and called `new` with the approved token metadata, owner and raw supply.
 
 - Aggregate initializer receipt gas burnt: **2,043,249,965,121 gas units** (**2.043249965121 Tgas**).
 - Test: `sandbox_measures_approved_token_initializer_and_verifies_supply` — passed.
 - Post-initialization views verified metadata, total supply and owner balance.
 
-This is an observed Sandbox execution measurement, not a Testnet fee quote or a final prepaid-gas setting. A provisional candidate for review is **3 Tgas**: this is approximately 47% headroom above the measured 2.04325 Tgas. It is not yet approved for use. Before adopting it, confirm current Testnet transaction/function-call gas limits and ensure the exact Meteor transaction preview accepts and displays 3 Tgas. If the current protocol limit or wallet behavior differs, stop and recalculate. This Sandbox measurement is a benchmark; it does not guarantee identical Testnet execution.
+This is an observed Sandbox execution measurement, not a Testnet fee quote or a final prepaid-gas setting. In the same successful run, the treasury suite passed **74 unit tests** and **15 Sandbox integration tests**; the token initializer Sandbox test passed **1/1**. Additional measurements recorded 2.852352376836 Tgas for a success callback at 256 commitments, 2.139992823416 Tgas for a failure callback at 255 commitments, and 2.852914884878 Tgas for a retry callback at 255 commitments. These are separate treasury callback paths, not token initializer gas. A provisional candidate for review is **3 Tgas**: this is approximately 47% headroom above the measured 2.04325 Tgas. It is not yet approved for use. Before adopting it, confirm current Testnet transaction/function-call gas limits and ensure the exact Meteor transaction preview accepts and displays 3 Tgas. If the current protocol limit or wallet behavior differs, stop and recalculate. This Sandbox measurement is a benchmark; it does not guarantee identical Testnet execution.
 
 ## Step 2 — Initialize token
 
