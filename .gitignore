@@ -1,0 +1,6 @@
+/target
+**/target
+.near-credentials
+.env
+.env.*
+!.env.example
