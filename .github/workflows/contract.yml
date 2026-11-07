@@ -54,3 +54,9 @@ jobs:
         run: cargo test --locked --workspace -- --nocapture
       - name: Read current NEAR Testnet deployment fee parameters
         run: python3 scripts/testnet_fee_preflight.py
+      - name: Set up Node.js for CLI package check
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Check published near-cli-rs package version
+        run: npm view near-cli-rs version
