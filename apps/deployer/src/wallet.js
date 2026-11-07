@@ -166,7 +166,7 @@ async function verifyTokenContractReadOnly() {
     const cap = (100n * scale).toString();
     const reserve = (200n * scale).toString();
     tokenCheckStatus.textContent =
-      "CONTRACT CODE FOUND — NEP-141 metadata verified. Token: " + name +
+      "CONTRACT CODE FOUND — ft_metadata responded successfully. This confirms metadata only, not full NEP-141 compliance. Token: " + name +
       " (" + symbol + "), decimals: " + decimals +
       ". Proposed settings: 100 tokens per agent payment = " + cap +
       " smallest units; 200-token reserve = " + reserve +
