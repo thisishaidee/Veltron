@@ -5,7 +5,7 @@ export const TOKEN_WASM_SHA256 = "5d5041336cc8fc92cc9ca11fff1f0b1f7ead33c4826c6d
 function asInteger(value, label) {
   if (typeof value === "bigint") return value;
   if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) return BigInt(value);
-  if (typeof value === "string" && /^\\d+$/.test(value)) return BigInt(value);
+  if (typeof value === "string" && /^\d+$/.test(value)) return BigInt(value);
   throw new TypeError(label + " must be a non-negative integer.");
 }
 
