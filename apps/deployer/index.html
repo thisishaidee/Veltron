@@ -16,7 +16,7 @@
     label{display:block;font-weight:650;margin:14px 0 6px}
     input[type=file]{display:block;width:100%;max-width:100%;min-width:0;padding:10px;background:#1b2932;border:1px solid #52636d;border-radius:8px;color:#edf2f4}
     code{overflow-wrap:anywhere;word-break:break-word;color:#b8e1dd}
-    .status{min-width:0;padding:12px;border-radius:8px;background:#263640;margin-top:12px;overflow-wrap:anywhere}
+    .status{min-width:0;padding:12px;border-radius:8px;background:#263640;margin-top:12px;overflow-wrap:anywhere}\n    button{width:100%;padding:13px 16px;margin:10px 0;border:0;border-radius:8px;background:#b8e1dd;color:#101820;font:inherit;font-weight:750}\n    button:disabled{opacity:.45}\n    input[type=checkbox]{width:20px;height:20px;vertical-align:middle;margin-right:8px}
     .warn{border-left:4px solid #e2a84b;padding-left:12px}
     .muted{font-size:.9rem;color:#9eafb8}
     @media(min-width:900px){body{padding-top:40px}.panel{padding:20px}}
@@ -25,7 +25,7 @@
 </head>
 <body>
   <h1>VELTRON Testnet Deployer</h1>
-  <p>Verify the official CI-built contract files and connect a NEAR Testnet wallet. This stage is read-only: it cannot submit transactions or deploy contracts.</p>
+  <p>Verify the official CI-built contract files, connect a NEAR Testnet wallet, and review a separately approved test-token deployment. No transaction is sent unless you click the deployment control and approve it in your wallet.</p>
   <div class="panel warn">
     <strong>Testnet only. No real funds.</strong>
     <p>Do not upload keys, seed phrases, or wallet backups. Only select the two <code>.wasm</code> files extracted from the matching GitHub Actions artifact.</p>
@@ -58,11 +58,11 @@
     <p class="status" id="deployment-capability">Deployment action support: NOT VERIFIED. A successful wallet connection does not prove that the selected wallet can sign and submit a NEAR DeployContract action. This preflight deliberately does not test by requesting a signature or sending a transaction.</p>
     <button id="verify-token-contract" type="button">Check token contract (read-only)</button>
     <p id="token-contract-status" class="status" role="status" aria-live="polite">Not checked. This check only reads public Testnet contract information; it cannot sign or submit transactions.</p>
-    <p class="muted">No signing, transfers, contract calls, deployment, or initialization are available in this stage. Disconnect from the wallet itself to end the session.</p>
+    <p class="muted">The only transaction action in this stage is the separate test-token DeployContract request described below. No initialization, transfer, or treasury deployment action is available.</p>
   </div>
   <div class="panel" id="deployment-review">
     <h2>Deployment transaction review — preview only</h2>
-    <p class="warn"><strong>NOT EXECUTABLE.</strong> This section is a static review of the intended sequence. It has no signing controls and cannot submit a transaction.</p>
+    <p class="warn"><strong>TESTNET DEPLOYMENT ONLY.</strong> The button below can request one DeployContract action after fresh read-only checks. Your wallet must show the exact action and you must approve it there. No transaction is submitted automatically.</p>
     <h3>Step 1 — Deploy the test-token contract</h3>
     <ul>
       <li>Network: <code>NEAR Testnet</code> (wallet network must still be independently confirmed)</li>
@@ -89,7 +89,11 @@
 }</code></pre>
     <p>Expected initial supply: <strong>1,000,000 VTT</strong>, minted to the owner account. The initializer is one-time; wrong arguments require stopping and assessing a fresh contract account, not attempting an improvised recovery.</p>
     <p><strong>Required gates:</strong> confirm the wallet's active network and that it is signing as <code>veltron-token.testnet</code>; verify the target account and current code state again; verify the uploaded WASM hash; refresh fee and storage estimates; inspect the exact DeployContract action in Meteor; deploy; independently compare the on-chain code hash; re-read actual balance and storage usage; only then prepare a separate initialization review with exact arguments, 3 Tgas only if current limits and Meteor preview support it, and 0 NEAR deposit. Do not combine the two actions.</p>
-    <p class="muted">No wallet action is available in this preview. Do not treat this display as a deployment authorization or as proof that the connected wallet supports this action on this device.</p>
+    <label><input id="confirm-testnet-network" type="checkbox">I have just checked Meteor Wallet itself and confirmed it displays NEAR Testnet. I understand that clicking the next button opens a wallet approval request.</label>
+    <p class="warn">Before approving in Meteor, verify: network Testnet; signer and receiver <code>veltron-token.testnet</code>; exactly one <code>DeployContract</code> action; no attached deposit; and the expected contract file. Reject the request if anything differs. Never approve an initialization or transfer here.</p>
+    <button id="deploy-token-contract" type="button" disabled>Review test-token deployment in Meteor</button>
+    <p id="deployment-execution-status" class="status" role="status" aria-live="polite">Not ready. Connect veltron-token.testnet, select the matching token WASM, and confirm the wallet network before a fresh preflight can run.</p>
+    <p class="muted">After approval, VELTRON independently reads the finalized on-chain code and compares its SHA-256 with the CI artifact. Initialization remains a separate, unavailable step until this comparison passes.</p>
   </div>
   <div class="panel">
     <h2>Testnet configuration to review</h2>
@@ -104,7 +108,7 @@
     </ul>
     <p class="muted">Configuration is displayed for review only. No contract initialization arguments are submitted.</p>
   </div>
-  <p class="muted">A matching hash proves file identity against this recorded build, not contract safety, wallet compatibility, or deployment success.</p>
+  <p class="muted">A matching hash proves file identity against this recorded build, not contract safety or deployment success. The wallet approval screen is the final authority for what you are signing.</p>
   <script>
     const expected={treasury:"3ed0cf173950f319fce18fd6f286c899ea264c76d2e1f4fd1411b54ce3455d36",token:"5d5041336cc8fc92cc9ca11fff1f0b1f7ead33c4826c6d12013f957ba1e7c95b"};
     const labels={treasury:"Treasury",token:"Test-token"};
