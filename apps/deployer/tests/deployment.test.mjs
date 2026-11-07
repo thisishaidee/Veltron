@@ -66,6 +66,8 @@ test("requests exactly one DeployContract transaction for the token account", as
   const wallet = { signAndSendTransaction: async value => { request = value; return "wallet-result"; } };
   const result = await requestDeployContract(wallet, TOKEN_ACCOUNT, bytes);
   assert.equal(result, "wallet-result");
+  assert.equal(request.network, "testnet");
+  assert.equal(request.signerId, TOKEN_ACCOUNT);
   assert.equal(request.receiverId, TOKEN_ACCOUNT);
   assert.equal(request.actions.length, 1);
   assert.equal(request.actions[0].type, "DeployContract");
