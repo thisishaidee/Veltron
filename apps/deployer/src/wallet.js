@@ -11,9 +11,9 @@ function showStatus(message) {
   status.textContent = message;
 }
 
-async function initializeWalletConnection() {
+function initializeWalletConnection() {
   connectButton.disabled = true;
-  showStatus("Loading supported wallet options…");
+  showStatus("Preparing supported wallet options…");
 
   try {
     connector = new NearConnector({
@@ -43,10 +43,10 @@ async function initializeWalletConnection() {
       connectButton.disabled = false;
     });
 
-    await connector.whenManifestLoaded;
     connectButton.disabled = false;
     showStatus("Ready. Choose a wallet that supports NEAR Testnet.");
   } catch (error) {
+    connector = undefined;
     connectButton.disabled = true;
     showStatus("Wallet connector could not initialize. Reload and try again.");
     console.error("VELTRON wallet connector initialization failed", error);
