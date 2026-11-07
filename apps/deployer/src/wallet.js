@@ -13,10 +13,10 @@ function showStatus(message) {
 
 function resetWalletDetails() {
   account.textContent = "Not connected";
-  network.textContent = "Not verified";
+  network.textContent = "Not independently verified";
 }
 
-async function handleWalletSignIn(event) {
+function handleWalletSignIn(event) {
   const accountId = event?.accounts?.[0]?.accountId;
   if (!accountId) {
     resetWalletDetails();
@@ -26,31 +26,10 @@ async function handleWalletSignIn(event) {
   }
 
   account.textContent = accountId;
-  network.textContent = "Checking wallet-reported network…";
-  showStatus("Checking the connected wallet session…");
-
-  try {
-    // NEAR Connect exposes the active wallet after the sign-in event.
-    // Read its network metadata; never infer the active network from app config.
-    const wallet = await connector.wallet();
-    const networkId = wallet?.network?.networkId ?? wallet?.networkId;
-
-    if (networkId === "testnet") {
-      network.textContent = "Testnet (verified from wallet)";
-      showStatus("Wallet connected on NEAR Testnet. Read-only mode: no transaction actions are enabled.");
-    } else if (networkId) {
-      network.textContent = `Mismatch — ${networkId}`;
-      showStatus("Wallet network does not match the required NEAR Testnet. Do not proceed.");
-    } else {
-      network.textContent = "Unable to verify";
-      showStatus("Wallet connected, but its active network could not be verified. Do not proceed.");
-    }
-  } catch (error) {
-    network.textContent = "Unable to verify";
-    showStatus("Wallet connected, but network verification failed. Do not proceed.");
-    console.error("VELTRON wallet network verification failed", error);
-  }
-
+  network.textContent = "Not independently verified";
+  showStatus(
+    "Wallet connected through a Testnet-configured connector. The wallet's active network has not been independently verified. Do not proceed to transactions or deployment."
+  );
   connectButton.disabled = false;
 }
 
@@ -66,9 +45,7 @@ function initializeWalletConnection() {
       footerBranding: null
     });
 
-    connector.on("wallet:signIn", (event) => {
-      void handleWalletSignIn(event);
-    });
+    connector.on("wallet:signIn", handleWalletSignIn);
 
     connector.on("wallet:signOut", () => {
       resetWalletDetails();
@@ -93,7 +70,7 @@ connectButton.addEventListener("click", async () => {
 
   try {
     await connector.connect();
-    // The wallet:signIn event updates the connected account and verifies its network.
+    // The wallet:signIn event updates the connected account.
   } catch (error) {
     showStatus("Connection was not completed. You can try again.");
     console.error("VELTRON wallet connection failed", error);
