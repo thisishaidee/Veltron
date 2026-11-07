@@ -109,9 +109,10 @@ function handleWalletSignIn(event) {
   }
 
   account.textContent = accountId;
+  deployButton.disabled = accountId !== TOKEN_ACCOUNT;
   network.textContent = "Not independently verified";
   showStatus(
-    "Wallet connected through a Testnet-configured connector. The wallet's active network has not been independently verified. Do not proceed to transactions or deployment."
+    "Wallet connected. The wallet's active network is not independently verified by this page. Confirm Testnet in Meteor itself before requesting a deployment."
   );
   connectButton.disabled = false;
 }
@@ -132,6 +133,7 @@ function initializeWalletConnection() {
     connector.on("wallet:signIn", handleWalletSignIn);
 
     connector.on("wallet:signOut", () => {
+      deployButton.disabled = true;
       resetWalletDetails();
       showStatus("Wallet disconnected.");
       connectButton.disabled = false;
