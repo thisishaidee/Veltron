@@ -17,29 +17,77 @@ function resetWalletDetails() {
   network.textContent = "Not independently verified";
 }
 
-async function verifyRpcNetwork() {
-  rpcNetwork.textContent = "Checking configured NEAR RPC…";
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8000);
+const RPC_ENDPOINTS = [
+  { name: "FastNEAR", url: "https://rpc.testnet.fastnear.com" },
+  { name: "dRPC", url: "https://near-testnet.drpc.org" },
+  { name: "NEAR public RPC", url: "https://rpc.testnet.near.org" }
+];
+const verifiedRpcEndpoints = new Set();
 
+async function rpcRequest(endpoint, method, params, timeoutMs = 8000) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const response = await fetch("https://rpc.testnet.near.org", {
+    const response = await fetch(endpoint.url, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ jsonrpc: "2.0", id: "veltron-network-check", method: "status", params: [] }),
+      body: JSON.stringify({ jsonrpc: "2.0", id: "veltron-read-only-check", method, params }),
       signal: controller.signal
     });
-    if (!response.ok) throw new Error("RPC request failed");
-    const payload = await response.json();
-    const chainId = payload?.result?.chain_id;
-    rpcNetwork.textContent = chainId === "testnet"
-      ? "Testnet verified (VELTRON RPC endpoint)"
-      : "Unverified — RPC did not identify NEAR Testnet";
-  } catch (error) {
-    rpcNetwork.textContent = "Unverified — configured NEAR RPC could not be checked";
-    console.error("VELTRON NEAR RPC network check failed", error);
+    const responseText = await response.text();
+    let payload;
+    try {
+      payload = JSON.parse(responseText);
+    } catch {
+      throw new Error("HTTP " + response.status + ": RPC returned a non-JSON response.");
+    }
+    if (!response.ok) throw new Error("HTTP " + response.status + ": " + (payload?.message || payload?.error?.message || "request failed"));
+    if (payload.error) {
+      const rpcError = payload.error;
+      const detail = rpcError.data
+        ? " Details: " + (typeof rpcError.data === "string" ? rpcError.data : JSON.stringify(rpcError.data)).slice(0, 300)
+        : "";
+      throw new Error("RPC error" + (rpcError.code ? " (" + rpcError.code + ")" : "") + ": " + (rpcError.message || "request failed") + detail);
+    }
+    if (!payload.result) throw new Error("RPC response did not contain a result.");
+    return payload.result;
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+async function getVerifiedRpcEndpoints() {
+  const verified = [];
+  const failures = [];
+  for (const endpoint of RPC_ENDPOINTS) {
+    if (verifiedRpcEndpoints.has(endpoint.url)) {
+      verified.push(endpoint);
+      continue;
+    }
+    try {
+      const statusResult = await rpcRequest(endpoint, "status", [], 8000);
+      if (statusResult.chain_id !== "testnet") {
+        failures.push(endpoint.name + " did not identify Testnet");
+        continue;
+      }
+      verifiedRpcEndpoints.add(endpoint.url);
+      verified.push(endpoint);
+    } catch (error) {
+      failures.push(endpoint.name + ": " + (error?.name === "AbortError" ? "timeout" : String(error?.message || error)));
+    }
+  }
+  if (!verified.length) throw new Error("No RPC endpoint could be verified as NEAR Testnet. " + failures.join(" | "));
+  return verified;
+}
+
+async function verifyRpcNetwork() {
+  rpcNetwork.textContent = "Checking independent Testnet RPC providers…";
+  try {
+    const endpoints = await getVerifiedRpcEndpoints();
+    rpcNetwork.textContent = "Testnet verified via " + endpoints[0].name + " (read-only RPC; " + endpoints.length + " verified endpoint" + (endpoints.length === 1 ? "" : "s") + ")";
+  } catch (error) {
+    rpcNetwork.textContent = "Unverified — " + String(error?.message || error).slice(0, 220);
+    console.error("VELTRON NEAR RPC network check failed", error);
   }
 }
 
@@ -112,38 +160,16 @@ const tokenCheckButton = document.querySelector("#verify-token-contract");
 const tokenCheckStatus = document.querySelector("#token-contract-status");
 
 async function nearRpc(method, params) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 12000);
-  try {
-    const response = await fetch("https://rpc.testnet.near.org", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ jsonrpc: "2.0", id: "veltron-token-preflight", method, params }),
-      signal: controller.signal
-    });
-    const responseText = await response.text();
-    let payload;
+  const endpoints = await getVerifiedRpcEndpoints();
+  const failures = [];
+  for (const endpoint of endpoints) {
     try {
-      payload = JSON.parse(responseText);
-    } catch {
-      throw new Error("RPC returned HTTP " + response.status + " with a non-JSON response.");
+      return await rpcRequest(endpoint, method, params, 12000);
+    } catch (error) {
+      failures.push(endpoint.name + ": " + (error?.name === "AbortError" ? "timeout" : String(error?.message || error)));
     }
-    if (!response.ok) {
-      throw new Error("RPC HTTP " + response.status + ": " + (payload?.message || payload?.error?.message || "request failed"));
-    }
-    if (payload.error) {
-      const rpcError = payload.error;
-      const detail = rpcError.data
-        ? " Details: " + (typeof rpcError.data === "string" ? rpcError.data : JSON.stringify(rpcError.data)).slice(0, 500)
-        : "";
-      throw new Error("RPC error" + (rpcError.code ? " (" + rpcError.code + ")" : "") + ": " +
-        (rpcError.message || "request failed") + detail);
-    }
-    if (!payload.result) throw new Error("RPC response did not contain a result.");
-    return payload.result;
-  } finally {
-    clearTimeout(timeout);
   }
+  throw new Error("All verified Testnet RPC endpoints failed. " + failures.join(" | "));
 }
 
 function explainTokenCheckError(error) {
