@@ -22,7 +22,7 @@ test("preflight renders without horizontal overflow", async ({ page }) => {
   await expect(page.getByLabel("Treasury contract WASM")).toBeVisible();
   await expect(page.getByLabel("Test-token contract WASM")).toBeVisible();
   await expect(page.locator("#wallet-network")).toHaveText("Not independently verified");
-  await expect(page.locator("#rpc-network")).toHaveText("Testnet verified (VELTRON RPC endpoint)");
+  await expect(page.locator("#rpc-network")).toContainText("Testnet verified via FastNEAR");
   const dimensions = await page.evaluate(() => ({
     viewport: document.documentElement.clientWidth,
     content: document.documentElement.scrollWidth
@@ -37,14 +37,14 @@ test("does not verify an RPC endpoint that reports another chain", async ({ page
     body: JSON.stringify({ jsonrpc: "2.0", id: "veltron-network-check", result: { chain_id: "mainnet" } })
   }));
   await page.goto("/");
-  await expect(page.locator("#rpc-network")).toHaveText("Unverified — RPC did not identify NEAR Testnet");
+  await expect(page.locator("#rpc-network")).toContainText("Unverified — No RPC endpoint could be verified as NEAR Testnet");
   await expect(page.locator("#wallet-network")).toHaveText("Not independently verified");
 });
 
 test("fails closed when the configured RPC cannot be reached", async ({ page }) => {
   await mockAllRpc(page, route => route.abort());
   await page.goto("/");
-  await expect(page.locator("#rpc-network")).toHaveText("Unverified — configured NEAR RPC could not be checked");
+  await expect(page.locator("#rpc-network")).toContainText("Unverified — No RPC endpoint could be verified as NEAR Testnet");
 });
 
 test("falls back to another endpoint only after verifying Testnet", async ({ page }) => {
