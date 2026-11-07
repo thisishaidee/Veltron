@@ -7,7 +7,7 @@ on:
       - "Cargo.lock"
       - "rust-toolchain.toml"
       - "contracts/**"
-      - ".github/workflows/contract.yml"
+      - ".github/workflows/contract.yml"\n      - "scripts/testnet_fee_preflight.py"
   pull_request:
     paths:
       - "Cargo.toml"
