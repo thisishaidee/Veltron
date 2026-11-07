@@ -4,10 +4,18 @@ on:
   push:
     paths:
       - "apps/deployer/**"
+      - "contracts/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
       - ".github/workflows/deployer-browser.yml"
   pull_request:
     paths:
       - "apps/deployer/**"
+      - "contracts/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
       - ".github/workflows/deployer-browser.yml"
   workflow_dispatch:
 
@@ -22,6 +30,15 @@ jobs:
         working-directory: apps/deployer
     steps:
       - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@1.99.1
+        with:
+          targets: wasm32-unknown-unknown
+      - name: Build treasury contract for positive-path verification
+        run: cargo build --locked --release -p veltron-treasury --target wasm32-unknown-unknown
+        working-directory: .
+      - name: Build test-token contract for positive-path verification
+        run: cargo build --locked --release -p veltron-test-token --target wasm32-unknown-unknown
+        working-directory: .
       - uses: actions/setup-node@v5
         with:
           node-version: 22
