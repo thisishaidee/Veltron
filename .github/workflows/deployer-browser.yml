@@ -43,7 +43,9 @@ jobs:
         with:
           node-version: 22
       - name: Install pinned test runner
-        run: npm install --no-save --package-lock=false @playwright/test@1.56.1
+        run: npm install --no-save --package-lock=false @playwright/test@1.56.1 esbuild@0.25.11 @hot-labs/near-connect@0.11.4
+      - name: Bundle the pinned wallet connector
+        run: npm run build
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
       - name: Run mobile and desktop browser checks
