@@ -1,0 +1,52 @@
+name: Deployer browser checks
+
+on:
+  push:
+    paths:
+      - "apps/deployer/**"
+      - "contracts/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - ".github/workflows/deployer-browser.yml"
+  pull_request:
+    paths:
+      - "apps/deployer/**"
+      - "contracts/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - ".github/workflows/deployer-browser.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/deployer
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@1.99.1
+        with:
+          targets: wasm32-unknown-unknown
+      - name: Build treasury contract for positive-path verification
+        run: cargo build --locked --release -p veltron-treasury --target wasm32-unknown-unknown
+        working-directory: .
+      - name: Build test-token contract for positive-path verification
+        run: cargo build --locked --release -p veltron-test-token --target wasm32-unknown-unknown
+        working-directory: .
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Install pinned test runner
+        run: npm install --no-save --package-lock=false @playwright/test@1.56.1 esbuild@0.25.11 @hot-labs/near-connect@0.11.4
+      - name: Bundle the pinned wallet connector
+        run: npm run build
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium firefox webkit
+      - name: Run mobile and desktop browser checks
+        run: npm run test:e2e
