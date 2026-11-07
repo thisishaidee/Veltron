@@ -1,6 +1,6 @@
 # VELTRON Testnet deployment fee and gas review
 
-Status: **live Testnet fee inputs captured; DeployContract action component calculated; all-in transaction cost and code-storage stake remain unverified**.
+Status: **read-only live Testnet preflight passed on 2026-11-07; modeled self-addressed DeployContract fee and storage projection recorded; final wallet quote and post-deployment storage remain unverified**.
 
 This document is deliberately not a transaction recipe. It does not authorize deployment, initialization, or wallet signing.
 
@@ -70,6 +70,30 @@ The returned `storage_usage_config` contained `num_bytes_account=100` and `num_e
 
 This is a sampled live configuration, not a guaranteed future quote. Re-read the finalized block and protocol configuration immediately before any wallet prompt. The numeric DeployContract action component is now reproducible from the recorded inputs, but **no final all-in deployment cost or required balance is approved**.
 
+### Latest corrected preflight — 2026-11-07
+
+The corrected script passed in Contract checks workflow run [42400914561](https://github.com/thisishaidee/Veltron/actions/runs/42400914561) on PR #5's merge test commit. The separate mobile/desktop browser checks passed in [42400914589](https://github.com/thisishaidee/Veltron/actions/runs/42400914589). This validates the automated build, Sandbox tests, read-only RPC script, and browser test suite; it does **not** validate a real wallet signature or transaction.
+
+The script models `veltron-token.testnet` signing its own `DeployContract` action. NEAR requires the DeployContract predecessor/signer to match the receiver; do not use `haideedotxyz.testnet` as signer for a direct DeployContract to `veltron-token.testnet`.
+
+Live read-only sample from finalized block:
+
+- Height: **276667470**
+- Hash: `BK3HKkaqHVhFwEVZ3Hyy4DMovgmxpcirtdyzHqhJCvJN`
+- Protocol version: **88**
+- Gas price: **100,000,000 yoctoNEAR/gas**
+- DeployContract `send_sir` action component: **2,399,712,602,894 gas = 0.000239971260 NEAR**
+- Modeled one-action transaction fee (receipt send + DeployContract send + receipt execution + DeployContract execution): **23,793,648,884,958 gas = 0.002379364888 NEAR**
+- Runtime storage amount: **10,000,000,000,000,000,000 yoctoNEAR/byte**
+- WASM code-byte reserve estimate: **3.251060000 NEAR**
+- Target account balance: **5.319866090 NEAR**
+- Target account storage usage before deployment: **182 bytes**
+- Approximate projected storage usage after deployment: **325,288 bytes**
+- Approximate projected storage-backed balance: **3.252880000 NEAR**
+- Contract code at target account: **absent**
+
+The modeled fee is an estimate, not a final all-in wallet quote. It excludes signature-verification gas where applicable, and the storage projection assumes adding the WASM byte count to current storage usage. Actual post-deployment storage usage and balance must be read again from Testnet. Do not interpret the apparent balance headroom as authorization to deploy.
+
 ## Sandbox initializer measurement
 
 CI run [42386873087](https://github.com/thisishaidee/Veltron/actions/runs/42386873087) completed successfully. The current run repeated the exact token initializer measurement and verified its post-initialization views. The test deployed the exact test-token WASM in NEAR Sandbox and called `new` with the approved token metadata, owner and raw supply.
@@ -111,4 +135,4 @@ Stop without signing if any of the following is true:
 - NEAR gas-cost model: https://near.github.io/nearcore/architecture/gas/index.html
 - NEAR gas flow and gas-price explanation: https://near.github.io/nearcore/architecture/how/gas.html
 
-No wallet transaction has been sent. This document adds no signing or transaction-submission capability.
+No wallet transaction has been sent. PR #5 remains a draft and unmerged. This document adds no signing or transaction-submission capability.
