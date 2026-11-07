@@ -15,23 +15,39 @@ test("builds only a DeployContract action with the supplied WASM bytes", () => {
   assert.throws(() => buildDeployContractAction(new Uint8Array()), /non-empty/);
 });
 
-test("calculates storage reserve and one-action transaction fee using integer arithmetic", () => {
+test("calculates storage reserve and transaction fee using integer arithmetic", () => {
   const result = calculateDeploymentBudget({
-    accountBalance: "5319866090462500000000000",
-    storageUsage: 182,
-    wasmBytes: 325106,
-    storageAmountPerByte: "10000000000000000000",
-    gasPrice: "100000000",
+    accountBalance: "50000000000000000000000000",
+    storageUsage: 100,
+    wasmBytes: 3,
+    storageAmountPerByte: "5",
+    gasPrice: "2",
     costs: {
-      deployContract: { send_sir: "184765750000", execution: "0" },
-      deployContractPerByte: { send_sir: "6812999", execution: "0" },
-      receipt: { send_sir: "108059500000", execution: "108059500000" }
+      deployContract: { send_sir: "10", execution: "7" },
+      deployContractPerByte: { send_sir: "2", execution: "3" },
+      receipt: { send_sir: "11", execution: "13" }
     }
   });
+  assert.equal(result.gas, "56");
+  assert.equal(result.feeYocto, "112");
+  assert.equal(result.storageReserveYocto, "515");
   assert.equal(result.hasSufficientBalance, true);
-  assert.equal(result.storageReserveYocto, "3252880000000000000000000");
-  assert.equal(result.feeYocto, "239971260289400000000");
-  assert.equal(result.requiredBalanceYocto, "3307849260289400000000000");
+});
+
+test("fails closed when the account cannot cover storage, fee, and margin", () => {
+  const result = calculateDeploymentBudget({
+    accountBalance: "100",
+    storageUsage: 100,
+    wasmBytes: 3,
+    storageAmountPerByte: "5",
+    gasPrice: "2",
+    costs: {
+      deployContract: { send_sir: "10", execution: "7" },
+      deployContractPerByte: { send_sir: "2", execution: "3" },
+      receipt: { send_sir: "11", execution: "13" }
+    }
+  });
+  assert.equal(result.hasSufficientBalance, false);
 });
 
 test("refuses a signer other than the dedicated token account", async () => {
