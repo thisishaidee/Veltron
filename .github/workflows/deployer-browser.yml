@@ -47,6 +47,6 @@ jobs:
       - name: Bundle the pinned wallet connector
         run: npm run build
       - name: Install Chromium
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium firefox webkit
       - name: Run mobile and desktop browser checks
         run: npm run test:e2e
