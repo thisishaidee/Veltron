@@ -96,7 +96,7 @@
     <p class="warn">Before approving in Meteor, verify: network Testnet; signer and receiver <code>veltron-token.testnet</code>; exactly one <code>DeployContract</code> action; no attached deposit; and the expected contract file. Reject the request if anything differs. Never approve an initialization or transfer here.</p>
     <button id="deploy-token-contract" type="button" disabled>Review test-token deployment in Meteor</button>
     <p id="deployment-execution-status" class="status" role="status" aria-live="polite">Not ready. Connect veltron-token.testnet, select the matching token WASM, and confirm the wallet network before a fresh preflight can run.</p>
-    <button id="verify-deployed-code" type="button" hidden>Verify finalized on-chain code hash</button>
+    <button id="verify-deployed-code" type="button">Verify current on-chain code hash (read-only)</button>
     <p class="muted">After approval, VELTRON independently reads the finalized on-chain code and compares its SHA-256 with the CI artifact. Initialization remains a separate, unavailable step until this comparison passes.</p>
   </div>
   <div class="panel">
