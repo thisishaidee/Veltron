@@ -237,12 +237,12 @@ async function verifyTokenContractReadOnly() {
       throw new Error("Token returned invalid decimals metadata.");
     }
     const scale = 10n ** BigInt(decimals);
-    const cap = (100n * scale).toString();
+    const cap = (50n * scale).toString();
     const reserve = (200n * scale).toString();
     tokenCheckStatus.textContent =
       "CONTRACT CODE FOUND — ft_metadata responded successfully. This confirms metadata only, not full NEP-141 compliance. Token: " + name +
       " (" + symbol + "), decimals: " + decimals +
-      ". Proposed settings: 100 tokens per agent payment = " + cap +
+      ". Proposed settings: 50 tokens per agent payment = " + cap +
       " smallest units; 200-token reserve = " + reserve +
       " smallest units. Code hash: " + code.hash +
       ". Read-only check only; nothing was deployed, initialized, or transferred.";
