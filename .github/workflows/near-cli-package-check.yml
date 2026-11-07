@@ -1,0 +1,18 @@
+name: NEAR CLI package check
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Check published near-cli-rs package version
+        run: npm view near-cli-rs version
