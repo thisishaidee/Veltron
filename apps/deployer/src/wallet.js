@@ -270,7 +270,7 @@ tokenCheckButton.addEventListener("click", verifyTokenContractReadOnly);
 
 const deployButton = document.querySelector("#deploy-token-contract");
 const deployNetworkConfirmation = document.querySelector("#confirm-testnet-network");
-const deployStatus = document.querySelector("#deployment-execution-status");
+const deployStatus = document.querySelector("#deployment-execution-status");\nconst verifyDeployedCodeButton = document.querySelector("#verify-deployed-code");
 
 function formatYoctoNear(value) {
   const amount = BigInt(value);
@@ -399,5 +399,22 @@ deployButton.addEventListener("click", async () => {
     console.error("VELTRON DeployContract flow stopped", error);
   } finally {
     deployButton.disabled = false;
+  }
+});
+
+
+verifyDeployedCodeButton.addEventListener("click", async () => {
+  verifyDeployedCodeButton.disabled = true;
+  deployStatus.textContent = "Reading finalized on-chain contract code and comparing its SHA-256…";
+  try {
+    const verified = await verifyDeployedTokenCode();
+    deployStatus.textContent =
+      "DEPLOYED CODE HASH VERIFIED — " + verified.actualHash +
+      " (" + verified.bytes + " bytes). This verifies code identity only. Token is NOT initialized. Stop here; initialization requires a separate review.";
+  } catch (error) {
+    deployStatus.textContent = "CODE NOT VERIFIED — " + String(error?.message || error) +
+      " Do not initialize. You may retry this read-only check after the transaction is finalized.";
+  } finally {
+    verifyDeployedCodeButton.disabled = false;
   }
 });
