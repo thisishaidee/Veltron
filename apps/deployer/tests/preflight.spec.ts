@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { resolve } from "node:path";
 
 test("preflight renders without horizontal overflow", async ({ page }) => {
   await page.goto("/");
@@ -23,4 +24,18 @@ test("rejects an unrecognized WASM file", async ({ page }) => {
   await expect(page.locator("#overall")).toContainText("Both files must match");
   await expect(page.locator("#treasury-result")).toHaveAttribute("data-ok", "false");
   await expect(page.locator("#token-result")).toContainText("Not checked");
+});
+
+test("accepts both actual CI-built contract files", async ({ page }) => {
+  const treasuryWasm = resolve(process.cwd(), "../../target/wasm32-unknown-unknown/release/veltron_treasury.wasm");
+  const tokenWasm = resolve(process.cwd(), "../../target/wasm32-unknown-unknown/release/veltron_test_token.wasm");
+
+  await page.goto("/");
+  await page.getByLabel("Treasury contract WASM").setInputFiles(treasuryWasm);
+  await expect(page.locator("#treasury-result")).toContainText("MATCH");
+  await page.getByLabel("Test-token contract WASM").setInputFiles(tokenWasm);
+  await expect(page.locator("#token-result")).toContainText("MATCH");
+  await expect(page.locator("#overall")).toContainText("Both files match the recorded CI build");
+  await expect(page.locator("#treasury-result")).toHaveAttribute("data-ok", "true");
+  await expect(page.locator("#token-result")).toHaveAttribute("data-ok", "true");
 });
