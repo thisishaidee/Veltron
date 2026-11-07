@@ -57,6 +57,8 @@ export async function requestDeployContract(wallet, accountId, code) {
     throw new Error("The connected wallet does not expose signAndSendTransaction.");
   }
   return wallet.signAndSendTransaction({
+    network: "testnet",
+    signerId: accountId,
     receiverId: TOKEN_ACCOUNT,
     actions: [buildDeployContractAction(code)]
   });
