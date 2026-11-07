@@ -42,6 +42,14 @@ print(f"DeployContract action fee at sampled gas price: {deploy_yocto} yoctoNEAR
 print(f"DeployContract action fee in NEAR: {deploy_yocto / 10**24:.12f} NEAR")
 print("Action creation config keys:", ", ".join(sorted(action.keys())))
 print("Transaction cost config keys:", ", ".join(sorted(costs.keys())))
+storage_config = costs.get("storage_usage_config", {})
+print("Storage usage config:", json.dumps(storage_config, sort_keys=True))
+if "storage_amount_per_byte" in storage_config:
+    storage_per_byte = int(storage_config["storage_amount_per_byte"])
+    storage_stake = WASM_BYTES * storage_per_byte
+    print(f"Code storage stake estimate: {storage_stake} yoctoNEAR ({storage_stake / 10**24:.9f} NEAR)")
+else:
+    print("Code storage stake estimate: unavailable; storage_amount_per_byte not found.")
 receipt_config = costs.get("action_receipt_creation_config")
 if receipt_config is not None:
     print("Action receipt creation config:", json.dumps(receipt_config, sort_keys=True))
