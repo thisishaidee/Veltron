@@ -66,14 +66,17 @@
     <h3>Step 1 — Deploy the test-token contract</h3>
     <ul>
       <li>Network: <code>NEAR Testnet</code> (wallet network must still be independently confirmed)</li>
-      <li>Receiver account: <code>veltron-token.testnet</code></li>
+      <li>Signer and receiver account: <code>veltron-token.testnet</code> (NEAR requires the DeployContract signer/predecessor to be the receiver account)</li>
       <li>Action: <code>DeployContract</code></li>
       <li>WASM file: <code>veltron_test_token.wasm</code></li>
       <li>Expected SHA-256: <code>5d5041336cc8fc92cc9ca11fff1f0b1f7ead33c4826c6d12013f957ba1e7c95b</code></li>
-      <li>Gas and attached deposit: <strong>must be calculated and independently reviewed before any signing flow is implemented</strong></li>
+      <li>Modeled one-action fee: approximately <strong>0.002379364888 NEAR</strong> at the sampled finalized block; excludes signature-verification gas and is not a live wallet quote</li>
+      <li>Storage projection: approximately <strong>3.25288 NEAR</strong> storage-backed balance after deployment; must be rechecked from actual post-deploy account state</li>
+      <li>Attached deposit: none for DeployContract; do not invent one</li>
+      <li>Signing key: the key for <code>veltron-token.testnet</code>; stop if the wallet cannot sign as that account</li>
     </ul>
     <h3>Step 2 — Initialize the token (only after deployed code hash passes)</h3>
-    <p>Method: <code>new</code>. The following is the proposed JSON argument payload; it is displayed, not sent:</p>
+    <p>Signer and receiver: <code>veltron-token.testnet</code>. Method: <code>new</code>. Attached deposit: <strong>0 NEAR</strong> (the current initializer is not payable). Prepaid gas: <strong>3 Tgas is provisional only</strong>, based on a 2.04325 Tgas Sandbox measurement; verify current Testnet limits and the exact wallet preview before any approval. The following JSON is displayed, not sent:</p>
     <pre><code>{
   "owner_id": "haideedotxyz.testnet",
   "total_supply": "1000000000000",
@@ -85,7 +88,7 @@
   }
 }</code></pre>
     <p>Expected initial supply: <strong>1,000,000 VTT</strong>, minted to the owner account. The initializer is one-time; wrong arguments require stopping and assessing a fresh contract account, not attempting an improvised recovery.</p>
-    <p><strong>Required gates:</strong> confirm the wallet's active network; verify the target account and current code state again; verify the uploaded WASM hash; calculate gas and deposit from current protocol/wallet requirements; inspect the exact transaction in Meteor; deploy; independently compare the on-chain code hash; only then prepare and separately approve initialization.</p>
+    <p><strong>Required gates:</strong> confirm the wallet's active network and that it is signing as <code>veltron-token.testnet</code>; verify the target account and current code state again; verify the uploaded WASM hash; refresh fee and storage estimates; inspect the exact DeployContract action in Meteor; deploy; independently compare the on-chain code hash; re-read actual balance and storage usage; only then prepare a separate initialization review with exact arguments, 3 Tgas only if current limits and Meteor preview support it, and 0 NEAR deposit. Do not combine the two actions.</p>
     <p class="muted">No wallet action is available in this preview. Do not treat this display as a deployment authorization or as proof that the connected wallet supports this action on this device.</p>
   </div>
   <div class="panel">
