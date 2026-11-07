@@ -1,4 +1,4 @@
-use near_workspaces::{Contract, Worker};
+use near_workspaces::Contract;
 use serde_json::json;
 
 const TOKEN_WASM: &[u8] =
@@ -12,7 +12,8 @@ async fn view_json(
     Ok(contract.call(method).args_json(args).view().await?.json()?)
 }
 
-async fn measure_initializer<W: Worker>(worker: &W) -> anyhow::Result<()> {
+async fn measure_initializer() -> anyhow::Result<()> {
+    let worker = near_workspaces::sandbox().await?;
     let owner = worker.dev_create_account().await?;
     let token = worker.dev_deploy(TOKEN_WASM).await?;
 
@@ -71,6 +72,5 @@ async fn measure_initializer<W: Worker>(worker: &W) -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn sandbox_measures_approved_token_initializer_and_verifies_supply() -> anyhow::Result<()> {
-    let worker = near_workspaces::sandbox().await?;
-    measure_initializer(&worker).await
+    measure_initializer().await
 }
