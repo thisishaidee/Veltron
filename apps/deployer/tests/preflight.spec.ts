@@ -21,5 +21,6 @@ test("rejects an unrecognized WASM file", async ({ page }) => {
   });
   await expect(page.locator("#treasury-result")).toContainText("MISMATCH");
   await expect(page.locator("#overall")).toContainText("Both files must match");
-  await expect(page.getByRole("button")).toHaveCount(0);
+  await expect(page.locator("#treasury-result")).toHaveAttribute("data-ok", "false");
+  await expect(page.locator("#token-result")).toHaveAttribute("data-ok", "false");
 });
