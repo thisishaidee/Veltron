@@ -16,7 +16,10 @@
     label{display:block;font-weight:650;margin:14px 0 6px}
     input[type=file]{display:block;width:100%;max-width:100%;min-width:0;padding:10px;background:#1b2932;border:1px solid #52636d;border-radius:8px;color:#edf2f4}
     code{overflow-wrap:anywhere;word-break:break-word;color:#b8e1dd}
-    .status{min-width:0;padding:12px;border-radius:8px;background:#263640;margin-top:12px;overflow-wrap:anywhere}\n    button{width:100%;padding:13px 16px;margin:10px 0;border:0;border-radius:8px;background:#b8e1dd;color:#101820;font:inherit;font-weight:750}\n    button:disabled{opacity:.45}\n    input[type=checkbox]{width:20px;height:20px;vertical-align:middle;margin-right:8px}
+    .status{min-width:0;padding:12px;border-radius:8px;background:#263640;margin-top:12px;overflow-wrap:anywhere}
+    button{width:100%;padding:13px 16px;margin:10px 0;border:0;border-radius:8px;background:#b8e1dd;color:#101820;font:inherit;font-weight:750}
+    button:disabled{opacity:.45}
+    input[type=checkbox]{width:20px;height:20px;vertical-align:middle;margin-right:8px}
     .warn{border-left:4px solid #e2a84b;padding-left:12px}
     .muted{font-size:.9rem;color:#9eafb8}
     @media(min-width:900px){body{padding-top:40px}.panel{padding:20px}}
@@ -92,7 +95,8 @@
     <label><input id="confirm-testnet-network" type="checkbox">I have just checked Meteor Wallet itself and confirmed it displays NEAR Testnet. I understand that clicking the next button opens a wallet approval request.</label>
     <p class="warn">Before approving in Meteor, verify: network Testnet; signer and receiver <code>veltron-token.testnet</code>; exactly one <code>DeployContract</code> action; no attached deposit; and the expected contract file. Reject the request if anything differs. Never approve an initialization or transfer here.</p>
     <button id="deploy-token-contract" type="button" disabled>Review test-token deployment in Meteor</button>
-    <p id="deployment-execution-status" class="status" role="status" aria-live="polite">Not ready. Connect veltron-token.testnet, select the matching token WASM, and confirm the wallet network before a fresh preflight can run.</p>\n    <button id="verify-deployed-code" type="button" hidden>Verify finalized on-chain code hash</button>
+    <p id="deployment-execution-status" class="status" role="status" aria-live="polite">Not ready. Connect veltron-token.testnet, select the matching token WASM, and confirm the wallet network before a fresh preflight can run.</p>
+    <button id="verify-deployed-code" type="button" hidden>Verify finalized on-chain code hash</button>
     <p class="muted">After approval, VELTRON independently reads the finalized on-chain code and compares its SHA-256 with the CI artifact. Initialization remains a separate, unavailable step until this comparison passes.</p>
   </div>
   <div class="panel">
