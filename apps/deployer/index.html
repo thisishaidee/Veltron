@@ -32,10 +32,10 @@
   </div>
   <div class="panel">
     <h2>Verified build reference</h2>
-    <p>Source commit: <code>4a2973e8bbe801c7729a2a72d993bc8526ec60f7</code></p>
+    <p>Source commit: <code>e6ac9aca4228032701d42dd167bd822fd5e94209</code></p>
     <p>Treasury SHA-256:<br><code>3ed0cf173950f319fce18fd6f286c899ea264c76d2e1f4fd1411b54ce3455d36</code></p>
     <p>Test-token SHA-256:<br><code>5d5041336cc8fc92cc9ca11fff1f0b1f7ead33c4826c6d12013f957ba1e7c95b</code></p>
-    <p class="muted">These hashes are tied to the recorded CI artifact above. If contract source changes, this reference must be updated from a fresh successful CI run.</p>
+    <p class="muted">These hashes were independently rechecked against the successful CI artifact for this source commit. If contract source changes, this reference must be updated from a fresh successful CI run.</p>
   </div>
   <div class="panel">
     <label for="treasury">Treasury contract WASM</label>
@@ -68,7 +68,7 @@
       <li>Token: <code>veltron-token.testnet</code></li>
       <li>Expected token symbol: VTT (verify live metadata before initialization)</li>
       <li>Agent transaction cap: 50 VTT (approved for initial testnet configuration)</li>
-      <li>Safety reserve: 200 VTT (proposed; verify token decimals first)</li>
+      <li>Safety reserve: 200 VTT (approved for initial testnet configuration; verify token decimals before initialization)</li>
     </ul>
     <p class="muted">Configuration is displayed for review only. No contract initialization arguments are submitted.</p>
   </div>
