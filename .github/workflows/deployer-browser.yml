@@ -65,7 +65,7 @@ jobs:
       - name: Install exact dependency tree
         run: npm ci
       - name: Verify pinned Meteor executor source without signing
-        run: npm run test:executor
+        run: npm run test:all
       - name: Bundle the pinned wallet connector
         run: npm run build
       - name: Install Chromium
