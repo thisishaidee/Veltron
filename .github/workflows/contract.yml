@@ -49,4 +49,4 @@ jobs:
           if-no-files-found: error
           retention-days: 14
       - name: Run workspace and NEAR Sandbox integration tests
-        run: cargo test --locked --workspace
+        run: cargo test --locked --workspace -- --nocapture
