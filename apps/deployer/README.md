@@ -5,7 +5,7 @@ This directory contains a static, browser-only artifact preflight page and a rea
 ## What it does
 - Accepts the two WASM files extracted from the recorded GitHub Actions artifact.
 - Computes SHA-256 with the browser Web Crypto API.
-- Compares each file against hashes recorded from CI run for commit `0f2ef4fbc4aeb7ed21eaaf99ea6dfa8a3bc0d69e`.
+- Compares each file against hashes recorded from CI run for commit `4a2973e8bbe801c7729a2a72d993bc8526ec60f7`.
 - Configures NEAR Connect for Testnet and enables wallets advertising Testnet support.
 - Reads the connected account ID from the wallet sign-in event.
 - Checks the configured VELTRON RPC endpoint with a read-only NEAR status request and reports Testnet only when the response says `chain_id: "testnet"`.
@@ -21,8 +21,8 @@ This directory contains a static, browser-only artifact preflight page and a rea
 - Connector configuration and wallet capability filtering are not independent proof of the wallet's active network.
 
 ## How to use
-1. Open the workflow run for commit `0f2ef4fbc4aeb7ed21eaaf99ea6dfa8a3bc0d69e`.
-2. Download the `veltron-wasm-0f2ef4fbc4aeb7ed21eaaf99ea6dfa8a3bc0d69e` artifact.
+1. Open the workflow run for commit `4a2973e8bbe801c7729a2a72d993bc8526ec60f7`.
+2. Download the `veltron-wasm-4a2973e8bbe801c7729a2a72d993bc8526ec60f7` artifact.
 3. Extract it and select `veltron_treasury.wasm` and `veltron_test_token.wasm` on the page.
 4. Continue only if both hashes match.
 5. Confirm the VELTRON RPC endpoint reports Testnet. This is not wallet-network verification.
