@@ -6,7 +6,7 @@
     "test:e2e": "playwright test",
     "build": "esbuild src/wallet.js --bundle --format=esm --outfile=dist/wallet.js",
     "test:executor": "node --test tests/meteor-executor.test.mjs",
-    "test:deployment": "node --test tests/deployment.test.mjs",
+    "test:deployment": "node --test scripts/deployment-checks.mjs",
     "test:all": "npm run test:executor && npm run test:deployment"
   },
   "devDependencies": {
