@@ -365,6 +365,7 @@ async function verifyDeployedTokenCode() {
 }
 
 deployButton.addEventListener("click", async () => {
+  let walletRequestStarted = false;
   deployButton.disabled = true;
   deployStatus.textContent = "Running fresh Testnet, account, artifact, fee, and storage checks…";
   try {
@@ -397,10 +398,12 @@ deployButton.addEventListener("click", async () => {
         " Do not initialize. Retry the read-only code check later.";
     }
   } catch (error) {
-    deployStatus.textContent = "NOT SUBMITTED / STOPPED: " + String(error?.message || error);
+    deployStatus.textContent = walletRequestStarted
+      ? "WALLET REQUEST DID NOT RETURN SUCCESSFULLY — submission status is uncertain. Use the read-only code-hash check before retrying; do not initialize. Details: " + String(error?.message || error)
+      : "PREFLIGHT STOPPED BEFORE THE WALLET REQUEST: " + String(error?.message || error);
     console.error("VELTRON DeployContract flow stopped", error);
   } finally {
-    deployButton.disabled = false;
+    deployButton.disabled = connectedAccountId !== TOKEN_ACCOUNT;
   }
 });
 
