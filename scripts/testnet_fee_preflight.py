@@ -56,4 +56,41 @@ if receipt_config is not None:
 else:
     print("Action receipt creation config: not present under transaction_costs; inspect full runtime config before treating the action fee as an all-in transaction quote.")
 print("IMPORTANT: This is the DeployContract action fee component only, not a final all-in transaction quote.")
-print("No transaction was constructed, signed, or submitted.")
+
+# Read-only target-account state at the same finalized block.
+TARGET_ACCOUNT = "veltron-token.testnet"
+
+def query_account(request_type):
+    return rpc("query", {
+        "request_type": request_type,
+        "finality": "final",
+        "account_id": TARGET_ACCOUNT
+    }, f"account-{request_type}")
+
+account = query_account("view_account")
+print(f"Target account: {TARGET_ACCOUNT}")
+print(f"Account balance: {int(account['amount'])} yoctoNEAR")
+print(f"Account balance: {int(account['amount']) / 10**24:.9f} NEAR")
+print(f"Account locked balance: {int(account.get('locked', '0'))} yoctoNEAR")
+print(f"Account storage usage: {account.get('storage_usage', 'not returned')} bytes")
+try:
+    code_result = query_account("view_code")
+    code_b64 = code_result.get("code_base64", "")
+    if not code_b64:
+        print("Deployed contract code: absent (empty code response)")
+    else:
+        import base64
+        import hashlib
+        deployed_bytes = base64.b64decode(code_b64)
+        deployed_hash = hashlib.sha256(deployed_bytes).hexdigest()
+        print(f"Deployed contract code: present ({len(deployed_bytes)} bytes)")
+        print(f"On-chain code SHA-256: {deployed_hash}")
+        print(f"Expected token WASM SHA-256: {EXPECTED_SHA256}")
+        print(f"On-chain code hash matches expected token WASM: {deployed_hash == EXPECTED_SHA256}")
+except RuntimeError as exc:
+    # NEAR returns contract code-not-found for accounts without deployed code.
+    if "contract code" in str(exc).lower() or "code not found" in str(exc).lower():
+        print("Deployed contract code: absent (RPC reports no contract code)")
+    else:
+        raise
+\nprint("No transaction was constructed, signed, or submitted.")
