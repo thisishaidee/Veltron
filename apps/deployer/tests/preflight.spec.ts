@@ -91,3 +91,11 @@ test("accepts both actual CI-built contract files", async ({ page }) => {
   await expect(page.locator("#treasury-result")).toHaveAttribute("data-ok", "true");
   await expect(page.locator("#token-result")).toHaveAttribute("data-ok", "true");
 });
+
+test("deployment request remains gated until wallet connection and user Testnet confirmation", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator("#deploy-token-contract")).toBeDisabled();
+  await expect(page.locator("#confirm-testnet-network")).not.toBeChecked();
+  await expect(page.locator("#deployment-execution-status")).toContainText("Not ready");
+  await expect(page.locator("#deployment-review")).toContainText("No initialization");
+});
