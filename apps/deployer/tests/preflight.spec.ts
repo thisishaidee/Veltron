@@ -6,6 +6,7 @@ test("preflight renders without horizontal overflow", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "VELTRON Testnet Deployer" })).toBeVisible();
   await expect(page.getByLabel("Treasury contract WASM")).toBeVisible();
   await expect(page.getByLabel("Test-token contract WASM")).toBeVisible();
+  await expect(page.locator("#wallet-network")).toHaveText("Not independently verified");
   const dimensions = await page.evaluate(() => ({
     viewport: document.documentElement.clientWidth,
     content: document.documentElement.scrollWidth
