@@ -381,6 +381,8 @@ deployButton.addEventListener("click", async () => {
       TOKEN_ACCOUNT + ", and one DeployContract action. No initialization is included.";
 
     const wallet = await connector.wallet();
+    verifyDeployedCodeButton.hidden = false;
+    walletRequestStarted = true;
     const outcome = await requestDeployContract(wallet, connectedAccountId, preflight.wasmBytes);
     deployStatus.textContent = "Wallet request returned. Checking finalized on-chain code hash; do not initialize unless it matches exactly.";
     try {
