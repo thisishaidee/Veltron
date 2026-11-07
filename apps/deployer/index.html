@@ -52,7 +52,9 @@
     <button id="connect-wallet" type="button" disabled>Loading wallet connector…</button>
     <p id="wallet-status" class="status" role="status" aria-live="polite">Preparing secure wallet connection…</p>
     <p>Account: <strong id="wallet-account">Not connected</strong></p>
-    <p>Network: <strong id="wallet-network">Not connected</strong></p>
+    <p>Wallet network: <strong id="wallet-network">Not independently verified</strong></p>
+    <p>VELTRON RPC network: <strong id="rpc-network">Checking configured NEAR RPC…</strong></p>
+    <p class="muted">RPC status verifies only VELTRON’s configured endpoint, not the wallet’s active network.</p>
     <p class="muted">No signing, transfers, contract calls, deployment, or initialization are available in this stage. Disconnect from the wallet itself to end the session.</p>
   </div>
   <div class="panel">
