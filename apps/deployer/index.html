@@ -2,27 +2,30 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#101820">
   <title>VELTRON Testnet Deployer — Preflight</title>
   <style>
-    :root{color-scheme:dark;font:16px/1.5 system-ui,sans-serif;background:#101820;color:#edf2f4}
-    body{max-width:760px;margin:0 auto;padding:28px 18px 56px}
-    h1{font-size:1.8rem;margin-bottom:.3rem}h2{font-size:1.1rem;margin-top:2rem}
-    p,li{color:#c5d0d6}.panel{border:1px solid #40515c;border-radius:12px;padding:16px;margin:16px 0}
+    :root{color-scheme:dark;font:16px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#101820;color:#edf2f4}
+    *{box-sizing:border-box}
+    body{width:min(100% - 32px,760px);margin:0 auto;padding:clamp(18px,4vw,32px) 0 max(40px,env(safe-area-inset-bottom))}
+    h1{font-size:clamp(1.55rem,5vw,1.9rem);line-height:1.2;margin:0 0 .5rem}
+    h2{font-size:1.1rem;margin:0 0 .75rem}
+    p,li{color:#c5d0d6}
+    .panel{min-width:0;border:1px solid #40515c;border-radius:12px;padding:clamp(12px,3.5vw,18px);margin:16px 0}
     label{display:block;font-weight:650;margin:14px 0 6px}
-    input[type=file]{width:100%;padding:10px;background:#1b2932;border-radius:8px;color:#edf2f4}
-    code{overflow-wrap:anywhere;color:#b8e1dd}
-    .status{padding:12px;border-radius:8px;background:#263640;margin-top:12px}
+    input[type=file]{display:block;width:100%;max-width:100%;min-width:0;padding:10px;background:#1b2932;border:1px solid #52636d;border-radius:8px;color:#edf2f4}
+    code{overflow-wrap:anywhere;word-break:break-word;color:#b8e1dd}
+    .status{min-width:0;padding:12px;border-radius:8px;background:#263640;margin-top:12px;overflow-wrap:anywhere}
     .warn{border-left:4px solid #e2a84b;padding-left:12px}
-    button{padding:12px 16px;border:0;border-radius:8px;background:#b8e1dd;color:#101820;font-weight:700}
-    button:disabled{opacity:.45}
     .muted{font-size:.9rem;color:#9eafb8}
+    @media(min-width:900px){body{padding-top:40px}.panel{padding:20px}}
+    @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
   </style>
 </head>
 <body>
   <h1>VELTRON Testnet Deployer</h1>
-  <p>Stage 1: verify the official CI-built contract files locally in this browser. This page does not connect to a wallet or submit transactions.</p>
+  <p>Stage 1: verify the official CI-built contract files in this browser. This page does not connect to a wallet or submit transactions.</p>
   <div class="panel warn">
     <strong>Testnet only. No real funds.</strong>
     <p>Do not upload keys, seed phrases, or wallet backups. Only select the two <code>.wasm</code> files extracted from the matching GitHub Actions artifact.</p>
@@ -58,32 +61,29 @@
   </div>
   <p class="muted">A matching hash proves file identity against this recorded build, not contract safety, wallet compatibility, or deployment success.</p>
   <script>
-    const expected = {
-      treasury: "3ed0cf173950f319fce18fd6f286c899ea264c76d2e1f4fd1411b54ce3455d36",
-      token: "5d5041336cc8fc92cc9ca11fff1f0b1f7ead33c4826c6d12013f957ba1e7c95b"
-    };
-    const labels = {treasury:"Treasury",token:"Test-token"};
-    async function verify(kind) {
-      const file = document.getElementById(kind).files[0];
-      const result = document.getElementById(kind + "-result");
-      if (!file) { result.textContent = "Not checked"; updateOverall(); return; }
-      if (!file.name.endsWith(".wasm")) { result.textContent = "Rejected: choose a .wasm file."; updateOverall(); return; }
-      const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
-      const actual = Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2,"0")).join("");
-      const ok = actual === expected[kind];
-      result.textContent = (ok ? "MATCH — " : "MISMATCH — ") + labels[kind] + " SHA-256: " + actual;
-      result.dataset.ok = String(ok);
+    const expected={treasury:"3ed0cf173950f319fce18fd6f286c899ea264c76d2e1f4fd1411b54ce3455d36",token:"5d5041336cc8fc92cc9ca11fff1f0b1f7ead33c4826c6d12013f957ba1e7c95b"};
+    const labels={treasury:"Treasury",token:"Test-token"};
+    async function verify(kind){
+      const file=document.getElementById(kind).files[0],result=document.getElementById(kind+"-result");
+      result.dataset.ok="false";
+      if(!file){result.textContent="Not checked";updateOverall();return}
+      if(!file.name.endsWith(".wasm")){result.textContent="Rejected: choose a .wasm file.";updateOverall();return}
+      if(!globalThis.crypto?.subtle){result.textContent="Unavailable: open this page in a secure HTTPS browser.";updateOverall();return}
+      try{
+        const digest=await crypto.subtle.digest("SHA-256",await file.arrayBuffer());
+        const actual=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,"0")).join("");
+        const ok=actual===expected[kind];
+        result.dataset.ok=String(ok);
+        result.textContent=(ok?"MATCH — ":"MISMATCH — ")+labels[kind]+" SHA-256: "+actual;
+      }catch(e){result.textContent="Could not verify this file in the current browser."}
       updateOverall();
     }
-    function updateOverall() {
-      const a = document.getElementById("treasury-result").dataset.ok === "true";
-      const b = document.getElementById("token-result").dataset.ok === "true";
-      document.getElementById("overall").textContent = a && b
-        ? "Both files match the recorded CI build. This is a preflight result only; no wallet is connected and no transaction can be sent here."
-        : "Both files must match before preflight can pass.";
+    function updateOverall(){
+      const a=document.getElementById("treasury-result").dataset.ok==="true",b=document.getElementById("token-result").dataset.ok==="true";
+      document.getElementById("overall").textContent=a&&b?"Both files match the recorded CI build. Preflight only; no wallet is connected and no transaction can be sent here.":"Both files must match before preflight can pass.";
     }
-    document.getElementById("treasury").addEventListener("change", () => verify("treasury"));
-    document.getElementById("token").addEventListener("change", () => verify("token"));
+    document.getElementById("treasury").addEventListener("change",()=>verify("treasury"));
+    document.getElementById("token").addEventListener("change",()=>verify("token"));
   </script>
 </body>
 </html>
