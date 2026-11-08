@@ -1,7 +1,7 @@
 const RPC="https://rpc.testnet.near.org";
 const $=id=>document.getElementById(id);
 const text=(id,value)=>$(id).textContent=value;
-const accountPattern=/^[a-z0-9_-]+(?:\\.[a-z0-9_-]+)*$/;
+const accountPattern=/^[a-z0-9_-]+(?:\.[a-z0-9_-]+)*$/;
 async function rpc(method,params){const response=await fetch(RPC,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({jsonrpc:"2.0",id:"veltron-dashboard",method,params})});if(!response.ok)throw Error("NEAR RPC HTTP "+response.status);const data=await response.json();if(data.error)throw Error(data.error.message||"NEAR RPC error");return data.result}
 async function view(account,method,args={}){const result=await rpc("query",{request_type:"call_function",finality:"final",account_id:account,method_name:method,args_base64:btoa(unescape(encodeURIComponent(JSON.stringify(args))))});return JSON.parse(new TextDecoder().decode(new Uint8Array(result.result)))}
 function amount(raw,decimals=6){if(raw===null||raw===undefined)return "—";const n=BigInt(raw),scale=10n**BigInt(decimals),whole=n/scale,frac=(n%scale).toString().padStart(decimals,"0").replace(/0+$/,"");return whole.toLocaleString("en-US")+(frac?"."+frac:"")+" VTT"}
