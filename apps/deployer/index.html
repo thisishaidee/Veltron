@@ -59,6 +59,8 @@
     <p>VELTRON RPC network: <strong id="rpc-network">Checking configured NEAR RPC…</strong></p>
     <p class="muted">RPC status verifies only VELTRON’s configured endpoint, not the wallet’s active network.</p>
     <p class="status" id="deployment-capability">Deployment action support: Meteor's executor source passed a DeployContract compatibility check in CI, but this does not prove the live wallet session loaded that exact source or that a real approval will succeed. The deployment control below is the only place a transaction can be requested.</p>
+    <button id="verify-wallet-key" type="button">Verify wallet ownership (sign message only)</button>
+    <p id="wallet-key-status" class="status" role="status" aria-live="polite">Not verified. This asks Meteor to sign a harmless message; it does not submit a transaction or spend NEAR.</p>
     <button id="verify-token-contract" type="button">Check token contract (read-only)</button>
     <p id="token-contract-status" class="status" role="status" aria-live="polite">Not checked. This check only reads public Testnet contract information; it cannot sign or submit transactions.</p>
     <p class="muted">The only transaction action in this stage is the separate test-token DeployContract request described below. No initialization, transfer, or treasury deployment action is available.</p>
