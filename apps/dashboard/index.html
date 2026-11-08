@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b1118"><title>VELTRON — Treasury Control</title>
+<link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+<header class="top"><a class="brand" href="./">VELTRON<span> / TREASURY CONTROL</span></a><span class="network"><i></i> NEAR TESTNET</span></header>
+<main>
+<section class="intro"><div><p class="eyebrow">COMMITMENT-AWARE TREASURY INFRASTRUCTURE</p><h1>Financial control<br>for autonomous business.</h1><p class="sub">Protect obligations. Bound agent spending. Keep every decision accountable.</p></div><div class="state" id="connection-state">Checking Testnet…</div></section>
+<section class="notice" id="deployment-notice"><b>Contracts not yet verified</b><span>Connect a deployed treasury contract to load live financial data. This dashboard never fabricates balances or transactions.</span></section>
+<section class="metrics">
+<article class="metric"><label>TREASURY BALANCE</label><strong id="balance">—</strong><small>On-chain ledger</small></article>
+<article class="metric"><label>COMMITTED</label><strong id="committed">—</strong><small>Reserved for obligations</small></article>
+<article class="metric"><label>SAFETY RESERVE</label><strong id="reserve">—</strong><small>Protected minimum</small></article>
+<article class="metric accent"><label>SPENDABLE</label><strong id="spendable">—</strong><small>After commitments and reserve</small></article>
+</section>
+<section class="layout">
+<article class="panel"><div class="panel-head"><div><p class="eyebrow">OBLIGATIONS</p><h2>Commitments</h2></div><span class="count" id="commitment-count">—</span></div><div id="commitments" class="empty">Waiting for a verified treasury contract.</div></article>
+<article class="panel"><div class="panel-head"><div><p class="eyebrow">EXECUTION CONTROL</p><h2>Agent &amp; safeguards</h2></div><span class="lock">ON-CHAIN</span></div><dl class="details"><div><dt>Agent account</dt><dd id="agent">—</dd></div><div><dt>Per-payment cap</dt><dd id="cap">—</dd></div><div><dt>Treasury status</dt><dd id="paused">—</dd></div><div><dt>Pending transfers</dt><dd id="pending">—</dd></div></dl><p class="hint">Agent permissions and limits are enforced by the treasury contract, not by this interface.</p></article>
+</section>
+<section class="panel activity"><div class="panel-head"><div><p class="eyebrow">AUDIT TRAIL</p><h2>Pending activity</h2></div><span class="lock">LIVE READS</span></div><div id="activity" class="empty">No on-chain activity loaded.</div></section>
+<section class="panel config"><div class="panel-head"><div><p class="eyebrow">CONNECTION</p><h2>Testnet contract</h2></div></div><label for="treasury-id">Treasury contract account</label><div class="input-row"><input id="treasury-id" value="veltron-treasury.testnet" spellcheck="false" autocomplete="off"><button id="load" type="button">Verify &amp; load</button></div><p id="load-status" class="hint">Read-only connection. No wallet connection or transaction is requested.</p><label for="token-id">Token contract account</label><input id="token-id" value="veltron-token.testnet" spellcheck="false" autocomplete="off"><p class="hint">Network is independently checked against NEAR Testnet RPC. Contract accounts are editable so the dashboard can use the final deployed addresses.</p></section>
+<footer><span>VELTRON · TESTNET</span><span>Autonomous execution. Controlled access.</span></footer>
+</main>
+<script type="module" src="./app.js"></script>
+</body></html>
