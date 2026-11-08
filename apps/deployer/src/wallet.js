@@ -137,22 +137,34 @@ function initializeWalletConnection() {
       footerBranding: null
     });
 
-    connector.on("wallet:signIn", handleWalletSignIn);
+    function handleSignedMessageEvent(event) {
+      const accountEntry = event?.accounts?.[0];
+      const accountId = accountEntry?.accountId;
+      const signedMessage = accountEntry?.signedMessage;
+      const rawPublicKey = signedMessage?.publicKey;
+      const publicKey = typeof rawPublicKey === "string"
+        ? rawPublicKey
+        : rawPublicKey?.toString?.();
 
-    connector.on("wallet:signInAndSignMessage", (event) => {
-      const accountId = event?.accounts?.[0]?.accountId;
-      const signedMessage = event?.accounts?.[0]?.signedMessage;
-      const publicKey = signedMessage?.publicKey;
-      if (accountId !== TOKEN_ACCOUNT) {
+      if (accountId !== TOKEN_ACCOUNT || (signedMessage?.accountId && signedMessage.accountId !== TOKEN_ACCOUNT)) {
         verifyWalletKeyStatus.textContent = "NOT VERIFIED — Meteor signed in as " + (accountId || "an unknown account") + ", not " + TOKEN_ACCOUNT + ".";
       } else if (!publicKey) {
-        verifyWalletKeyStatus.textContent = "MESSAGE SIGNED, BUT KEY NOT VERIFIED — the wallet response did not include a readable public key. No transaction was sent.";
+        verifyWalletKeyStatus.textContent = "MESSAGE SIGNING RETURNED WITHOUT A PUBLIC KEY — no ownership proof was accepted. No transaction was sent.";
       } else if (publicKey === EXPECTED_TOKEN_PUBLIC_KEY) {
-        verifyWalletKeyStatus.textContent = "OWNERSHIP VERIFIED — the signed-message public key exactly matches the sole full-access key recorded for " + TOKEN_ACCOUNT + ". This was an off-chain signature; no transaction was sent.";
+        verifyWalletKeyStatus.textContent = "OWNERSHIP VERIFIED — the signed-message public key exactly matches the full-access key recorded for " + TOKEN_ACCOUNT + ". This was an off-chain signature; no transaction was sent.";
       } else {
         verifyWalletKeyStatus.textContent = "NOT VERIFIED — the signed-message key does not match the public key recorded on Testnet. Do not deploy.";
       }
+    }
+
+    connector.on("wallet:signIn", (event) => {
+      handleWalletSignIn(event);
+      if (event?.source === "signInAndSignMessage" || event?.accounts?.[0]?.signedMessage) {
+        handleSignedMessageEvent(event);
+      }
     });
+
+    connector.on("wallet:signInAndSignMessage", handleSignedMessageEvent);
 
     connector.on("wallet:signOut", () => {
       deployButton.disabled = true;
