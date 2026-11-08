@@ -68,3 +68,7 @@ jobs:
           npx --yes near-cli-rs@0.31.1 account add-key --help
           npx --yes near-cli-rs@0.31.1 contract deploy --help
           npx --yes near-cli-rs@0.31.1 account list-keys --help
+          npx --yes near-cli-rs@0.31.1 account add-key grant-full-access --help
+          npx --yes near-cli-rs@0.31.1 account add-key grant-function-call-access --help
+          npx --yes near-cli-rs@0.31.1 account delete-keys --help
+          npx --yes near-cli-rs@0.31.1 contract deploy use-file --help
