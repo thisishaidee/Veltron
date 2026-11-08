@@ -63,6 +63,8 @@
     <p id="wallet-key-status" class="status" role="status" aria-live="polite">Not verified. This asks Meteor to sign a harmless message; it does not submit a transaction or spend NEAR.</p>
     <button id="verify-token-contract" type="button">Check token contract (read-only)</button>
     <p id="token-contract-status" class="status" role="status" aria-live="polite">Not checked. This check only reads public Testnet contract information; it cannot sign or submit transactions.</p>
+    <button id="inspect-access-keys" type="button">Inspect registered account keys (read-only)</button>
+    <pre id="access-keys-status" class="status" role="status" aria-live="polite">Not checked. This reads public access-key permissions for veltron-token.testnet; it cannot sign, change permissions, or submit transactions.</pre>
     <p class="muted">The only transaction action in this stage is the separate test-token DeployContract request described below. No initialization, transfer, or treasury deployment action is available.</p>
   </div>
   <div class="panel" id="deployment-review">
