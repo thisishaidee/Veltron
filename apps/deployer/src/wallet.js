@@ -1,18 +1,32 @@
 import { NearConnector } from "@hot-labs/near-connect";
+import {
+  TOKEN_ACCOUNT,
+  TOKEN_WASM_BYTES,
+  TOKEN_WASM_SHA256,
+  calculateDeploymentBudget,
+  requestDeployContract,
+  sha256Hex
+} from "./deployment.js";
 
 const connectButton = document.querySelector("#connect-wallet");
 const status = document.querySelector("#wallet-status");
 const account = document.querySelector("#wallet-account");
 const network = document.querySelector("#wallet-network");
 const rpcNetwork = document.querySelector("#rpc-network");
+const verifyWalletKeyButton = document.querySelector("#verify-wallet-key");
+const verifyWalletKeyStatus = document.querySelector("#wallet-key-status");
+const EXPECTED_TOKEN_PUBLIC_KEY = "ed25519:5L9opGEMJgG3ZRXPp61kocCR2YXjmvVnoxodvfommrkR";
+const WALLET_PROOF_MESSAGE = "VELTRON wallet ownership verification — Testnet only. No transaction or contract deployment is authorized.";
 
 let connector;
+let connectedAccountId;
 
 function showStatus(message) {
   status.textContent = message;
 }
 
 function resetWalletDetails() {
+  connectedAccountId = undefined;
   account.textContent = "Not connected";
   network.textContent = "Not independently verified";
 }
@@ -100,10 +114,12 @@ function handleWalletSignIn(event) {
     return;
   }
 
+  connectedAccountId = accountId;
   account.textContent = accountId;
+  deployButton.disabled = accountId !== TOKEN_ACCOUNT;
   network.textContent = "Not independently verified";
   showStatus(
-    "Wallet connected through a Testnet-configured connector. The wallet's active network has not been independently verified. Do not proceed to transactions or deployment."
+    "Wallet connected. The wallet's active network is not independently verified by this page. Confirm Testnet in Meteor itself before requesting a deployment."
   );
   connectButton.disabled = false;
 }
@@ -117,13 +133,29 @@ function initializeWalletConnection() {
   try {
     connector = new NearConnector({
       network: "testnet",
-      features: { testnet: true },
+      features: { testnet: true, signMessage: true },
       footerBranding: null
     });
 
     connector.on("wallet:signIn", handleWalletSignIn);
 
+    connector.on("wallet:signInAndSignMessage", (event) => {
+      const accountId = event?.accounts?.[0]?.accountId;
+      const signedMessage = event?.accounts?.[0]?.signedMessage;
+      const publicKey = signedMessage?.publicKey;
+      if (accountId !== TOKEN_ACCOUNT) {
+        verifyWalletKeyStatus.textContent = "NOT VERIFIED — Meteor signed in as " + (accountId || "an unknown account") + ", not " + TOKEN_ACCOUNT + ".";
+      } else if (!publicKey) {
+        verifyWalletKeyStatus.textContent = "MESSAGE SIGNED, BUT KEY NOT VERIFIED — the wallet response did not include a readable public key. No transaction was sent.";
+      } else if (publicKey === EXPECTED_TOKEN_PUBLIC_KEY) {
+        verifyWalletKeyStatus.textContent = "OWNERSHIP VERIFIED — the signed-message public key exactly matches the sole full-access key recorded for " + TOKEN_ACCOUNT + ". This was an off-chain signature; no transaction was sent.";
+      } else {
+        verifyWalletKeyStatus.textContent = "NOT VERIFIED — the signed-message key does not match the public key recorded on Testnet. Do not deploy.";
+      }
+    });
+
     connector.on("wallet:signOut", () => {
+      deployButton.disabled = true;
       resetWalletDetails();
       showStatus("Wallet disconnected.");
       connectButton.disabled = false;
@@ -256,3 +288,195 @@ async function verifyTokenContractReadOnly() {
 }
 
 tokenCheckButton.addEventListener("click", verifyTokenContractReadOnly);
+
+
+const deployButton = document.querySelector("#deploy-token-contract");
+const deployNetworkConfirmation = document.querySelector("#confirm-testnet-network");
+const networkConfirmationStatus = document.querySelector("#network-confirmation-status");
+let networkConfirmedByUser = false;
+deployNetworkConfirmation.addEventListener("click", () => {
+  networkConfirmedByUser = !networkConfirmedByUser;
+  deployNetworkConfirmation.setAttribute("aria-pressed", String(networkConfirmedByUser));
+  deployNetworkConfirmation.textContent = networkConfirmedByUser
+    ? "Confirmed: Meteor Wallet displays NEAR Testnet — tap to undo"
+    : "Confirm: Meteor Wallet displays NEAR Testnet";
+  networkConfirmationStatus.textContent = networkConfirmedByUser
+    ? "Testnet confirmation recorded on this page. Fresh preflight is still required; no transaction has been sent."
+    : "Not confirmed on this page. Tap the confirmation button only after checking Meteor Wallet.";
+});
+const deployStatus = document.querySelector("#deployment-execution-status");
+const verifyDeployedCodeButton = document.querySelector("#verify-deployed-code");
+
+function formatYoctoNear(value) {
+  const amount = BigInt(value);
+  const whole = amount / 10n ** 24n;
+  const fraction = (amount % (10n ** 24n)).toString().padStart(24, "0").slice(0, 6);
+  return whole.toString() + "." + fraction + " NEAR";
+}
+
+async function readDeploymentPreflight(file) {
+  const statusResult = await nearRpc("status", []);
+  if (statusResult.chain_id !== "testnet") throw new Error("RPC no longer confirms NEAR Testnet.");
+
+  const wasmBytes = new Uint8Array(await file.arrayBuffer());
+  if (wasmBytes.byteLength !== TOKEN_WASM_BYTES) {
+    throw new Error("WASM size mismatch. Expected " + TOKEN_WASM_BYTES + " bytes; received " + wasmBytes.byteLength + ".");
+  }
+  const localHash = await sha256Hex(wasmBytes);
+  if (localHash !== TOKEN_WASM_SHA256) {
+    throw new Error("WASM SHA-256 mismatch. The selected file is not the recorded CI artifact.");
+  }
+
+  const block = await nearRpc("block", { finality: "final" });
+  const config = await nearRpc("EXPERIMENTAL_protocol_config", { block_id: block.header.height });
+  const accountInfo = await nearRpc("query", {
+    request_type: "view_account",
+    finality: "final",
+    account_id: TOKEN_ACCOUNT
+  });
+
+  try {
+    const deployed = await nearRpc("query", {
+      request_type: "view_code",
+      finality: "final",
+      account_id: TOKEN_ACCOUNT
+    });
+    if (deployed?.code_base64) {
+      throw new Error("STOP: contract code already exists at " + TOKEN_ACCOUNT + ". Do not overwrite it.");
+    }
+  } catch (error) {
+    if (String(error?.message || error).startsWith("STOP:")) throw error;
+    if (!/contract code for contract ID .* has never been observed|contract.*not found|no contract code/i.test(String(error?.message || error))) {
+      throw new Error("Could not prove the target account has no contract code: " + String(error?.message || error));
+    }
+  }
+
+  const runtime = config.runtime_config;
+  const costs = runtime?.transaction_costs;
+  const actionConfig = costs?.action_creation_config;
+  const receiptConfig = costs?.action_receipt_creation_config;
+  if (!runtime?.storage_amount_per_byte || !actionConfig?.deploy_contract_cost ||
+      !actionConfig?.deploy_contract_cost_per_byte || !receiptConfig?.send_sir ||
+      !receiptConfig?.execution || !block?.header?.gas_price) {
+    throw new Error("Current Testnet fee or storage configuration is incomplete. Stop; no transaction was requested.");
+  }
+
+  const budget = calculateDeploymentBudget({
+    accountBalance: accountInfo.amount,
+    storageUsage: accountInfo.storage_usage,
+    wasmBytes: wasmBytes.byteLength,
+    storageAmountPerByte: runtime.storage_amount_per_byte,
+    gasPrice: block.header.gas_price,
+    costs: {
+      deployContract: actionConfig.deploy_contract_cost,
+      deployContractPerByte: actionConfig.deploy_contract_cost_per_byte,
+      receipt: receiptConfig
+    }
+  });
+  if (!budget.hasSufficientBalance) {
+    throw new Error("Insufficient balance for the live storage reserve, modeled transaction fee, and 0.05 NEAR safety margin. No wallet request was made.");
+  }
+  return { wasmBytes, localHash, block, budget, accountInfo };
+}
+
+async function verifyDeployedTokenCode() {
+  const result = await nearRpc("query", {
+    request_type: "view_code",
+    finality: "final",
+    account_id: TOKEN_ACCOUNT
+  });
+  if (!result?.code_base64) throw new Error("No deployed code is visible at the finalized block yet.");
+  const binary = Uint8Array.from(atob(result.code_base64), character => character.charCodeAt(0));
+  const actualHash = await sha256Hex(binary);
+  if (actualHash !== TOKEN_WASM_SHA256) {
+    throw new Error("STOP: on-chain WASM SHA-256 does not match the approved CI artifact. Do not initialize.");
+  }
+  return { actualHash, bytes: binary.byteLength };
+}
+
+deployButton.addEventListener("click", async () => {
+  let walletRequestStarted = false;
+  deployButton.disabled = true;
+  deployStatus.textContent = "Running fresh Testnet, account, artifact, fee, and storage checks…";
+  try {
+    if (!connector || !connectedAccountId) throw new Error("Connect the intended wallet first.");
+    if (connectedAccountId !== TOKEN_ACCOUNT) throw new Error("Connected account must be " + TOKEN_ACCOUNT + ".");
+    if (!networkConfirmedByUser) throw new Error("Confirm that Meteor Wallet itself currently displays Testnet before continuing.");
+    const file = document.querySelector("#token").files[0];
+    if (!file) throw new Error("Select the verified veltron_test_token.wasm file first.");
+
+    const preflight = await readDeploymentPreflight(file);
+    deployStatus.textContent =
+      "Preflight passed at finalized block " + preflight.block.header.height +
+      ". Modeled transaction fee: " + formatYoctoNear(preflight.budget.feeYocto) +
+      "; projected storage reserve: " + formatYoctoNear(preflight.budget.storageReserveYocto) +
+      "; additional safety margin: 0.05 NEAR. Opening Meteor for your review. Approve only if it shows Testnet, signer/receiver " +
+      TOKEN_ACCOUNT + ", and one DeployContract action. No initialization is included.";
+
+    const wallet = await connector.wallet();
+    verifyDeployedCodeButton.hidden = false;
+    walletRequestStarted = true;
+    const outcome = await requestDeployContract(wallet, connectedAccountId, preflight.wasmBytes);
+    deployStatus.textContent = "Wallet request returned. Checking finalized on-chain code hash; do not initialize unless it matches exactly.";
+    try {
+      const verified = await verifyDeployedTokenCode();
+      deployStatus.textContent =
+        "DEPLOYED CODE HASH VERIFIED — " + verified.actualHash +
+        " (" + verified.bytes + " bytes). This verifies code identity only. Token is NOT initialized. Stop here; initialization requires a separate review.";
+    } catch (verifyError) {
+      deployStatus.textContent =
+        "Wallet request returned" + (outcome ? " with a response" : "") +
+        ", but on-chain code verification is not complete: " + String(verifyError?.message || verifyError) +
+        " Do not initialize. Retry the read-only code check later.";
+    }
+  } catch (error) {
+    deployStatus.textContent = walletRequestStarted
+      ? "WALLET REQUEST DID NOT RETURN SUCCESSFULLY — submission status is uncertain. Use the read-only code-hash check before retrying; do not initialize. Details: " + String(error?.message || error)
+      : "PREFLIGHT STOPPED BEFORE THE WALLET REQUEST: " + String(error?.message || error);
+    console.error("VELTRON DeployContract flow stopped", error);
+  } finally {
+    deployButton.disabled = connectedAccountId !== TOKEN_ACCOUNT;
+  }
+});
+
+
+verifyDeployedCodeButton.addEventListener("click", async () => {
+  verifyDeployedCodeButton.disabled = true;
+  deployStatus.textContent = "Reading finalized on-chain contract code and comparing its SHA-256…";
+  try {
+    const verified = await verifyDeployedTokenCode();
+    deployStatus.textContent =
+      "DEPLOYED CODE HASH VERIFIED — " + verified.actualHash +
+      " (" + verified.bytes + " bytes). This verifies code identity only. Token is NOT initialized. Stop here; initialization requires a separate review.";
+  } catch (error) {
+    deployStatus.textContent = "CODE NOT VERIFIED — " + String(error?.message || error) +
+      " Do not initialize. You may retry this read-only check after the transaction is finalized.";
+  } finally {
+    verifyDeployedCodeButton.disabled = false;
+  }
+});
+
+
+verifyWalletKeyButton.addEventListener("click", async () => {
+  if (!connector) {
+    verifyWalletKeyStatus.textContent = "Wallet connector is not ready. Reload and try again.";
+    return;
+  }
+  verifyWalletKeyButton.disabled = true;
+  verifyWalletKeyStatus.textContent = "Requesting a harmless signed message from Meteor. This is not a blockchain transaction.";
+  try {
+    const nonce = crypto.getRandomValues(new Uint8Array(32));
+    await connector.connect({
+      signMessageParams: {
+        message: WALLET_PROOF_MESSAGE,
+        recipient: window.location.host,
+        nonce
+      }
+    });
+    verifyWalletKeyStatus.textContent = "Wallet returned from the signing request. Waiting for the signed-message account and public key response…";
+  } catch (error) {
+    verifyWalletKeyStatus.textContent = "MESSAGE SIGNING NOT COMPLETED — " + String(error?.message || error).slice(0, 240) + ". No transaction was requested.";
+  } finally {
+    verifyWalletKeyButton.disabled = false;
+  }
+});

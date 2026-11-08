@@ -35,11 +35,7 @@ jobs:
       - name: Build test-token WebAssembly contract
         run: cargo build --locked --release -p veltron-test-token --target wasm32-unknown-unknown
       - name: Calculate WebAssembly SHA-256 hashes
-        run: |
-          sha256sum \
-            target/wasm32-unknown-unknown/release/veltron_treasury.wasm \
-            target/wasm32-unknown-unknown/release/veltron_test_token.wasm \
-            | tee wasm-sha256.txt
+        run: sha256sum target/wasm32-unknown-unknown/release/veltron_treasury.wasm target/wasm32-unknown-unknown/release/veltron_test_token.wasm | tee wasm-sha256.txt
       - name: Upload release WebAssembly artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -54,3 +50,37 @@ jobs:
         run: cargo test --locked --workspace -- --nocapture
       - name: Read current NEAR Testnet deployment fee parameters
         run: python3 scripts/testnet_fee_preflight.py
+      - name: Set up Node.js for CLI package check
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Check pinned near-cli-rs package version
+        run: test "$(npm view near-cli-rs@0.31.1 version)" = "0.31.1"
+      - name: Verify NEAR CLI runs without credentials
+        run: npx --yes near-cli-rs@0.31.1 --version
+      - name: Inspect NEAR CLI command help without credentials
+        run: |
+          npx --yes near-cli-rs@0.31.1 --help
+          npx --yes near-cli-rs@0.31.1 account add-key --help
+          npx --yes near-cli-rs@0.31.1 contract deploy --help
+          npx --yes near-cli-rs@0.31.1 account list-keys --help
+          npx --yes near-cli-rs@0.31.1 account add-key veltron-token.testnet grant-full-access --help
+          npx --yes near-cli-rs@0.31.1 account add-key veltron-token.testnet grant-full-access autogenerate-new-keypair --help
+          npx --yes near-cli-rs@0.31.1 account add-key veltron-token.testnet grant-full-access autogenerate-new-keypair save-to-keychain --help
+          npx --yes near-cli-rs@0.31.1 account add-key veltron-token.testnet grant-full-access autogenerate-new-keypair print-to-terminal --help
+          npx --yes near-cli-rs@0.31.1 account add-key veltron-token.testnet grant-full-access use-manually-provided-public-key --help
+          npx --yes near-cli-rs@0.31.1 account add-key veltron-token.testnet grant-function-call-access --help
+          npx --yes near-cli-rs@0.31.1 account delete-keys veltron-token.testnet --help
+          npx --yes near-cli-rs@0.31.1 account delete-keys veltron-token.testnet public-keys --help
+          npx --yes near-cli-rs@0.31.1 contract deploy veltron-token.testnet use-file --help
+          npx --yes near-cli-rs@0.31.1 contract deploy veltron-token.testnet use-file without-init-call --help
+          npx --yes near-cli-rs@0.31.1 contract deploy veltron-token.testnet use-file without-init-call network-config --help
+          npx --yes near-cli-rs@0.31.1 contract deploy veltron-token.testnet use-file without-init-call network-config testnet --help
+          npx --yes near-cli-rs@0.31.1 contract deploy veltron-token.testnet use-file without-init-call network-config testnet sign-with-keychain --help
+          npx --yes near-cli-rs@0.31.1 account add-key veltron-token.testnet grant-full-access autogenerate-new-keypair save-to-keychain network-config --help
+          npx --yes near-cli-rs@0.31.1 account add-key veltron-token.testnet grant-full-access autogenerate-new-keypair save-to-keychain network-config testnet --help
+          npx --yes near-cli-rs@0.31.1 account add-key veltron-token.testnet grant-full-access autogenerate-new-keypair save-to-keychain network-config testnet sign-with-keychain --help
+          npx --yes near-cli-rs@0.31.1 account delete-keys veltron-token.testnet public-keys network-config testnet --help
+          npx --yes near-cli-rs@0.31.1 account list-keys veltron-token.testnet network-config testnet --help
+      - name: Read current veltron-token Testnet access keys
+        run: npx --yes near-cli-rs@0.31.1 account list-keys veltron-token.testnet network-config testnet now
