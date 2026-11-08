@@ -75,4 +75,10 @@ jobs:
           npx --yes near-cli-rs@0.31.1 contract deploy veltron-token.testnet use-file --help
           npx --yes near-cli-rs@0.31.1 contract deploy veltron-token.testnet use-file without-init-call --help
           npx --yes near-cli-rs@0.31.1 contract deploy veltron-token.testnet use-file without-init-call network-config --help
+          npx --yes near-cli-rs@0.31.1 contract deploy veltron-token.testnet use-file without-init-call network-config testnet --help
+          npx --yes near-cli-rs@0.31.1 contract deploy veltron-token.testnet use-file without-init-call network-config testnet sign-with-keychain --help
           npx --yes near-cli-rs@0.31.1 account add-key veltron-token.testnet grant-full-access autogenerate-new-keypair save-to-keychain network-config --help
+          npx --yes near-cli-rs@0.31.1 account add-key veltron-token.testnet grant-full-access autogenerate-new-keypair save-to-keychain network-config testnet --help
+          npx --yes near-cli-rs@0.31.1 account add-key veltron-token.testnet grant-full-access autogenerate-new-keypair save-to-keychain network-config testnet sign-with-keychain --help
+          npx --yes near-cli-rs@0.31.1 account delete-keys veltron-token.testnet public-keys network-config testnet --help
+          npx --yes near-cli-rs@0.31.1 account list-keys veltron-token.testnet network-config testnet --help
