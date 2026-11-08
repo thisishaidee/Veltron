@@ -29,6 +29,8 @@ function showStatus(message) {
 
 function resetWalletDetails() {
   connectedAccountId = undefined;
+  pendingWalletProofNonce = undefined;
+  signedMessageEventReceived = false;
   walletOwnershipVerified = false;
   account.textContent = "Not connected";
   network.textContent = "Not independently verified";
@@ -156,8 +158,19 @@ async function verifyNep413Proof(signedMessage, nonce) {
 async function handleSignedMessageEvent(event, nonce) {
   const entry=event?.accounts?.[0], signed=entry?.signedMessage;
   if(entry?.accountId!==TOKEN_ACCOUNT||(signed?.accountId&&signed.accountId!==TOKEN_ACCOUNT)){verifyWalletKeyStatus.textContent="NOT VERIFIED — wallet did not prove control of "+TOKEN_ACCOUNT+".";return;}
-  try{await verifyNep413Proof(signed,nonce);verifyWalletKeyStatus.textContent="OWNERSHIP VERIFIED — valid NEP-413 signature and full-access Testnet key. No transaction was sent.";}
-  catch(error){verifyWalletKeyStatus.textContent="NOT VERIFIED — "+String(error?.message||error).slice(0,240)+" No transaction was sent.";}
+  try {
+    await verifyNep413Proof(signed, nonce);
+    if (pendingWalletProofNonce !== nonce || connectedAccountId !== TOKEN_ACCOUNT) {
+      throw new Error("Wallet account or proof request changed before verification completed.");
+    }
+    walletOwnershipVerified = true;
+    deployButton.disabled = !networkConfirmedByUser;
+    verifyWalletKeyStatus.textContent = "OWNERSHIP VERIFIED — valid NEP-413 signature and full-access Testnet key. No transaction was sent.";
+  } catch (error) {
+    walletOwnershipVerified = false;
+    deployButton.disabled = true;
+    verifyWalletKeyStatus.textContent = "NOT VERIFIED — " + String(error?.message || error).slice(0, 240) + " No transaction was sent.";
+  }
 }
 
 function initializeWalletConnection() {
@@ -495,6 +508,8 @@ verifyWalletKeyButton.addEventListener("click", async () => {
   }
   verifyWalletKeyButton.disabled = true;
   signedMessageEventReceived = false;
+  walletOwnershipVerified = false;
+  deployButton.disabled = true;
   verifyWalletKeyStatus.textContent = "Requesting a harmless signed message from Meteor. This is not a blockchain transaction.";
   try {
     const nonce = crypto.getRandomValues(new Uint8Array(32));
