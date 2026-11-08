@@ -58,5 +58,13 @@ jobs:
         uses: actions/setup-node@v5
         with:
           node-version: 22
-      - name: Check published near-cli-rs package version
-        run: npm view near-cli-rs version
+      - name: Check pinned near-cli-rs package version
+        run: test "$(npm view near-cli-rs@0.31.1 version)" = "0.31.1"
+      - name: Verify NEAR CLI runs without credentials
+        run: npx --yes near-cli-rs@0.31.1 --version
+      - name: Inspect NEAR CLI command help without credentials
+        run: |
+          npx --yes near-cli-rs@0.31.1 --help
+          npx --yes near-cli-rs@0.31.1 account --help
+          npx --yes near-cli-rs@0.31.1 contract --help
+          npx --yes near-cli-rs@0.31.1 config --help
