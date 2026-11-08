@@ -20,6 +20,7 @@ const WALLET_PROOF_MESSAGE = "VELTRON wallet ownership verification — Testnet 
 
 let connector;
 let connectedAccountId;
+let signedMessageEventReceived = false;
 
 function showStatus(message) {
   status.textContent = message;
@@ -138,6 +139,7 @@ function initializeWalletConnection() {
     });
 
     function handleSignedMessageEvent(event) {
+      signedMessageEventReceived = true;
       const accountEntry = event?.accounts?.[0];
       const accountId = accountEntry?.accountId;
       const signedMessage = accountEntry?.signedMessage;
@@ -475,17 +477,22 @@ verifyWalletKeyButton.addEventListener("click", async () => {
     return;
   }
   verifyWalletKeyButton.disabled = true;
+  signedMessageEventReceived = false;
   verifyWalletKeyStatus.textContent = "Requesting a harmless signed message from Meteor. This is not a blockchain transaction.";
   try {
     const nonce = crypto.getRandomValues(new Uint8Array(32));
-    await connector.connect({
+    const connectResult = await connector.connect({
       signMessageParams: {
         message: WALLET_PROOF_MESSAGE,
         recipient: window.location.host,
         nonce
       }
     });
-    verifyWalletKeyStatus.textContent = "Wallet returned from the signing request. Waiting for the signed-message account and public key response…";
+    if (connectResult?.accounts?.[0]?.signedMessage) {
+      handleSignedMessageEvent(connectResult);
+    } else if (!signedMessageEventReceived) {
+      verifyWalletKeyStatus.textContent = "Wallet returned without a signed-message result. No ownership proof was accepted. Check the wallet response path; no transaction was sent.";
+    }
   } catch (error) {
     verifyWalletKeyStatus.textContent = "MESSAGE SIGNING NOT COMPLETED — " + String(error?.message || error).slice(0, 240) + ". No transaction was requested.";
   } finally {
