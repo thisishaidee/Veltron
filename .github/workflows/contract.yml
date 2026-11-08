@@ -35,11 +35,7 @@ jobs:
       - name: Build test-token WebAssembly contract
         run: cargo build --locked --release -p veltron-test-token --target wasm32-unknown-unknown
       - name: Calculate WebAssembly SHA-256 hashes
-        run: |
-          sha256sum \\
-            target/wasm32-unknown-unknown/release/veltron_treasury.wasm \\
-            target/wasm32-unknown-unknown/release/veltron_test_token.wasm \\
-            | tee wasm-sha256.txt
+        run: sha256sum target/wasm32-unknown-unknown/release/veltron_treasury.wasm target/wasm32-unknown-unknown/release/veltron_test_token.wasm | tee wasm-sha256.txt
       - name: Upload release WebAssembly artifacts
         uses: actions/upload-artifact@v4
         with:
