@@ -82,3 +82,5 @@ jobs:
           npx --yes near-cli-rs@0.31.1 account add-key veltron-token.testnet grant-full-access autogenerate-new-keypair save-to-keychain network-config testnet sign-with-keychain --help
           npx --yes near-cli-rs@0.31.1 account delete-keys veltron-token.testnet public-keys network-config testnet --help
           npx --yes near-cli-rs@0.31.1 account list-keys veltron-token.testnet network-config testnet --help
+      - name: Read current veltron-token Testnet access keys
+        run: npx --yes near-cli-rs@0.31.1 account list-keys veltron-token.testnet network-config testnet now
