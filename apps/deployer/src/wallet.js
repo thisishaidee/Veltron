@@ -28,6 +28,7 @@ function showStatus(message) {
 }
 
 function resetWalletDetails() {
+  connectButton.textContent = "Connect NEAR Testnet wallet";
   connectedAccountId = undefined;
   pendingWalletProofNonce = undefined;
   signedMessageEventReceived = false;
@@ -120,6 +121,7 @@ function handleWalletSignIn(event) {
   }
 
   connectedAccountId = accountId;
+  connectButton.textContent = "Connected — change wallet";
   account.textContent = accountId;
   walletOwnershipVerified = false;
   deployButton.disabled = true;
@@ -175,6 +177,7 @@ async function handleSignedMessageEvent(event, nonce) {
 
 function initializeWalletConnection() {
   connectButton.disabled = true;
+  connectButton.textContent = "Loading wallet connector…";
   showStatus("Preparing supported wallet options…");
   resetWalletDetails();
   verifyRpcNetwork();
@@ -205,10 +208,12 @@ function initializeWalletConnection() {
     });
 
     connectButton.disabled = false;
+    connectButton.textContent = "Connect NEAR Testnet wallet";
     showStatus("Ready. Choose a wallet that supports NEAR Testnet.");
   } catch (error) {
     connector = undefined;
     connectButton.disabled = true;
+    connectButton.textContent = "Wallet connector unavailable — reload";
     showStatus("Wallet connector could not initialize. Reload and try again.");
     console.error("VELTRON wallet connector initialization failed", error);
   }
@@ -217,11 +222,13 @@ function initializeWalletConnection() {
 connectButton.addEventListener("click", async () => {
   if (!connector) return;
   connectButton.disabled = true;
+  connectButton.textContent = "Opening wallet connection…";
   showStatus("Opening wallet connection…");
 
   try {
     await connector.connect();
   } catch (error) {
+    connectButton.textContent = "Connect NEAR Testnet wallet";
     showStatus("Connection was not completed. You can try again.");
     console.error("VELTRON wallet connection failed", error);
     connectButton.disabled = false;
