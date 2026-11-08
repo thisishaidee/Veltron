@@ -65,6 +65,6 @@ jobs:
       - name: Inspect NEAR CLI command help without credentials
         run: |
           npx --yes near-cli-rs@0.31.1 --help
-          npx --yes near-cli-rs@0.31.1 account --help
-          npx --yes near-cli-rs@0.31.1 contract --help
-          npx --yes near-cli-rs@0.31.1 config --help
+          npx --yes near-cli-rs@0.31.1 account add-key --help
+          npx --yes near-cli-rs@0.31.1 contract deploy --help
+          npx --yes near-cli-rs@0.31.1 account list-keys --help
