@@ -15,12 +15,12 @@ const network = document.querySelector("#wallet-network");
 const rpcNetwork = document.querySelector("#rpc-network");
 const verifyWalletKeyButton = document.querySelector("#verify-wallet-key");
 const verifyWalletKeyStatus = document.querySelector("#wallet-key-status");
-const EXPECTED_TOKEN_PUBLIC_KEY = "ed25519:5L9opGEMJgG3ZRXPp61kocCR2YXjmvVnoxodvfommrkR";
 const WALLET_PROOF_MESSAGE = "VELTRON wallet ownership verification — Testnet only. No transaction or contract deployment is authorized.";
 
 let connector;
 let connectedAccountId;
 let signedMessageEventReceived = false;
+let pendingWalletProofNonce;
 
 function showStatus(message) {
   status.textContent = message;
@@ -125,6 +125,38 @@ function handleWalletSignIn(event) {
   connectButton.disabled = false;
 }
 
+async function verifyNep413Proof(signedMessage, nonce) {
+  const publicKeyText = typeof signedMessage?.publicKey === "string" ? signedMessage.publicKey : signedMessage?.publicKey?.toString?.();
+  if (signedMessage?.accountId !== TOKEN_ACCOUNT || !publicKeyText?.startsWith("ed25519:") || !signedMessage?.signature) throw new Error("Signed message account, Ed25519 key, or signature is missing.");
+  const alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+  const b58 = value => {
+    let bytes=[0];
+    for (const ch of value) { let carry=alphabet.indexOf(ch); if(carry<0) throw new Error("Invalid base58 key/signature."); for(let i=0;i<bytes.length;i++){carry+=bytes[i]*58;bytes[i]=carry&255;carry>>=8;} while(carry){bytes.push(carry&255);carry>>=8;} }
+    for(let i=0;i<value.length-1&&value[i]==="1";i++)bytes.push(0);
+    return new Uint8Array(bytes.reverse());
+  };
+  const key=b58(publicKeyText.slice(8));
+  const sig=typeof signedMessage.signature==="string"&&signedMessage.signature.startsWith("ed25519:")?b58(signedMessage.signature.slice(8)):Uint8Array.from(atob(signedMessage.signature),c=>c.charCodeAt(0));
+  if(key.length!==32||sig.length!==64||nonce?.length!==32)throw new Error("Invalid NEP-413 key, signature, or nonce length.");
+  const enc=new TextEncoder();
+  const str=v=>{const b=enc.encode(v),n=new Uint8Array(4);new DataView(n.buffer).setUint32(0,b.length,true);return[n,b];};
+  const tag=new Uint8Array(4);new DataView(tag.buffer).setUint32(0,2147484061,true);
+  const parts=[tag,...str(WALLET_PROOF_MESSAGE),nonce,...str(window.location.host),new Uint8Array([0])];
+  const data=new Uint8Array(parts.reduce((n,p)=>n+p.length,0));let off=0;for(const p of parts){data.set(p,off);off+=p.length;}
+  const digest=await crypto.subtle.digest("SHA-256",data);
+  const imported=await crypto.subtle.importKey("raw",key,{name:"Ed25519"},false,["verify"]);
+  if(!await crypto.subtle.verify({name:"Ed25519"},imported,sig,digest))throw new Error("NEP-413 signature is invalid.");
+  const access=await nearRpc("query",{request_type:"view_access_key",finality:"final",account_id:TOKEN_ACCOUNT,public_key:publicKeyText});
+  if(access?.permission!=="FullAccess")throw new Error("Signing key is not a full-access key on this Testnet account.");
+  return publicKeyText;
+}
+async function handleSignedMessageEvent(event, nonce) {
+  const entry=event?.accounts?.[0], signed=entry?.signedMessage;
+  if(entry?.accountId!==TOKEN_ACCOUNT||(signed?.accountId&&signed.accountId!==TOKEN_ACCOUNT)){verifyWalletKeyStatus.textContent="NOT VERIFIED — wallet did not prove control of "+TOKEN_ACCOUNT+".";return;}
+  try{await verifyNep413Proof(signed,nonce);verifyWalletKeyStatus.textContent="OWNERSHIP VERIFIED — valid NEP-413 signature and full-access Testnet key. No transaction was sent.";}
+  catch(error){verifyWalletKeyStatus.textContent="NOT VERIFIED — "+String(error?.message||error).slice(0,240)+" No transaction was sent.";}
+}
+
 function initializeWalletConnection() {
   connectButton.disabled = true;
   showStatus("Preparing supported wallet options…");
@@ -138,35 +170,16 @@ function initializeWalletConnection() {
       footerBranding: null
     });
 
-    function handleSignedMessageEvent(event) {
-      signedMessageEventReceived = true;
-      const accountEntry = event?.accounts?.[0];
-      const accountId = accountEntry?.accountId;
-      const signedMessage = accountEntry?.signedMessage;
-      const rawPublicKey = signedMessage?.publicKey;
-      const publicKey = typeof rawPublicKey === "string"
-        ? rawPublicKey
-        : rawPublicKey?.toString?.();
-
-      if (accountId !== TOKEN_ACCOUNT || (signedMessage?.accountId && signedMessage.accountId !== TOKEN_ACCOUNT)) {
-        verifyWalletKeyStatus.textContent = "NOT VERIFIED — Meteor signed in as " + (accountId || "an unknown account") + ", not " + TOKEN_ACCOUNT + ".";
-      } else if (!publicKey) {
-        verifyWalletKeyStatus.textContent = "MESSAGE SIGNING RETURNED WITHOUT A PUBLIC KEY — no ownership proof was accepted. No transaction was sent.";
-      } else if (publicKey === EXPECTED_TOKEN_PUBLIC_KEY) {
-        verifyWalletKeyStatus.textContent = "OWNERSHIP VERIFIED — the signed-message public key exactly matches the full-access key recorded for " + TOKEN_ACCOUNT + ". This was an off-chain signature; no transaction was sent.";
-      } else {
-        verifyWalletKeyStatus.textContent = "NOT VERIFIED — the signed-message key does not match the public key recorded on Testnet. Do not deploy.";
-      }
-    }
 
     connector.on("wallet:signIn", (event) => {
       handleWalletSignIn(event);
       if (event?.source === "signInAndSignMessage" || event?.accounts?.[0]?.signedMessage) {
-        handleSignedMessageEvent(event);
+        signedMessageEventReceived = true;
+        void handleSignedMessageEvent(event, pendingWalletProofNonce);
       }
     });
 
-    connector.on("wallet:signInAndSignMessage", handleSignedMessageEvent);
+    connector.on("wallet:signInAndSignMessage", (event) => { signedMessageEventReceived = true; void handleSignedMessageEvent(event, pendingWalletProofNonce); });
 
     connector.on("wallet:signOut", () => {
       deployButton.disabled = true;
@@ -481,6 +494,7 @@ verifyWalletKeyButton.addEventListener("click", async () => {
   verifyWalletKeyStatus.textContent = "Requesting a harmless signed message from Meteor. This is not a blockchain transaction.";
   try {
     const nonce = crypto.getRandomValues(new Uint8Array(32));
+    pendingWalletProofNonce = nonce;
     const connectResult = await connector.connect({
       signMessageParams: {
         message: WALLET_PROOF_MESSAGE,
@@ -489,7 +503,7 @@ verifyWalletKeyButton.addEventListener("click", async () => {
       }
     });
     if (connectResult?.accounts?.[0]?.signedMessage) {
-      handleSignedMessageEvent(connectResult);
+      await handleSignedMessageEvent(connectResult, nonce);
     } else if (!signedMessageEventReceived) {
       verifyWalletKeyStatus.textContent = "Wallet returned without a signed-message result. No ownership proof was accepted. Check the wallet response path; no transaction was sent.";
     }
