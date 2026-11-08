@@ -21,6 +21,7 @@ let connector;
 let connectedAccountId;
 let signedMessageEventReceived = false;
 let pendingWalletProofNonce;
+let walletOwnershipVerified = false;
 
 function showStatus(message) {
   status.textContent = message;
@@ -28,6 +29,8 @@ function showStatus(message) {
 
 function resetWalletDetails() {
   connectedAccountId = undefined;
+  walletOwnershipVerified = false;
+  if (typeof deployButton !== "undefined") deployButton.disabled = true;
   account.textContent = "Not connected";
   network.textContent = "Not independently verified";
 }
@@ -117,7 +120,8 @@ function handleWalletSignIn(event) {
 
   connectedAccountId = accountId;
   account.textContent = accountId;
-  deployButton.disabled = accountId !== TOKEN_ACCOUNT;
+  walletOwnershipVerified = false;
+  deployButton.disabled = true;
   network.textContent = "Not independently verified";
   showStatus(
     "Wallet connected. The wallet's active network is not independently verified by this page. Confirm Testnet in Meteor itself before requesting a deployment."
@@ -428,6 +432,7 @@ deployButton.addEventListener("click", async () => {
   try {
     if (!connector || !connectedAccountId) throw new Error("Connect the intended wallet first.");
     if (connectedAccountId !== TOKEN_ACCOUNT) throw new Error("Connected account must be " + TOKEN_ACCOUNT + ".");
+    if (!walletOwnershipVerified) throw new Error("Complete cryptographic wallet ownership verification before deployment.");
     if (!networkConfirmedByUser) throw new Error("Confirm that Meteor Wallet itself currently displays Testnet before continuing.");
     const file = document.querySelector("#token").files[0];
     if (!file) throw new Error("Select the verified veltron_test_token.wasm file first.");
@@ -462,7 +467,7 @@ deployButton.addEventListener("click", async () => {
       : "PREFLIGHT STOPPED BEFORE THE WALLET REQUEST: " + String(error?.message || error);
     console.error("VELTRON DeployContract flow stopped", error);
   } finally {
-    deployButton.disabled = connectedAccountId !== TOKEN_ACCOUNT;
+    deployButton.disabled = connectedAccountId !== TOKEN_ACCOUNT || !walletOwnershipVerified;
   }
 });
 
