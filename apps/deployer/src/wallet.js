@@ -28,8 +28,8 @@ function showStatus(message) {
 }
 
 function resetWalletDetails() {
-  connectButton.textContent = "Connect NEAR Testnet wallet";
   connectedAccountId = undefined;
+  connectButton.textContent = "Connect NEAR Testnet wallet";
   pendingWalletProofNonce = undefined;
   signedMessageEventReceived = false;
   walletOwnershipVerified = false;
