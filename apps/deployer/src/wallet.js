@@ -346,6 +346,7 @@ deployNetworkConfirmation.addEventListener("click", () => {
   networkConfirmationStatus.textContent = networkConfirmedByUser
     ? "Testnet confirmation recorded on this page. Fresh preflight is still required; no transaction has been sent."
     : "Not confirmed on this page. Tap the confirmation button only after checking Meteor Wallet.";
+  deployButton.disabled = !(connectedAccountId === TOKEN_ACCOUNT && walletOwnershipVerified && networkConfirmedByUser);
 });
 const deployStatus = document.querySelector("#deployment-execution-status");
 const verifyDeployedCodeButton = document.querySelector("#verify-deployed-code");
@@ -479,7 +480,7 @@ deployButton.addEventListener("click", async () => {
       : "PREFLIGHT STOPPED BEFORE THE WALLET REQUEST: " + String(error?.message || error);
     console.error("VELTRON DeployContract flow stopped", error);
   } finally {
-    deployButton.disabled = connectedAccountId !== TOKEN_ACCOUNT || !walletOwnershipVerified;
+    deployButton.disabled = !(connectedAccountId === TOKEN_ACCOUNT && walletOwnershipVerified && networkConfirmedByUser);
   }
 });
 
