@@ -30,7 +30,6 @@ function showStatus(message) {
 function resetWalletDetails() {
   connectedAccountId = undefined;
   walletOwnershipVerified = false;
-  if (typeof deployButton !== "undefined") deployButton.disabled = true;
   account.textContent = "Not connected";
   network.textContent = "Not independently verified";
 }
