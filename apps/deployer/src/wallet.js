@@ -13,6 +13,10 @@ const status = document.querySelector("#wallet-status");
 const account = document.querySelector("#wallet-account");
 const network = document.querySelector("#wallet-network");
 const rpcNetwork = document.querySelector("#rpc-network");
+const verifyWalletKeyButton = document.querySelector("#verify-wallet-key");
+const verifyWalletKeyStatus = document.querySelector("#wallet-key-status");
+const EXPECTED_TOKEN_PUBLIC_KEY = "ed25519:5L9opGEMJgG3ZRXPp61kocCR2YXjmvVnoxodvfommrkR";
+const WALLET_PROOF_MESSAGE = "VELTRON wallet ownership verification — Testnet only. No transaction or contract deployment is authorized.";
 
 let connector;
 let connectedAccountId;
@@ -129,11 +133,26 @@ function initializeWalletConnection() {
   try {
     connector = new NearConnector({
       network: "testnet",
-      features: { testnet: true },
+      features: { testnet: true, signMessage: true },
       footerBranding: null
     });
 
     connector.on("wallet:signIn", handleWalletSignIn);
+
+    connector.on("wallet:signInAndSignMessage", (event) => {
+      const accountId = event?.accounts?.[0]?.accountId;
+      const signedMessage = event?.accounts?.[0]?.signedMessage;
+      const publicKey = signedMessage?.publicKey;
+      if (accountId !== TOKEN_ACCOUNT) {
+        verifyWalletKeyStatus.textContent = "NOT VERIFIED — Meteor signed in as " + (accountId || "an unknown account") + ", not " + TOKEN_ACCOUNT + ".";
+      } else if (!publicKey) {
+        verifyWalletKeyStatus.textContent = "MESSAGE SIGNED, BUT KEY NOT VERIFIED — the wallet response did not include a readable public key. No transaction was sent.";
+      } else if (publicKey === EXPECTED_TOKEN_PUBLIC_KEY) {
+        verifyWalletKeyStatus.textContent = "OWNERSHIP VERIFIED — the signed-message public key exactly matches the sole full-access key recorded for " + TOKEN_ACCOUNT + ". This was an off-chain signature; no transaction was sent.";
+      } else {
+        verifyWalletKeyStatus.textContent = "NOT VERIFIED — the signed-message key does not match the public key recorded on Testnet. Do not deploy.";
+      }
+    });
 
     connector.on("wallet:signOut", () => {
       deployButton.disabled = true;
@@ -434,5 +453,30 @@ verifyDeployedCodeButton.addEventListener("click", async () => {
       " Do not initialize. You may retry this read-only check after the transaction is finalized.";
   } finally {
     verifyDeployedCodeButton.disabled = false;
+  }
+});
+
+
+verifyWalletKeyButton.addEventListener("click", async () => {
+  if (!connector) {
+    verifyWalletKeyStatus.textContent = "Wallet connector is not ready. Reload and try again.";
+    return;
+  }
+  verifyWalletKeyButton.disabled = true;
+  verifyWalletKeyStatus.textContent = "Requesting a harmless signed message from Meteor. This is not a blockchain transaction.";
+  try {
+    const nonce = crypto.getRandomValues(new Uint8Array(32));
+    await connector.connect({
+      signMessageParams: {
+        message: WALLET_PROOF_MESSAGE,
+        recipient: window.location.host,
+        nonce
+      }
+    });
+    verifyWalletKeyStatus.textContent = "Wallet returned from the signing request. Waiting for the signed-message account and public key response…";
+  } catch (error) {
+    verifyWalletKeyStatus.textContent = "MESSAGE SIGNING NOT COMPLETED — " + String(error?.message || error).slice(0, 240) + ". No transaction was requested.";
+  } finally {
+    verifyWalletKeyButton.disabled = false;
   }
 });
