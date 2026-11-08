@@ -254,6 +254,40 @@ async function nearRpc(method, params) {
   throw new Error("All verified Testnet RPC endpoints failed. " + failures.join(" | "));
 }
 
+const inspectAccessKeysButton = document.querySelector("#inspect-access-keys");
+const accessKeysStatus = document.querySelector("#access-keys-status");
+
+async function inspectRegisteredAccessKeys() {
+  inspectAccessKeysButton.disabled = true;
+  accessKeysStatus.textContent = "Reading public access-key records for " + TOKEN_ACCOUNT + " from finalized NEAR Testnet…";
+  try {
+    const result = await nearRpc("query", {
+      request_type: "view_access_key_list",
+      finality: "final",
+      account_id: TOKEN_ACCOUNT
+    });
+    if (!Array.isArray(result?.keys)) throw new Error("Testnet RPC returned an unexpected access-key list response.");
+    if (result.keys.length === 0) {
+      accessKeysStatus.textContent = "No access keys were returned for " + TOKEN_ACCOUNT + ". This is a read-only result; no transaction was sent.";
+      return;
+    }
+    const lines = result.keys.map((entry, index) => {
+      const publicKey = String(entry?.public_key || "Public key unavailable");
+      const permission = entry?.access_key?.permission;
+      const permissionText = typeof permission === "string" ? permission : JSON.stringify(permission ?? "Permission unavailable");
+      return (index + 1) + ". " + publicKey + "\n   Permission: " + permissionText;
+    });
+    accessKeysStatus.textContent = "FOUND " + result.keys.length + " REGISTERED ACCESS KEY(S) on NEAR Testnet for " + TOKEN_ACCOUNT + ":\n\n" + lines.join("\n\n") + "\n\nPublic key and permission data only. No private keys are available from this query. No transaction was sent.";
+  } catch (error) {
+    accessKeysStatus.textContent = "ACCESS-KEY INSPECTION INCOMPLETE — " + String(error?.message || error).slice(0, 700) + " No transaction was sent; no account permissions were changed.";
+    console.error("VELTRON read-only access-key inspection failed", error);
+  } finally {
+    inspectAccessKeysButton.disabled = false;
+  }
+}
+
+inspectAccessKeysButton.addEventListener("click", inspectRegisteredAccessKeys);
+
 function explainTokenCheckError(error) {
   const message = String(error?.message || error || "Unknown RPC error");
   if (error?.name === "AbortError") return "RPC request timed out. The Testnet RPC may be busy; retry shortly.";
