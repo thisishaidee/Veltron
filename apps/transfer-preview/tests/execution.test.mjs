@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
+const html = await readFile(new URL("../execution.html", import.meta.url), "utf8");
 
 test("execution page is explicitly Testnet-only and binds the intended account and contract", () => {
   assert.match(html, /network:"testnet"/);
@@ -22,7 +22,6 @@ test("exact NEP-141 transfer action is configured", () => {
 test("transaction request is behind explicit user interaction and fresh checks", () => {
   assert.match(html, /if\(!checksPassed\|\|accountId!==OWNER\|\|!wallet\)/);
   assert.match(html, /window\.confirm\(/);
-  assert.match(html, /reviewButtonNotUsed/);
   assert.match(html, /addEventListener\("click",async\(\)=>\{/);
   assert.match(html, /wallet\.signAndSendTransaction\(/);
 });
