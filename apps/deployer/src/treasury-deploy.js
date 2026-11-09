@@ -63,7 +63,7 @@ try{
    set("#network-status","Not confirmed.");
   }
   connectedAccount=nextAccount;
-  if(!hasProof){pendingNonce=undefined;signedMessageEventReceived=false;}
+  if(accountChanged&&!hasProof){pendingNonce=undefined;signedMessageEventReceived=false;}
   set("#account",connectedAccount||"No account returned");
   set("#wallet-status",connectedAccount===TREASURY_ACCOUNT?"Account selected, but ownership is NOT verified. Request the harmless signed-message proof.":"Wrong account. Select veltron-treasury.testnet in Meteor.");
   $("#prove-wallet").disabled=connectedAccount!==TREASURY_ACCOUNT;
