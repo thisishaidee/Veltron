@@ -190,6 +190,7 @@ test("dedicated treasury deployer requires a verified NEP-413 ownership proof be
 test("treasury wallet proof handles signed-message event ordering and rechecks the exact FullAccess key before deployment", () => {
   const source = readFileSync(new URL("../src/treasury-deploy.js", import.meta.url), "utf8");
   assert.match(source, /signedMessageEventReceived/);
+  assert.match(source, /if\(accountChanged&&!hasProof\)/);
   assert.match(source, /pendingNonce!==nonce/);
   assert.match(source, /verifiedPublicKey/);
   assert.match(source, /request_type:"view_access_key"/);
