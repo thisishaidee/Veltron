@@ -3,7 +3,33 @@ import { TREASURY_ACCOUNT, TREASURY_WASM_BYTES, TREASURY_WASM_SHA256, calculateT
 
 const RPCS=[{name:"FastNEAR",url:"https://rpc.testnet.fastnear.com"},{name:"dRPC",url:"https://near-testnet.drpc.org"},{name:"NEAR public RPC",url:"https://rpc.testnet.near.org"}];
 const $=s=>document.querySelector(s);
-let connector,connectedAccount,networkConfirmed=false,fileVerified=false,preflightPassed=false,wasmBytes;
+let connector,connectedAccount,networkConfirmed=false,fileVerified=false,preflightPassed=false,wasmBytes;\nconst PROOF_MESSAGE="VELTRON treasury deployment ownership verification — Testnet only. This message does not authorize a transaction.";
+let ownershipVerified=false,pendingNonce;
+function b58decode(value){
+ const alphabet="123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";let bytes=[0];
+ for(const ch of value){let carry=alphabet.indexOf(ch);if(carry<0)throw new Error("Invalid base58 key/signature.");for(let i=0;i<bytes.length;i++){carry+=bytes[i]*58;bytes[i]=carry&255;carry>>=8;}while(carry){bytes.push(carry&255);carry>>=8;}}
+ for(let i=0;i<value.length-1&&value[i]==="1";i++)bytes.push(0);
+ return new Uint8Array(bytes.reverse());
+}
+async function verifyWalletProof(event,nonce){
+ const entry=event?.accounts?.[0],signed=entry?.signedMessage;
+ const publicKeyText=typeof signed?.publicKey==="string"?signed.publicKey:signed?.publicKey?.toString?.();
+ if(entry?.accountId!==TREASURY_ACCOUNT||signed?.accountId!==TREASURY_ACCOUNT||!publicKeyText?.startsWith("ed25519:")||!signed?.signature)throw new Error("Signed message must identify veltron-treasury.testnet and include an Ed25519 signature.");
+ const key=b58decode(publicKeyText.slice(8));
+ const sig=typeof signed.signature==="string"&&signed.signature.startsWith("ed25519:")?b58decode(signed.signature.slice(8)):Uint8Array.from(atob(signed.signature),c=>c.charCodeAt(0));
+ if(key.length!==32||sig.length!==64||nonce?.length!==32)throw new Error("Invalid NEP-413 key, signature, or nonce length.");
+ const enc=new TextEncoder(),str=v=>{const b=enc.encode(v),n=new Uint8Array(4);new DataView(n.buffer).setUint32(0,b.length,true);return[n,b];};
+ const tag=new Uint8Array(4);new DataView(tag.buffer).setUint32(0,2147484061,true);
+ const parts=[tag,...str(PROOF_MESSAGE),nonce,...str(location.host),new Uint8Array([0])];
+ const data=new Uint8Array(parts.reduce((n,p)=>n+p.length,0));let off=0;for(const p of parts){data.set(p,off);off+=p.length;}
+ const digest=await crypto.subtle.digest("SHA-256",data);
+ const imported=await crypto.subtle.importKey("raw",key,{name:"Ed25519"},false,["verify"]);
+ if(!await crypto.subtle.verify({name:"Ed25519"},imported,sig,digest))throw new Error("NEP-413 signature is invalid.");
+ const access=await read("query",{request_type:"view_access_key",finality:"final",account_id:TREASURY_ACCOUNT,public_key:publicKeyText});
+ if(access.value.permission!=="FullAccess")throw new Error("Signing key is not a FullAccess key on this Testnet account.");
+ return publicKeyText;
+}
+
 const set=(s,v)=>$(s).textContent=v;
 function fmt(v){const n=BigInt(v),u=10n**24n;return (n/u).toString()+"."+(n%u).toString().padStart(24,"0").slice(0,6)+" NEAR";}
 async function rpcOne(endpoint,method,params){
@@ -23,19 +49,39 @@ $("#wasm").addEventListener("change",async()=>{
  try{wasmBytes=new Uint8Array(await file.arrayBuffer());const hash=await sha(wasmBytes);fileVerified=wasmBytes.length===TREASURY_WASM_BYTES&&hash===TREASURY_WASM_SHA256;set("#file-status",(fileVerified?"MATCH — ":"REJECTED — ")+"Size "+wasmBytes.length+" bytes; SHA-256 "+hash);$("#preflight").disabled=!fileVerified||!connectedAccount||!networkConfirmed;}
  catch(e){set("#file-status","File verification failed: "+e.message);}
 });
-function update(){ $("#preflight").disabled=!(fileVerified&&connectedAccount===TREASURY_ACCOUNT&&networkConfirmed);$("#deploy").disabled=!preflightPassed; }
+function update(){ $("#preflight").disabled=!(fileVerified&&connectedAccount===TREASURY_ACCOUNT&&networkConfirmed&&ownershipVerified);$("#deploy").disabled=!(preflightPassed&&ownershipVerified); }
 try{
- connector=new NearConnector({network:"testnet",features:{testnet:true},footerBranding:null});
- connector.on("wallet:signIn",event=>{connectedAccount=event?.accounts?.[0]?.accountId||undefined;set("#account",connectedAccount||"No account returned");set("#wallet-status",connectedAccount===TREASURY_ACCOUNT?"Treasury account selected. Complete Testnet confirmation and preflight.":"Wrong account. Select veltron-treasury.testnet in Meteor.");preflightPassed=false;update();});
+ connector=new NearConnector({network:"testnet",features:{testnet:true,signMessage:true},footerBranding:null});
+ connector.on("wallet:signIn",event=>{connectedAccount=event?.accounts?.[0]?.accountId||undefined;ownershipVerified=false;pendingNonce=undefined;set("#account",connectedAccount||"No account returned");set("#wallet-status",connectedAccount===TREASURY_ACCOUNT?"Account selected, but ownership is NOT verified. Request the harmless signed-message proof.":"Wrong account. Select veltron-treasury.testnet in Meteor.");preflightPassed=false;$("#confirm-network").disabled=connectedAccount!==TREASURY_ACCOUNT;update();});
+ connector.on("wallet:signInAndSignMessage",event=>{void acceptProofEvent(event,pendingNonce);});
+ connector.on("wallet:signOut",()=>{connectedAccount=undefined;ownershipVerified=false;networkConfirmed=false;preflightPassed=false;pendingNonce=undefined;$("#confirm-network").disabled=true;set("#account","Not connected");set("#wallet-status","Wallet disconnected; ownership proof cleared.");update();});
  connector.on("wallet:signOut",()=>{connectedAccount=undefined;networkConfirmed=false;preflightPassed=false;set("#account","Not connected");set("#wallet-status","Wallet disconnected.");update();});
  $("#connect").disabled=false;$("#connect").textContent="Connect Meteor / NEAR Testnet wallet";set("#wallet-status","Wallet connector ready.");
 }catch(e){set("#wallet-status","Wallet connector failed to initialize: "+e.message);}
-$("#connect").addEventListener("click",async()=>{try{await connector.connect();}catch(e){set("#wallet-status","Connection not completed: "+e.message);}});
-$("#confirm-network").addEventListener("click",()=>{networkConfirmed=!networkConfirmed;$("#confirm-network").textContent=networkConfirmed?"Testnet confirmed — tap to undo":"Confirm Meteor displays NEAR Testnet";set("#network-status",networkConfirmed?"You confirmed Meteor itself displays NEAR Testnet.":"Not confirmed.");preflightPassed=false;update();});
+$( "#connect" ).addEventListener("click",async()=>{try{await connector.connect();}catch(e){set("#wallet-status","Connection not completed: "+e.message);}});
+async function acceptProofEvent(event,nonce){
+ try{
+  const key=await verifyWalletProof(event,nonce);
+  if(pendingNonce!==nonce||connectedAccount!==TREASURY_ACCOUNT)throw new Error("Account or proof request changed during verification.");
+  ownershipVerified=true;set("#wallet-status","OWNERSHIP VERIFIED — valid NEP-413 signature and registered FullAccess key ("+key+"). No transaction was sent.");update();
+ }catch(e){ownershipVerified=false;preflightPassed=false;set("#wallet-status","OWNERSHIP NOT VERIFIED — "+e.message+" No transaction was sent.");update();}
+}
+$( "#prove-wallet" ).addEventListener("click",async()=>{
+ if(!connector||connectedAccount!==TREASURY_ACCOUNT){set("#wallet-status","Connect veltron-treasury.testnet first.");return;}
+ ownershipVerified=false;preflightPassed=false;update();
+ try{
+  const nonce=crypto.getRandomValues(new Uint8Array(32));pendingNonce=nonce;
+  set("#wallet-status","Requesting a harmless NEP-413 signed message from Meteor. This is not a blockchain transaction.");
+  const result=await connector.connect({signMessageParams:{message:PROOF_MESSAGE,recipient:location.host,nonce}});
+  if(result?.accounts?.[0]?.signedMessage)await acceptProofEvent(result,nonce);
+  else set("#wallet-status","Wallet returned without a signed-message proof. Ownership remains unverified; no transaction was sent.");
+ }catch(e){set("#wallet-status","Signed-message proof not completed: "+e.message+". No transaction was sent.");}
+});
+$("#confirm-network").addEventListener("click",()=>{if(!ownershipVerified){set("#network-status","Verify wallet ownership first.");return;}networkConfirmed=!networkConfirmed;$("#confirm-network").textContent=networkConfirmed?"Testnet confirmed — tap to undo":"Confirm Meteor displays NEAR Testnet";set("#network-status",networkConfirmed?"You confirmed Meteor itself displays NEAR Testnet.":"Not confirmed.");preflightPassed=false;update();});
 $("#preflight").addEventListener("click",async()=>{
  $("#preflight").disabled=true;preflightPassed=false;$("#deploy").disabled=true;set("#preflight-status","Checking live Testnet state and deployment budget…");
  try{
-  if(!fileVerified||connectedAccount!==TREASURY_ACCOUNT||!networkConfirmed)throw new Error("Required file, treasury account, or Testnet confirmation is missing.");
+  if(!fileVerified||connectedAccount!==TREASURY_ACCOUNT||!networkConfirmed||!ownershipVerified)throw new Error("Required file, treasury account, ownership proof, or Testnet confirmation is missing.");
   const status=await read("status",[]);if(status.value.chain_id!=="testnet")throw new Error("RPC did not confirm Testnet.");
   const block=await read("block",{finality:"final"});
   const config=await read("EXPERIMENTAL_protocol_config",{block_id:block.value.header.height});
@@ -60,11 +106,16 @@ $("#preflight").addEventListener("click",async()=>{
 $("#deploy").addEventListener("click",async()=>{
  $("#deploy").disabled=true;set("#deploy-status","Repeating critical checks immediately before wallet request…");
  try{
-  if(!preflightPassed||!fileVerified||connectedAccount!==TREASURY_ACCOUNT||!networkConfirmed)throw new Error("Preflight state expired or required gate changed. Run preflight again.");
+  if(!preflightPassed||!fileVerified||connectedAccount!==TREASURY_ACCOUNT||!networkConfirmed||!ownershipVerified)throw new Error("Preflight state expired or required gate changed. Run preflight again.");
   const status=await read("status",[]);if(status.value.chain_id!=="testnet")throw new Error("Testnet not confirmed by RPC.");
   const code=await read("query",{request_type:"view_code",finality:"final",account_id:TREASURY_ACCOUNT});
   if(code.value.code_base64)throw new Error("Contract code now exists. Refusing deployment.");
   const latestHash=await sha(wasmBytes);if(latestHash!==TREASURY_WASM_SHA256)throw new Error("WASM changed after verification.");
+  const freshBlock=await read("block",{finality:"final"}),freshConfig=await read("EXPERIMENTAL_protocol_config",{block_id:freshBlock.value.header.height}),freshAccount=await read("query",{request_type:"view_account",finality:"final",account_id:TREASURY_ACCOUNT});
+  const rt=freshConfig.value.runtime_config,cost=rt?.transaction_costs,ac=cost?.action_creation_config,rc=cost?.action_receipt_creation_config;
+  if(!rt?.storage_amount_per_byte||!ac?.deploy_contract_cost||!ac?.deploy_contract_cost_per_byte||!rc?.send_sir||!rc?.execution||!freshBlock.value.header.gas_price)throw new Error("Fresh protocol fee/storage configuration unavailable.");
+  const freshBudget=calculateTreasuryDeploymentBudget({accountBalance:freshAccount.value.amount,storageUsage:freshAccount.value.storage_usage,wasmBytes:TREASURY_WASM_BYTES,storageAmountPerByte:rt.storage_amount_per_byte,gasPrice:freshBlock.value.header.gas_price,costs:{deployContract:ac.deploy_contract_cost,deployContractPerByte:ac.deploy_contract_cost_per_byte,receipt:rc}});
+  if(!freshBudget.hasSufficientBalance)throw new Error("Fresh balance no longer covers modeled fee, storage reserve, and safety margin.");
   const wallet=await connector.wallet();
   set("#deploy-status","Opening Meteor. Review carefully: Testnet; signer and receiver veltron-treasury.testnet; exactly one DeployContract action; no initialization, deposit, or transfer. Approve only if every detail matches.");
   const result=await requestTreasuryDeployContract(wallet,connectedAccount,wasmBytes);
