@@ -25,7 +25,7 @@ input{background:#1b2932;border:1px solid #52636d;color:#edf2f4}
 <button id="connect" disabled>Loading wallet connector…</button>
 <p id="wallet-status" class="status" aria-live="polite">Preparing wallet connector…</p>
 <p>Connected account: <strong id="account">Not connected</strong></p>
-<button id="confirm-network" disabled>Confirm Meteor displays NEAR Testnet</button><p id="network-status" class="status">Not confirmed.</p></section>
+<button id="prove-wallet" disabled>Verify treasury wallet ownership (sign message only)</button><p class="muted">This requests a NEP-413 message signature, not a transaction. It verifies the selected account and its registered FullAccess key.</p><button id="confirm-network" disabled>Confirm Meteor displays NEAR Testnet</button><p id="network-status" class="status">Not confirmed.</p></section>
 <section class="panel"><h2>3. Fresh read-only deployment preflight</h2>
 <p>Before opening Meteor, this page rechecks Testnet, account state, that no contract code is present, the exact WASM hash, and current protocol fee/storage parameters.</p>
 <button id="preflight" disabled>Run fresh deployment preflight</button><p id="preflight-status" class="status" aria-live="polite">Not run.</p></section>
