@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#101820"><title>VELTRON — Treasury Deployment</title>
+<style>
+:root{color-scheme:dark;font:16px/1.5 system-ui,-apple-system,sans-serif;background:#101820;color:#edf2f4}*{box-sizing:border-box}
+body{width:min(100% - 32px,760px);margin:auto;padding:24px 0 max(40px,env(safe-area-inset-bottom))}
+h1{font-size:1.7rem;line-height:1.2}h2{font-size:1.1rem;margin:0 0 10px}p,li{color:#c5d0d6}
+.panel{border:1px solid #40515c;border-radius:12px;padding:16px;margin:16px 0;min-width:0}
+button,input{width:100%;font:inherit;border-radius:8px;padding:13px;margin:8px 0}
+button{border:0;background:#b8e1dd;color:#101820;font-weight:750}button:disabled{opacity:.45}
+input{background:#1b2932;border:1px solid #52636d;color:#edf2f4}
+.status{white-space:pre-wrap;overflow-wrap:anywhere;background:#263640;border-radius:8px;padding:12px;min-width:0}
+.warn{border-left:4px solid #e2a84b;padding-left:12px}code{overflow-wrap:anywhere;color:#b8e1dd}.muted{font-size:.9rem;color:#9eafb8}
+</style></head><body>
+<h1>VELTRON Treasury Deployment</h1>
+<p>Dedicated Testnet-only deployment for <code>veltron-treasury.testnet</code>. Deployment and initialization are separate. This page can request exactly one DeployContract action; it cannot initialize or transfer tokens.</p>
+<section class="panel warn"><strong>Testnet only. No mainnet deployment.</strong><p>Never enter or upload a seed phrase, private key, or wallet backup. Verify the transaction details in Meteor before approving.</p></section>
+<section class="panel"><h2>1. Verify the CI-built treasury WASM</h2>
+<p>Expected file: <code>veltron_treasury.wasm</code><br>Size: <code>338,088 bytes</code><br>SHA-256: <code>3ed0cf173950f319fce18fd6f286c899ea264c76d2e1f4fd1411b54ce3455d36</code></p>
+<input id="wasm" type="file"><p id="file-status" class="status" aria-live="polite">Select the WASM file from iPhone Files → Downloads.</p></section>
+<section class="panel"><h2>2. Connect the treasury account</h2>
+<p>Connect Meteor with <code>veltron-treasury.testnet</code> selected. The page checks the selected account and independently reads the account's public FullAccess key list. This check does not itself authorize a transaction.</p>
+<button id="connect" disabled>Loading wallet connector…</button>
+<p id="wallet-status" class="status" aria-live="polite">Preparing wallet connector…</p>
+<p>Connected account: <strong id="account">Not connected</strong></p>
+<button id="confirm-network" disabled>Confirm Meteor displays NEAR Testnet</button><p id="network-status" class="status">Not confirmed.</p></section>
+<section class="panel"><h2>3. Fresh read-only deployment preflight</h2>
+<p>Before opening Meteor, this page rechecks Testnet, account state, that no contract code is present, the exact WASM hash, and current protocol fee/storage parameters.</p>
+<button id="preflight" disabled>Run fresh deployment preflight</button><p id="preflight-status" class="status" aria-live="polite">Not run.</p></section>
+<section class="panel"><h2>4. Request one deployment action</h2>
+<p class="warn"><strong>Wallet approval is the only point at which a transaction can be sent.</strong> Check that Meteor shows Testnet, signer and receiver both <code>veltron-treasury.testnet</code>, exactly one <code>DeployContract</code> action, and no initialization or token transfer. Reject anything different.</p>
+<button id="deploy" disabled>Review treasury deployment in Meteor</button><p id="deploy-status" class="status" aria-live="polite">Locked until the file, account, network, and fresh preflight checks pass.</p>
+</section>
+<section class="panel"><h2>After deployment</h2><p>The page will read finalized on-chain contract code and compare its SHA-256 to the CI artifact. A successful match proves code identity only. Stop there: initialization remains a separate step requiring its own review and approval.</p></section>
+<script type="module" src="./dist/treasury-deploy.js"></script>
+</body></html>
