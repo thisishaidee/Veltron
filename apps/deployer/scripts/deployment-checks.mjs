@@ -193,6 +193,6 @@ test("treasury wallet proof handles signed-message event ordering and rechecks t
   assert.match(source, /pendingNonce!==nonce/);
   assert.match(source, /verifiedPublicKey/);
   assert.match(source, /request_type:"view_access_key"/);
-  assert.match(source, /freshKey\.value\.permission!==\\"FullAccess\\"/);
-  assert.doesNotMatch(source, /wasmBytes;\\\\nconst PROOF_MESSAGE/);
+  assert.match(source, /freshKey\.value\.permission!=="FullAccess"/);
+  assert.equal(source.includes("wasmBytes;\\nconst PROOF_MESSAGE"), false);
 });
