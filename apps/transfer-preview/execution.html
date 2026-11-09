@@ -4,172 +4,108 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#101820">
-<title>VELTRON — Testnet Transfer Execution</title>
+<title>VELTRON — Read-only VTT Balance Check</title>
 <style>
 :root{color-scheme:dark;font:16px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#101820;color:#edf2f4}
 *{box-sizing:border-box}body{width:min(100% - 32px,720px);margin:auto;padding:24px 0 max(40px,env(safe-area-inset-bottom))}
-h1{font-size:1.65rem;line-height:1.2}h2{font-size:1.12rem}p,li{color:#c5d0d6}
+h1{font-size:1.65rem;line-height:1.2}h2{font-size:1.12rem}p{color:#c5d0d6}
 .panel{border:1px solid #40515c;border-radius:12px;padding:16px;margin:16px 0;overflow-wrap:anywhere}
 button{width:100%;padding:14px 16px;margin:8px 0;border:0;border-radius:9px;background:#b8e1dd;color:#101820;font:inherit;font-weight:750}
 button:disabled{opacity:.45}.status{padding:12px;background:#263640;border-radius:8px;white-space:pre-wrap;overflow-wrap:anywhere}
 .warn{border-left:4px solid #e2a84b;padding-left:12px}.muted{font-size:.9rem;color:#9eafb8}
-code{color:#b8e1dd;overflow-wrap:anywhere}pre{white-space:pre-wrap;overflow-wrap:anywhere}
+code{color:#b8e1dd;overflow-wrap:anywhere}.balance{font-size:1.35rem;font-weight:750;color:#b8e1dd}
 </style>
 </head>
 <body>
-<h1>VELTRON Testnet Transfer</h1>
-<p>This page connects Meteor through NEAR Connect and prepares one VTT test transfer. Wallet approval signs and broadcasts the transaction.</p>
-<section class="panel warn"><strong>TESTNET ONLY</strong><p>Never switch to Mainnet. Never share your seed phrase or private key. Do not approve if any transaction detail differs from this review.</p></section>
+<h1>VELTRON Testnet VTT Balance Check</h1>
+<p>This page reads token balances directly from NEAR Testnet. It does not connect to a wallet and cannot send transactions.</p>
+<section class="panel warn"><strong>READ-ONLY · TESTNET</strong><p>No wallet connection, signing request, transfer action, private key, or recovery phrase is used by this page.</p></section>
 <section class="panel">
-<h2>1. Connect your wallet</h2>
-<p>In Meteor, keep <code>haideedotxyz.testnet</code> selected and confirm that Meteor says Testnet.</p>
-<button id="connect" type="button">Connect Meteor / NEAR wallet</button>
-<p id="connection" class="status" role="status" aria-live="polite">Not connected. No transaction has been requested.</p>
+<h2>Token contract</h2>
+<p><code>veltron-token.testnet</code> · VELTRON Test Token (VTT) · 6 decimals</p>
+<p id="network" class="status">Network not checked yet.</p>
+<button id="check" type="button">Check both VTT balances</button>
+<p id="status" class="status" role="status" aria-live="polite">Ready. This check is read-only and will not move funds.</p>
 </section>
 <section class="panel">
-<h2>2. Run fresh checks</h2>
-<button id="preflight" type="button" disabled>Check Testnet balances and token registration</button>
-<p id="checks" class="status" role="status" aria-live="polite">Connect the intended account first.</p>
+<h2>Owner balance</h2>
+<p><code>haideedotxyz.testnet</code></p>
+<p id="owner" class="balance">Not checked</p>
 </section>
 <section class="panel">
-<h2>3. Review the exact transfer</h2>
-<ul>
-<li>Network: <strong>NEAR Testnet</strong></li>
-<li>Signer: <code>haideedotxyz.testnet</code></li>
-<li>Contract: <code>veltron-token.testnet</code></li>
-<li>Method: <code>ft_transfer</code></li>
-<li>Recipient: <code>veltron-agent.testnet</code></li>
-<li>Amount: <strong>10 VTT</strong> (10,000,000 base units; 6 decimals)</li>
-<li>Memo: <code>VELTRON test transfer</code></li>
-<li>Attached deposit: <strong>1 yoctoNEAR</strong></li>
-<li>Prepaid gas: <strong>30 Tgas</strong></li>
-</ul>
-<pre class="status">{
-  "receiver_id": "veltron-agent.testnet",
-  "amount": "10000000",
-  "memo": "VELTRON test transfer"
-}</pre>
-<p class="warn"><strong>Important:</strong> The next button opens Meteor's transaction approval flow. Meteor may sign and broadcast in the same approval. Pressing the button is a request; approving inside Meteor sends it.</p>
-<button id="review" type="button" disabled>Request transaction review in Meteor</button>
-<p id="execution" class="status" role="status" aria-live="polite">Locked until wallet identity and fresh Testnet checks pass.</p>
+<h2>Agent balance</h2>
+<p><code>veltron-agent.testnet</code></p>
+<p id="agent" class="balance">Not checked</p>
 </section>
-<p class="muted">VELTRON will not request keys or recovery phrases. If the wallet response is unclear or times out, do not retry until the transaction is checked on-chain.</p>
+<p class="muted">Expected after the two verified test transfers: owner 999,980 VTT; agent 20 VTT. The live RPC results below are authoritative for the current balances. If the check fails, do not infer a balance.</p>
 <script type="module">
-import { NearConnector } from "https://esm.sh/@hot-labs/near-connect@0.11.4";
-const OWNER="haideedotxyz.testnet";
-const CONTRACT="veltron-token.testnet";
-const AGENT="veltron-agent.testnet";
-const AMOUNT="10000000";
-const GAS="30000000000000";
-const RPC="https://rpc.testnet.near.org";
-const $=id=>document.getElementById(id);
-let connector;
-let accountId=null;
-let wallet=null;
-let checksPassed=false;
-let requestStarted=false;
+const CONTRACT = "veltron-token.testnet";
+const OWNER = "haideedotxyz.testnet";
+const AGENT = "veltron-agent.testnet";
+const RPC = "https://rpc.testnet.near.org";
+const $ = id => document.getElementById(id);
 
-async function rpc(method,params){
-  const response=await fetch(RPC,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({jsonrpc:"2.0",id:"veltron-vtt-transfer",method,params})});
-  const payload=await response.json();
-  if(!response.ok||payload.error)throw new Error(payload.error?.message||"NEAR Testnet RPC request failed.");
+async function rpc(method, params) {
+  const response = await fetch(RPC, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: "veltron-read-only-balance", method, params })
+  });
+  if (!response.ok) throw new Error("NEAR Testnet RPC returned HTTP " + response.status + ".");
+  const payload = await response.json();
+  if (payload.error) throw new Error(payload.error.message || "NEAR RPC request failed.");
   return payload.result;
 }
-async function view(method,args){
-  const encoded=btoa(unescape(encodeURIComponent(JSON.stringify(args))));
-  const result=await rpc("query",{request_type:"call_function",finality:"final",account_id:CONTRACT,method_name:method,args_base64:encoded});
+
+async function view(method, args) {
+  const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(args))));
+  const result = await rpc("query", {
+    request_type: "call_function",
+    finality: "final",
+    account_id: CONTRACT,
+    method_name: method,
+    args_base64: encoded
+  });
   return JSON.parse(new TextDecoder().decode(new Uint8Array(result.result)));
 }
-function lockChecks(message){
-  checksPassed=false;
-  $("review").disabled=true;
-  $("checks").textContent=message;
+
+function formatVtt(raw) {
+  if (typeof raw !== "string" || !/^\d+$/.test(raw)) throw new Error("Token contract returned an invalid balance.");
+  const value = BigInt(raw);
+  const whole = value / 1000000n;
+  const fraction = (value % 1000000n).toString().padStart(6, "0").replace(/0+$/, "");
+  return whole.toLocaleString("en-US") + (fraction ? "." + fraction : "") + " VTT";
 }
-try{
-  connector=new NearConnector({network:"testnet",features:{testnet:true},footerBranding:null});
-  connector.on("wallet:signIn",event=>{
-    accountId=event?.accounts?.[0]?.accountId||null;
-    wallet=null;
-    checksPassed=false;
-    $("review").disabled=true;
-    $("preflight").disabled=accountId!==OWNER;
-    $("connection").textContent=accountId===OWNER
-      ?"Connected account: "+accountId+". Confirm Testnet in Meteor itself. No transaction requested."
-      :"Wrong account connected: "+String(accountId)+". Disconnect and select "+OWNER+".";
-    lockChecks("Wallet account changed. Run fresh checks again.");
-  });
-  connector.on("wallet:signOut",()=>{
-    accountId=null;wallet=null;checksPassed=false;
-    $("preflight").disabled=true;$("review").disabled=true;
-    $("connection").textContent="Wallet disconnected.";
-    lockChecks("Reconnect the intended account.");
-  });
-  $("connect").disabled=false;
-  $("connection").textContent="Wallet connector ready. Connect only after confirming Meteor is on Testnet.";
-}catch(error){
-  $("connection").textContent="Wallet connector failed to load. No transaction can be requested. "+String(error.message||error);
-  $("connect").disabled=true;
-}
-$("connect").addEventListener("click",async()=>{
-  $("connect").disabled=true;
-  $("connection").textContent="Opening supported wallet options…";
-  try{await connector.connect();}
-  catch(error){$("connection").textContent="Wallet connection did not complete. "+String(error.message||error);}
-  finally{$("connect").disabled=false;}
-});
-$("preflight").addEventListener("click",async()=>{
-  $("preflight").disabled=true;
-  lockChecks("Checking NEAR Testnet and token state…");
-  try{
-    if(accountId!==OWNER)throw new Error("Connected account must be "+OWNER+".");
-    const status=await rpc("status",[]);
-    if(status.chain_id!=="testnet")throw new Error("RPC does not identify NEAR Testnet.");
-    const [metadata,ownerBalance,agentBalance,storage,ownerAccount]=await Promise.all([
-      view("ft_metadata",{}),view("ft_balance_of",{account_id:OWNER}),
-      view("ft_balance_of",{account_id:AGENT}),view("storage_balance_of",{account_id:AGENT}),
-      rpc("query",{request_type:"view_account",finality:"final",account_id:OWNER})
+
+$("check").addEventListener("click", async () => {
+  const button = $("check");
+  button.disabled = true;
+  $("status").textContent = "Reading finalised Testnet state… No transaction will be submitted.";
+  $("network").textContent = "Checking NEAR Testnet…";
+  $("owner").textContent = "Checking…";
+  $("agent").textContent = "Checking…";
+  try {
+    const network = await rpc("status", []);
+    if (network.chain_id !== "testnet") throw new Error("RPC did not identify NEAR Testnet. Results rejected.");
+    $("network").textContent = "Confirmed by RPC: NEAR Testnet";
+    const [metadata, ownerBalance, agentBalance] = await Promise.all([
+      view("ft_metadata", {}),
+      view("ft_balance_of", { account_id: OWNER }),
+      view("ft_balance_of", { account_id: AGENT })
     ]);
-    if(metadata.name!=="VELTRON Test Token"||metadata.symbol!=="VTT"||metadata.decimals!==6)throw new Error("Token metadata mismatch. Stop.");
-    if(BigInt(ownerBalance)<BigInt(AMOUNT))throw new Error("Owner token balance is below 10 VTT.");
-    if(!storage)throw new Error("Agent is not registered to receive VTT.");
-    if(BigInt(ownerAccount.amount)<100000000000000000000000n)throw new Error("Owner NEAR balance is below the safety threshold of 0.1 NEAR.");
-    wallet=await connector.wallet();
-    if(typeof wallet?.signAndSendTransaction!=="function")throw new Error("Connected wallet does not support signAndSendTransaction.");
-    checksPassed=true;
-    $("checks").textContent="PREFLIGHT PASSED — Testnet RPC confirmed; owner has "+(Number(ownerBalance)/1e6)+" VTT; agent is registered; owner has enough NEAR for a small test call. No transaction has been requested.";
-    $("review").disabled=false;
-  }catch(error){lockChecks("PREFLIGHT FAILED — DO NOT PROCEED. "+String(error.message||error));}
-  finally{$("preflight").disabled=accountId!==OWNER;}
-});
-$("review").addEventListener("click",async()=>{
-  if(requestStarted)return;
-  if(!checksPassed||accountId!==OWNER||!wallet) {lockChecks("Checks or wallet identity are no longer valid. Reconnect and rerun checks.");return;}
-  const confirmed=window.confirm("You are about to open Meteor for ONE Testnet transfer: 10 VTT from haideedotxyz.testnet to veltron-agent.testnet. Meteor approval may sign and broadcast. Continue to wallet review?");
-  if(!confirmed)return;
-  requestStarted=true;
-  $("review").disabled=true;
-  $("execution").textContent="Requesting Meteor review. Inspect the wallet screen carefully. Do not approve if any detail differs.";
-  try{
-    const status=await rpc("status",[]);
-    if(status.chain_id!=="testnet")throw new Error("Network changed; Testnet not confirmed.");
-    if(accountId!==OWNER)throw new Error("Connected account changed.");
-    const outcome=await wallet.signAndSendTransaction({
-      network:"testnet",
-      signerId:OWNER,
-      receiverId:CONTRACT,
-      actions:[{type:"FunctionCall",params:{
-        methodName:"ft_transfer",
-        args:{receiver_id:AGENT,amount:AMOUNT,memo:"VELTRON test transfer"},
-        gas:GAS,
-        deposit:"1"
-      }}]
-    });
-    const hash=outcome?.transaction?.hash||outcome?.transaction_outcome?.id||outcome?.transactionHash;
-    $("execution").textContent=hash
-      ?"Wallet returned transaction hash: "+hash+". Verify final status and balances before considering this complete."
-      :"Wallet returned without a readable transaction hash. Submission status is uncertain. Do not retry; check Testnet transaction history first.";
-  }catch(error){
-    $("execution").textContent="Wallet request did not return a confirmed result. Treat submission status as uncertain until Testnet is checked. Do not retry blindly. Details: "+String(error.message||error);
+    if (metadata.name !== "VELTRON Test Token" || metadata.symbol !== "VTT" || metadata.decimals !== 6) {
+      throw new Error("Token metadata did not match the expected VTT contract. Results rejected.");
+    }
+    $("owner").textContent = formatVtt(ownerBalance);
+    $("agent").textContent = formatVtt(agentBalance);
+    $("status").textContent = "BALANCE CHECK PASSED — finalised NEAR Testnet state read successfully for both accounts. Read-only: no wallet was connected and no transaction was requested.";
+  } catch (error) {
+    $("network").textContent = "Network or token verification failed.";
+    $("owner").textContent = "Unavailable";
+    $("agent").textContent = "Unavailable";
+    $("status").textContent = "CHECK FAILED — " + String(error.message || error) + " No transaction was submitted.";
+  } finally {
+    button.disabled = false;
   }
 });
 </script>
