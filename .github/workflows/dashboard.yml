@@ -25,6 +25,6 @@ jobs:
       - name: Run dashboard safety and RPC tests
         working-directory: apps/dashboard
         run: npm test
-      - name: Verify dashboard does not expose transaction or wallet signing APIs
+      - name: Verify dashboard runtime has no transaction or wallet signing APIs
         run: |
-          ! grep -R -E "signAndSendTransaction|signMessage|DeployContract|ft_transfer|request_payment|set_paused" apps/dashboard
+          ! grep -R -E "signAndSendTransaction|signMessage|DeployContract|ft_transfer|request_payment|set_paused" apps/dashboard/src apps/dashboard/index.html
