@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "scripts": {
     "test:e2e": "playwright test",
-    "build": "esbuild src/wallet.js --bundle --format=esm --outfile=dist/wallet.js",
+    "build": "esbuild src/wallet.js --bundle --format=esm --outfile=dist/wallet.js && esbuild src/treasury-deploy.js --bundle --format=esm --outfile=dist/treasury-deploy.js",
     "test:executor": "node --test tests/meteor-executor.test.mjs",
     "test:deployment": "node --test scripts/deployment-checks.mjs",
     "test:all": "npm run test:executor && npm run test:deployment"

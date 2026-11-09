@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101820"><title>VELTRON Treasury Deployment Preflight</title>
+<style>
+:root{color-scheme:dark;font:16px/1.5 system-ui;background:#101820;color:#edf2f4}*{box-sizing:border-box}
+body{width:min(100% - 32px,760px);margin:auto;padding:24px 0 48px}h1{font-size:1.7rem}p,li{color:#c5d0d6}
+.panel{border:1px solid #40515c;border-radius:12px;padding:16px;margin:16px 0}
+.status{background:#263640;padding:12px;border-radius:8px;white-space:pre-wrap;overflow-wrap:anywhere}
+.warn{border-left:4px solid #e2a84b;padding-left:12px}button,input{width:100%;padding:14px;margin:8px 0;border-radius:8px;font-size:16px}
+input[type=file]{display:block;min-height:54px;border:2px dashed #b8e1dd;background:#1b2a33;color:#edf2f4}
+button{border:0;background:#b8e1dd;color:#101820;font-weight:700}button:disabled{opacity:.5}
+code{overflow-wrap:anywhere;color:#b8e1dd}.muted{font-size:.9rem;color:#9eafb8}
+</style></head>
+<body>
+<h1>VELTRON Treasury — Read-only Deployment Preflight</h1>
+<p>This page is dedicated to <code>veltron-treasury.testnet</code>. It does not connect a wallet, sign messages, deploy code, initialize the contract, or transfer tokens.</p>
+<div class="panel warn"><strong>Testnet only. No real funds.</strong><p>Never enter or upload a seed phrase, private key, wallet backup, or access key.</p></div>
+<div class="panel">
+<h2>Verified artifact</h2>
+<p>Source commit: <code>ae3d095639e4640ab0f83119afa99327d7fd56b9</code></p>
+<p>Expected treasury WASM: <strong>338,088 bytes</strong></p>
+<p>Expected SHA-256:<br><code>3ed0cf173950f319fce18fd6f286c899ea264c76d2e1f4fd1411b54ce3455d36</code></p>
+<label for="wasm"><strong>Step 1 — Choose the contract file</strong></label>
+<p class="muted">Tap the file area. In the iPhone Files picker, open Downloads and select <code>veltron_treasury.wasm</code>. The picker is intentionally not restricted by file type, so the file remains visible.</p>
+<input id="wasm" type="file">
+<p id="file-status" class="status">No file selected yet.</p>
+</div>
+<div class="panel">
+<h2>Target account</h2>
+<p><code>veltron-treasury.testnet</code></p>
+<button id="check">Step 2 — Run read-only Testnet preflight</button>
+<p id="result" class="status">Not checked.</p>
+</div>
+<div class="panel">
+<h2>Proposed initialization — review only</h2>
+<ul>
+<li>Owner: <code>haideedotxyz.testnet</code></li>
+<li>Token: <code>veltron-token.testnet</code></li>
+<li>Agent: <code>veltron-agent.testnet</code></li>
+<li>Maximum agent transaction: <strong>50 VTT</strong> (<code>50000000</code> raw units)</li>
+<li>Safety reserve: <strong>200 VTT</strong> (<code>200000000</code> raw units)</li>
+</ul>
+<p class="warn">These values are proposed for review, not submitted. Deployment and initialization must remain separate wallet approvals. This page has no transaction capability.</p>
+</div>
+<script type="module" src="./src/treasury-preflight.js"></script>
+</body></html>
