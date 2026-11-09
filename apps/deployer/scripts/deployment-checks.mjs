@@ -168,6 +168,6 @@ test("dedicated treasury deployment page is pinned, isolated, and guarded", () =
   assert.match(source, /calculateTreasuryDeploymentBudget/);
   assert.match(source, /requestTreasuryDeployContract/);
   assert.match(source, /connectedAccount===TREASURY_ACCOUNT/);
-  assert.match(source, /No initialization/);
+  assert.match(page, /cannot initialize or transfer tokens/);
   assert.doesNotMatch(source, /ft_transfer|ft_transfer_call|FunctionCall|signMessage/);
 });
