@@ -109,8 +109,8 @@
   function renderCommitments() {
     byId("commitment-count").textContent = commitmentRows.length + " shown";
     byId("commitments-table").innerHTML = table(
-      ["ID","Recipient","Amount","Status"],
-      commitmentRows.map(c => [c.id,c.recipient_id,amount(c.amount),c.settlement_pending ? "Settlement pending" : "Active"])
+      ["ID","Recipient","Amount","Description","Status"],
+      commitmentRows.map(c => [c.id,c.recipient_id,amount(c.amount),c.description,c.settlement_pending ? "Settlement pending" : "Active"])
     );
     byId("load-more").hidden = !nextCommitmentCursor;
   }
@@ -157,8 +157,14 @@
       renderCommitments();
       byId("pending-count").textContent = data.pending.length + " in flight";
       byId("pending-table").innerHTML = table(
-        ["Transfer","Amount","Type","Created (ns)"],
-        data.pending.map(t => [t.id,amount(t.amount),typeof t.kind === "object" ? Object.keys(t.kind)[0] : t.kind,t.created_at_ns])
+        ["Transfer","Amount","Type","Details","Created (ns)"],
+        data.pending.map(t => {
+          const kind = typeof t.kind === "object" && t.kind !== null ? Object.entries(t.kind)[0] : [String(t.kind), {}];
+          const details = kind[1] && typeof kind[1] === "object"
+            ? (kind[1].recipient_id || kind[1].commitment_id || "—")
+            : "—";
+          return [t.id,amount(t.amount),kind[0],details,t.created_at_ns];
+        })
       );
       byId("pause-state").innerHTML = data.paused ? '<span class="bad">Outgoing transfers paused</span>' : '<span class="good">Outgoing transfers enabled</span>';
       const audit = data.audit;
