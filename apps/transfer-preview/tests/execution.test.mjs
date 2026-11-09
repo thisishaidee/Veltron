@@ -4,28 +4,28 @@ import test from "node:test";
 
 const html = await readFile(new URL("../execution.html", import.meta.url), "utf8");
 
-test("execution page is explicitly Testnet-only and binds the intended account and contract", () => {
-  assert.match(html, /network:"testnet"/);
-  assert.match(html, /haideedotxyz\.testnet/);
+test("balance page is explicitly read-only and names the intended Testnet accounts", () => {
+  assert.match(html, /READ-ONLY/);
   assert.match(html, /veltron-token\.testnet/);
+  assert.match(html, /haideedotxyz\.testnet/);
   assert.match(html, /veltron-agent\.testnet/);
+  assert.match(html, /rpc\.testnet\.near\.org/);
 });
 
-test("exact NEP-141 transfer action is configured", () => {
-  assert.match(html, /methodName:"ft_transfer"/);
-  assert.match(html, /amount:AMOUNT/);
-  assert.match(html, /AMOUNT="10000000"/);
-  assert.match(html, /deposit:"1"/);
-  assert.match(html, /memo:"VELTRON test transfer"/);
+test("page reads token metadata and both NEP-141 balances", () => {
+  assert.match(html, /view\("ft_metadata"/);
+  assert.match(html, /view\("ft_balance_of", \{ account_id: OWNER \}\)/);
+  assert.match(html, /view\("ft_balance_of", \{ account_id: AGENT \}\)/);
+  assert.match(html, /metadata\.decimals !== 6/);
 });
 
-test("transaction request is behind explicit user interaction and fresh checks", () => {
-  assert.match(html, /if\(!checksPassed\|\|accountId!==OWNER\|\|!wallet\)/);
-  assert.match(html, /window\.confirm\(/);
-  assert.match(html, /addEventListener\("click",async\(\)=>\{/);
-  assert.match(html, /wallet\.signAndSendTransaction\(/);
+test("page rejects a non-Testnet RPC response and displays live balances", () => {
+  assert.match(html, /network\.chain_id !== "testnet"/);
+  assert.match(html, /formatVtt\(ownerBalance\)/);
+  assert.match(html, /formatVtt\(agentBalance\)/);
 });
 
-test("page never requests secret keys or recovery phrases", () => {
+test("page contains no wallet connection, signing, or transfer capability", () => {
+  assert.doesNotMatch(html, /NearConnector|signAndSendTransaction|wallet\.connect|ft_transfer|FunctionCall/);
   assert.doesNotMatch(html, /seed phrase input|private key input/i);
 });
