@@ -60,14 +60,14 @@
 
   <section class="grid" aria-label="Treasury financial position">
     <div class="metric"><span>Treasury balance</span><strong id="balance">—</strong></div>
-    <div class="metric"><span>Active commitments</span><strong id="commitments-total">—</strong></div>
+    <div class="metric"><span>Committed balance</span><strong id="commitments-total">—</strong></div>
     <div class="metric"><span>Safety reserve</span><strong id="reserve">—</strong></div>
     <div class="metric"><span>Pending discretionary</span><strong id="pending-total">—</strong></div>
     <div class="metric"><span>Spendable balance</span><strong id="spendable" class="good">—</strong></div>
   </section>
 
   <section class="panel">
-    <div class="section-head"><h2>Commitments</h2><span id="commitment-count" class="muted">—</span></div>
+    <div class="section-head"><h2>Commitments</h2><div><span id="commitment-count" class="muted">—</span> <button id="load-more" type="button" hidden>Load more</button></div></div>
     <div id="commitments-table" class="empty">Waiting for contract data.</div>
   </section>
 
@@ -91,7 +91,9 @@
 </main>
 
 <script type="module">
-  import { readTreasurySnapshot } from "./src/dashboard.mjs";
+  import { readTreasurySnapshot, callView } from "./src/dashboard.mjs";
+  let nextCommitmentCursor = null;
+  let commitmentRows = [];
 
   const byId = id => document.getElementById(id);
   const raw = value => value == null ? "—" : String(value);
@@ -103,6 +105,30 @@
     const body = rows.map(row => '<tr>' + row.map(cell => '<td>' + safe(cell).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;") + '</td>').join("") + '</tr>').join("");
     return '<div class="table-wrap"><table><thead><tr>' + head + '</tr></thead><tbody>' + body + '</tbody></table></div>';
   };
+
+  function renderCommitments() {
+    byId("commitment-count").textContent = commitmentRows.length + " shown";
+    byId("commitments-table").innerHTML = table(
+      ["ID","Recipient","Amount","Status"],
+      commitmentRows.map(c => [c.id,c.recipient_id,amount(c.amount),c.settlement_pending ? "Settlement pending" : "Active"])
+    );
+    byId("load-more").hidden = !nextCommitmentCursor;
+  }
+
+  async function loadMoreCommitments() {
+    const button = byId("load-more");
+    button.disabled = true;
+    try {
+      const page = await callView("get_commitments", { from_id: nextCommitmentCursor, limit: 50 });
+      commitmentRows = commitmentRows.concat(page.commitments);
+      nextCommitmentCursor = page.next_cursor;
+      renderCommitments();
+    } catch (error) {
+      byId("message").textContent = "Could not load the next commitment page: " + error.message;
+    } finally {
+      button.disabled = false;
+    }
+  }
 
   async function refresh() {
     const button = byId("refresh");
@@ -126,11 +152,9 @@
       byId("reserve").textContent = amount(p.safety_reserve);
       byId("pending-total").textContent = amount(p.pending_discretionary);
       byId("spendable").textContent = amount(p.spendable_balance);
-      byId("commitment-count").textContent = data.commitments.commitments.length + " shown";
-      byId("commitments-table").innerHTML = table(
-        ["ID","Recipient","Amount","Status"],
-        data.commitments.commitments.map(c => [c.id,c.recipient_id,amount(c.amount),c.settlement_pending ? "Settlement pending" : "Active"])
-      );
+      commitmentRows = data.commitments.commitments;
+      nextCommitmentCursor = data.commitments.next_cursor;
+      renderCommitments();
       byId("pending-count").textContent = data.pending.length + " in flight";
       byId("pending-table").innerHTML = table(
         ["Transfer","Amount","Type","Created (ns)"],
@@ -154,6 +178,7 @@
   }
 
   byId("refresh").addEventListener("click", refresh);
+  byId("load-more").addEventListener("click", loadMoreCommitments);
   refresh();
 </script>
 </body>
