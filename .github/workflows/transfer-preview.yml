@@ -1,4 +1,4 @@
-name: Transfer preview checks
+name: Transfer preview and execution checks
 
 on:
   push:
@@ -15,12 +15,15 @@ permissions:
   contents: read
 
 jobs:
-  preview:
+  transfer:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
           node-version: 22
-      - name: Run read-only transfer preview tests
-        run: node --test apps/transfer-preview/tests/preview.test.mjs
+      - name: Run transfer preview and execution safety tests
+        run: node --test apps/transfer-preview/tests/*.test.mjs
+      - name: Check execution page JavaScript syntax
+        run: |
+          node --input-type=module --check < <(sed -n '/<script type="module">/,/<\/script>/p' apps/transfer-preview/execution.html | sed '1d;$d')
