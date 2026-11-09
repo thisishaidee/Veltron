@@ -57,7 +57,8 @@ try{
  connector.on("wallet:signIn",event=>{
   const nextAccount=event?.accounts?.[0]?.accountId||undefined;
   const hasProof=event?.source==="signInAndSignMessage"||Boolean(event?.accounts?.[0]?.signedMessage);
-  if(nextAccount!==connectedAccount){
+  const accountChanged=nextAccount!==connectedAccount;
+  if(accountChanged){
    ownershipVerified=false;verifiedPublicKey=undefined;preflightPassed=false;networkConfirmed=false;
    $("#confirm-network").textContent="Confirm Meteor displays NEAR Testnet";
    set("#network-status","Not confirmed.");
