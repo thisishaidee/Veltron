@@ -87,6 +87,11 @@ print("Total supply (raw units):", supply)
 print(f"Owner balance for {OWNER} (raw units):", owner_balance)
 print(f"Agent balance for {AGENT} (raw units):", agent_balance)
 
+treasury_storage = json.loads(bytes(view("storage_balance_of", {"account_id": "veltron-treasury.testnet"})["result"]).decode())
+storage_bounds = json.loads(bytes(view("storage_balance_bounds", {})["result"]).decode())
+print("Treasury token storage registration:", json.dumps(treasury_storage, sort_keys=True))
+print("Token storage balance bounds:", json.dumps(storage_bounds, sort_keys=True))
+
 if metadata.get("symbol") != "VTT" or metadata.get("decimals") != 6:
     raise SystemExit("FAIL: initialized token metadata differs from the planned VTT configuration.")
 if (
