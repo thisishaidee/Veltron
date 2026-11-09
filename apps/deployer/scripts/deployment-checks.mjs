@@ -171,3 +171,18 @@ test("dedicated treasury deployment page is pinned, isolated, and guarded", () =
   assert.match(page, /cannot initialize or transfer tokens/);
   assert.doesNotMatch(source, /ft_transfer|ft_transfer_call|FunctionCall|signMessage/);
 });
+
+test("dedicated treasury deployer requires a verified NEP-413 ownership proof before preflight and deployment", () => {
+  const page = readFileSync(new URL("../treasury-deploy.html", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../src/treasury-deploy.js", import.meta.url), "utf8");
+  assert.match(page, /id="prove-wallet"/);
+  assert.match(source, /signMessageParams/);
+  assert.match(source, /crypto\.subtle\.verify/);
+  assert.match(source, /request_type:"view_access_key"/);
+  assert.match(source, /permission!=="FullAccess"/);
+  assert.match(source, /ownershipVerified/);
+  assert.match(source, /!ownershipVerified/);
+  assert.match(source, /freshBudget\.hasSufficientBalance/);
+  assert.match(source, /NO_CONTRACT_CODE/);
+  assert.doesNotMatch(source, /ft_transfer|ft_transfer_call|FunctionCall/);
+});
