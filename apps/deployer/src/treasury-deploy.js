@@ -108,8 +108,8 @@ $("#deploy").addEventListener("click",async()=>{
  try{
   if(!preflightPassed||!fileVerified||connectedAccount!==TREASURY_ACCOUNT||!networkConfirmed||!ownershipVerified)throw new Error("Preflight state expired or required gate changed. Run preflight again.");
   const status=await read("status",[]);if(status.value.chain_id!=="testnet")throw new Error("Testnet not confirmed by RPC.");
-  const code=await read("query",{request_type:"view_code",finality:"final",account_id:TREASURY_ACCOUNT});
-  if(code.value.code_base64)throw new Error("Contract code now exists. Refusing deployment.");
+  const code=await read("query",{request_type:"view_code",finality:"final",account_id:TREASURY_ACCOUNT}).then(x=>({present:Boolean(x.value.code_base64)})).catch(e=>{if(/contract code for contract ID .* has never been observed|no contract code|NO_CONTRACT_CODE/i.test(e.message))return {present:false};throw new Error("Could not prove target still has no code: "+e.message);});
+  if(code.present)throw new Error("Contract code now exists. Refusing deployment.");
   const latestHash=await sha(wasmBytes);if(latestHash!==TREASURY_WASM_SHA256)throw new Error("WASM changed after verification.");
   const freshBlock=await read("block",{finality:"final"}),freshConfig=await read("EXPERIMENTAL_protocol_config",{block_id:freshBlock.value.header.height}),freshAccount=await read("query",{request_type:"view_account",finality:"final",account_id:TREASURY_ACCOUNT});
   const rt=freshConfig.value.runtime_config,cost=rt?.transaction_costs,ac=cost?.action_creation_config,rc=cost?.action_receipt_creation_config;
