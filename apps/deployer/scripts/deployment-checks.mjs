@@ -151,3 +151,23 @@ test("treasury budget uses only the pinned treasury WASM byte count", () => {
   assert.equal(calculateTreasuryDeploymentBudget(input).hasSufficientBalance, true);
   assert.throws(() => calculateTreasuryDeploymentBudget({ ...input, wasmBytes: 325106 }), /pinned WASM/);
 });
+
+import { readFileSync as readTreasuryFile } from "node:fs";
+
+test("dedicated treasury deployment page is pinned, isolated, and guarded", () => {
+  const page = readTreasuryFile(new URL("../treasury-deploy.html", import.meta.url), "utf8");
+  const source = readTreasuryFile(new URL("../src/treasury-deploy.js", import.meta.url), "utf8");
+  assert.match(page, /veltron-treasury\.testnet/);
+  assert.match(page, /338,088 bytes/);
+  assert.match(page, /3ed0cf173950f319fce18fd6f286c899ea264c76d2e1f4fd1411b54ce3455d36/);
+  assert.match(source, /chain_id!==\"testnet\"/);
+  assert.match(source, /view_account/);
+  assert.match(source, /view_access_key_list/);
+  assert.match(source, /view_code/);
+  assert.match(source, /EXPERIMENTAL_protocol_config/);
+  assert.match(source, /calculateTreasuryDeploymentBudget/);
+  assert.match(source, /requestTreasuryDeployContract/);
+  assert.match(source, /connectedAccount===TREASURY_ACCOUNT/);
+  assert.match(source, /No initialization/);
+  assert.doesNotMatch(source, /ft_transfer|ft_transfer_call|FunctionCall|signMessage/);
+});
