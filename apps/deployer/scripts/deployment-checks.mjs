@@ -169,7 +169,7 @@ test("dedicated treasury deployment page is pinned, isolated, and guarded", () =
   assert.match(source, /requestTreasuryDeployContract/);
   assert.match(source, /connectedAccount===TREASURY_ACCOUNT/);
   assert.match(page, /cannot initialize or transfer tokens/);
-  assert.doesNotMatch(source, /ft_transfer|ft_transfer_call|FunctionCall|signMessage/);
+  assert.doesNotMatch(source, /ft_transfer|ft_transfer_call|FunctionCall/);
 });
 
 test("dedicated treasury deployer requires a verified NEP-413 ownership proof before preflight and deployment", () => {
