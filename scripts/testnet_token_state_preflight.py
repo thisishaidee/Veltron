@@ -7,7 +7,7 @@ import urllib.request
 
 RPC = "https://rpc.testnet.near.org"
 ACCOUNT = "veltron-token.testnet"
-EXPECTED_SHA256 = "5d5041336cc8fc92cc9ca11fff1f0b1f7ead33c4826d6c12013f957ba1e7c95b"
+EXPECTED_SHA256 = "5d5041336cc8fc92cc9ca11fff1f0b1f7ead33c4826c6d12013f957ba1e7c95b"
 OWNER = "haideedotxyz.testnet"
 EXPECTED_SUPPLY = "1000000000000"
 
