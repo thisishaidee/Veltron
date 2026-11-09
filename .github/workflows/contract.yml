@@ -8,6 +8,7 @@ on:
       - "rust-toolchain.toml"
       - "contracts/**"
       - "scripts/testnet_fee_preflight.py"
+      - "scripts/testnet_token_state_preflight.py"
       - ".github/workflows/contract.yml"
   pull_request:
     paths:
@@ -48,8 +49,12 @@ jobs:
           retention-days: 14
       - name: Run workspace and NEAR Sandbox integration tests
         run: cargo test --locked --workspace -- --nocapture
+      - name: Explicitly verify NEP-141 token initialization in NEAR Sandbox
+        run: cargo test --locked -p veltron-test-token --test sandbox -- --nocapture
       - name: Read current NEAR Testnet deployment fee parameters
         run: python3 scripts/testnet_fee_preflight.py
+      - name: Verify deployed VTT code and initialization state (read-only)
+        run: python3 scripts/testnet_token_state_preflight.py
       - name: Set up Node.js for CLI package check
         uses: actions/setup-node@v5
         with:
