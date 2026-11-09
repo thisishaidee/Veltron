@@ -3,7 +3,9 @@ import { TREASURY_ACCOUNT, TREASURY_WASM_BYTES, TREASURY_WASM_SHA256, calculateT
 
 const RPCS=[{name:"FastNEAR",url:"https://rpc.testnet.fastnear.com"},{name:"dRPC",url:"https://near-testnet.drpc.org"},{name:"NEAR public RPC",url:"https://rpc.testnet.near.org"}];
 const $=s=>document.querySelector(s);
-let connector,connectedAccount,networkConfirmed=false,fileVerified=false,preflightPassed=false,wasmBytes;\nconst PROOF_MESSAGE="VELTRON treasury deployment ownership verification — Testnet only. This message does not authorize a transaction.";
+let connector,connectedAccount,networkConfirmed=false,fileVerified=false,preflightPassed=false,wasmBytes;
+let signedMessageEventReceived=false,verifiedPublicKey;
+const PROOF_MESSAGE="VELTRON treasury deployment ownership verification — Testnet only. This message does not authorize a transaction.";
 let ownershipVerified=false,pendingNonce;
 function b58decode(value){
  const alphabet="123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";let bytes=[0];
@@ -49,32 +51,53 @@ $("#wasm").addEventListener("change",async()=>{
  try{wasmBytes=new Uint8Array(await file.arrayBuffer());const hash=await sha(wasmBytes);fileVerified=wasmBytes.length===TREASURY_WASM_BYTES&&hash===TREASURY_WASM_SHA256;set("#file-status",(fileVerified?"MATCH — ":"REJECTED — ")+"Size "+wasmBytes.length+" bytes; SHA-256 "+hash);$("#preflight").disabled=!fileVerified||!connectedAccount||!networkConfirmed;}
  catch(e){set("#file-status","File verification failed: "+e.message);}
 });
-function update(){ $("#preflight").disabled=!(fileVerified&&connectedAccount===TREASURY_ACCOUNT&&networkConfirmed&&ownershipVerified);$("#deploy").disabled=!(preflightPassed&&ownershipVerified); }
+function update(){ $("#preflight").disabled=!(fileVerified&&connectedAccount===TREASURY_ACCOUNT&&networkConfirmed&&ownershipVerified);$("#deploy").disabled=!(preflightPassed&&fileVerified&&connectedAccount===TREASURY_ACCOUNT&&networkConfirmed&&ownershipVerified); }
 try{
  connector=new NearConnector({network:"testnet",features:{testnet:true,signMessage:true},footerBranding:null});
- connector.on("wallet:signIn",event=>{connectedAccount=event?.accounts?.[0]?.accountId||undefined;ownershipVerified=false;pendingNonce=undefined;set("#account",connectedAccount||"No account returned");set("#wallet-status",connectedAccount===TREASURY_ACCOUNT?"Account selected, but ownership is NOT verified. Request the harmless signed-message proof.":"Wrong account. Select veltron-treasury.testnet in Meteor.");preflightPassed=false;$("#prove-wallet").disabled=connectedAccount!==TREASURY_ACCOUNT;$("#confirm-network").disabled=connectedAccount!==TREASURY_ACCOUNT;update();});
- connector.on("wallet:signInAndSignMessage",event=>{void acceptProofEvent(event,pendingNonce);});
- connector.on("wallet:signOut",()=>{connectedAccount=undefined;ownershipVerified=false;networkConfirmed=false;preflightPassed=false;pendingNonce=undefined;$("#confirm-network").disabled=true;set("#account","Not connected");set("#wallet-status","Wallet disconnected; ownership proof cleared.");update();});
- connector.on("wallet:signOut",()=>{connectedAccount=undefined;networkConfirmed=false;preflightPassed=false;set("#account","Not connected");set("#wallet-status","Wallet disconnected.");update();});
+ connector.on("wallet:signIn",event=>{
+  const nextAccount=event?.accounts?.[0]?.accountId||undefined;
+  const hasProof=event?.source==="signInAndSignMessage"||Boolean(event?.accounts?.[0]?.signedMessage);
+  if(nextAccount!==connectedAccount){
+   ownershipVerified=false;verifiedPublicKey=undefined;preflightPassed=false;networkConfirmed=false;
+   $("#confirm-network").textContent="Confirm Meteor displays NEAR Testnet";
+   set("#network-status","Not confirmed.");
+  }
+  connectedAccount=nextAccount;
+  if(!hasProof){pendingNonce=undefined;signedMessageEventReceived=false;}
+  set("#account",connectedAccount||"No account returned");
+  set("#wallet-status",connectedAccount===TREASURY_ACCOUNT?"Account selected, but ownership is NOT verified. Request the harmless signed-message proof.":"Wrong account. Select veltron-treasury.testnet in Meteor.");
+  $("#prove-wallet").disabled=connectedAccount!==TREASURY_ACCOUNT;
+  $("#confirm-network").disabled=connectedAccount!==TREASURY_ACCOUNT;
+  if(hasProof){signedMessageEventReceived=true;void acceptProofEvent(event,pendingNonce);}
+  update();
+ });
+ connector.on("wallet:signInAndSignMessage",event=>{signedMessageEventReceived=true;void acceptProofEvent(event,pendingNonce);});
+ connector.on("wallet:signOut",()=>{
+  connectedAccount=undefined;ownershipVerified=false;verifiedPublicKey=undefined;networkConfirmed=false;preflightPassed=false;pendingNonce=undefined;signedMessageEventReceived=false;
+  $("#confirm-network").disabled=true;$("#confirm-network").textContent="Confirm Meteor displays NEAR Testnet";
+  set("#account","Not connected");set("#wallet-status","Wallet disconnected; ownership proof cleared.");
+  update();
+ });
  $("#connect").disabled=false;$("#connect").textContent="Connect Meteor / NEAR Testnet wallet";set("#wallet-status","Wallet connector ready.");
 }catch(e){set("#wallet-status","Wallet connector failed to initialize: "+e.message);}
 $( "#connect" ).addEventListener("click",async()=>{try{await connector.connect();}catch(e){set("#wallet-status","Connection not completed: "+e.message);}});
 async function acceptProofEvent(event,nonce){
  try{
+  if(!nonce||pendingNonce!==nonce||connectedAccount!==TREASURY_ACCOUNT)throw new Error("Account or proof request changed before verification.");
   const key=await verifyWalletProof(event,nonce);
   if(pendingNonce!==nonce||connectedAccount!==TREASURY_ACCOUNT)throw new Error("Account or proof request changed during verification.");
-  ownershipVerified=true;set("#wallet-status","OWNERSHIP VERIFIED — valid NEP-413 signature and registered FullAccess key ("+key+"). No transaction was sent.");update();
+  verifiedPublicKey=key;ownershipVerified=true;set("#wallet-status","OWNERSHIP VERIFIED — valid NEP-413 signature and registered FullAccess key ("+key+"). No transaction was sent.");update();
  }catch(e){ownershipVerified=false;preflightPassed=false;set("#wallet-status","OWNERSHIP NOT VERIFIED — "+e.message+" No transaction was sent.");update();}
 }
 $( "#prove-wallet" ).addEventListener("click",async()=>{
  if(!connector||connectedAccount!==TREASURY_ACCOUNT){set("#wallet-status","Connect veltron-treasury.testnet first.");return;}
- ownershipVerified=false;preflightPassed=false;update();
+ ownershipVerified=false;verifiedPublicKey=undefined;preflightPassed=false;signedMessageEventReceived=false;update();
  try{
   const nonce=crypto.getRandomValues(new Uint8Array(32));pendingNonce=nonce;
   set("#wallet-status","Requesting a harmless NEP-413 signed message from Meteor. This is not a blockchain transaction.");
   const result=await connector.connect({signMessageParams:{message:PROOF_MESSAGE,recipient:location.host,nonce}});
-  if(result?.accounts?.[0]?.signedMessage)await acceptProofEvent(result,nonce);
-  else set("#wallet-status","Wallet returned without a signed-message proof. Ownership remains unverified; no transaction was sent.");
+  if(result?.accounts?.[0]?.signedMessage&&!signedMessageEventReceived)await acceptProofEvent(result,nonce);
+  else if(!signedMessageEventReceived)set("#wallet-status","Wallet returned without a signed-message proof. Ownership remains unverified; no transaction was sent.");
  }catch(e){set("#wallet-status","Signed-message proof not completed: "+e.message+". No transaction was sent.");}
 });
 $("#confirm-network").addEventListener("click",()=>{if(!ownershipVerified){set("#network-status","Verify wallet ownership first.");return;}networkConfirmed=!networkConfirmed;$("#confirm-network").textContent=networkConfirmed?"Testnet confirmed — tap to undo":"Confirm Meteor displays NEAR Testnet";set("#network-status",networkConfirmed?"You confirmed Meteor itself displays NEAR Testnet.":"Not confirmed.");preflightPassed=false;update();});
@@ -111,6 +134,9 @@ $("#deploy").addEventListener("click",async()=>{
   const code=await read("query",{request_type:"view_code",finality:"final",account_id:TREASURY_ACCOUNT}).then(x=>({present:Boolean(x.value.code_base64)})).catch(e=>{if(/contract code for contract ID .* has never been observed|no contract code|NO_CONTRACT_CODE/i.test(e.message))return {present:false};throw new Error("Could not prove target still has no code: "+e.message);});
   if(code.present)throw new Error("Contract code now exists. Refusing deployment.");
   const latestHash=await sha(wasmBytes);if(latestHash!==TREASURY_WASM_SHA256)throw new Error("WASM changed after verification.");
+  if(!verifiedPublicKey)throw new Error("Verified wallet public key is missing. Repeat ownership proof.");
+  const freshKey=await read("query",{request_type:"view_access_key",finality:"final",account_id:TREASURY_ACCOUNT,public_key:verifiedPublicKey});
+  if(freshKey.value.permission!=="FullAccess")throw new Error("Verified signing key is no longer FullAccess. Repeat ownership proof.");
   const freshBlock=await read("block",{finality:"final"}),freshConfig=await read("EXPERIMENTAL_protocol_config",{block_id:freshBlock.value.header.height}),freshAccount=await read("query",{request_type:"view_account",finality:"final",account_id:TREASURY_ACCOUNT});
   const rt=freshConfig.value.runtime_config,cost=rt?.transaction_costs,ac=cost?.action_creation_config,rc=cost?.action_receipt_creation_config;
   if(!rt?.storage_amount_per_byte||!ac?.deploy_contract_cost||!ac?.deploy_contract_cost_per_byte||!rc?.send_sir||!rc?.execution||!freshBlock.value.header.gas_price)throw new Error("Fresh protocol fee/storage configuration unavailable.");
