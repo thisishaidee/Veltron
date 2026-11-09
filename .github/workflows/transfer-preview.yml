@@ -1,0 +1,26 @@
+name: Transfer preview checks
+
+on:
+  push:
+    paths:
+      - "apps/transfer-preview/**"
+      - ".github/workflows/transfer-preview.yml"
+  pull_request:
+    paths:
+      - "apps/transfer-preview/**"
+      - ".github/workflows/transfer-preview.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Run read-only transfer preview tests
+        run: node --test apps/transfer-preview/tests/preview.test.mjs
