@@ -13,7 +13,7 @@ let verifiedFile=false;
 async function rpc(endpoint,method,params){
  const response=await fetch(endpoint.url,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({jsonrpc:"2.0",id:"veltron-treasury-preflight",method,params})});
  const payload=await response.json();
- if(!response.ok||payload.error||!payload.result)throw new Error(payload.error?.message||"RPC request failed");
+ if(!response.ok||payload.error||!payload.result){const detail=payload.error?.data||payload.error?.cause?.info||payload.error?.cause?.name||"";throw new Error([payload.error?.message||"RPC request failed",detail].filter(Boolean).join(" — "));}
  return payload.result;
 }
 async function read(method,params){
@@ -53,7 +53,7 @@ document.querySelector("#check").addEventListener("click",async()=>{
    codePresent=Boolean(code.value.code_base64);
   }catch(e){codeError=e.message;}
   if(codePresent)throw new Error("STOP: contract code already exists at "+ACCOUNT+". This preflight will not overwrite it.");
-  if(!/contract code for contract ID .* has never been observed|contract.*not found|no contract code/i.test(codeError))
+  if(!/contract code for contract ID .* has never been observed|no contract code|NO_CONTRACT_CODE/i.test(codeError))
    throw new Error("Could not prove that the target has no deployed code: "+codeError);
   const amount=BigInt(account.value.amount);
   const yocto=10n**24n;
