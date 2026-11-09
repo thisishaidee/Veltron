@@ -9,7 +9,10 @@ RPC = "https://rpc.testnet.near.org"
 ACCOUNT = "veltron-token.testnet"
 EXPECTED_SHA256 = "5d5041336cc8fc92cc9ca11fff1f0b1f7ead33c4826c6d12013f957ba1e7c95b"
 OWNER = "haideedotxyz.testnet"
+AGENT = "veltron-agent.testnet"
 EXPECTED_SUPPLY = "1000000000000"
+EXPECTED_OWNER_BALANCE = "999980000000"
+EXPECTED_AGENT_BALANCE = "20000000"
 
 
 def rpc(method, params, request_id):
@@ -63,6 +66,7 @@ if not state.get("values"):
     print("No transaction was constructed, signed, or submitted.")
     raise SystemExit(0)
 
+
 def view(method, args):
     return rpc("query", {
         "request_type": "call_function",
@@ -72,16 +76,25 @@ def view(method, args):
         "args_base64": base64.b64encode(json.dumps(args, separators=(",", ":")).encode()).decode(),
     }, method)
 
+
 metadata = json.loads(bytes(view("ft_metadata", {})["result"]).decode())
 supply = json.loads(bytes(view("ft_total_supply", {})["result"]).decode())
-balance = json.loads(bytes(view("ft_balance_of", {"account_id": OWNER})["result"]).decode())
+owner_balance = json.loads(bytes(view("ft_balance_of", {"account_id": OWNER})["result"]).decode())
+agent_balance = json.loads(bytes(view("ft_balance_of", {"account_id": AGENT})["result"]).decode())
 print("LIVE TOKEN STATE: INITIALIZED")
 print("Metadata:", json.dumps(metadata, sort_keys=True))
 print("Total supply (raw units):", supply)
-print(f"Owner balance for {OWNER} (raw units):", balance)
+print(f"Owner balance for {OWNER} (raw units):", owner_balance)
+print(f"Agent balance for {AGENT} (raw units):", agent_balance)
+
 if metadata.get("symbol") != "VTT" or metadata.get("decimals") != 6:
     raise SystemExit("FAIL: initialized token metadata differs from the planned VTT configuration.")
-if supply != EXPECTED_SUPPLY or balance != EXPECTED_SUPPLY:
-    raise SystemExit("FAIL: total supply or owner balance differs from the planned initial supply.")
-print("PASS: initialized VTT metadata, total supply, and owner balance match the planned values.")
+if (
+    supply != EXPECTED_SUPPLY
+    or owner_balance != EXPECTED_OWNER_BALANCE
+    or agent_balance != EXPECTED_AGENT_BALANCE
+    or int(owner_balance) + int(agent_balance) != int(supply)
+):
+    raise SystemExit("FAIL: finalized VTT supply distribution differs from the two verified test transfers.")
+print("PASS: VTT metadata, total supply, and owner/agent balances match the verified testnet transfers.")
 print("No transaction was constructed, signed, or submitted.")
