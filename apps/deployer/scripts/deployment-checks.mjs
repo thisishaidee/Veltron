@@ -80,3 +80,17 @@ test("persists the connected signer ID for preflight and clears it on reset", ()
   assert.match(walletSource, /connectedAccountId = accountId;/);
   assert.match(walletSource, /function resetWalletDetails\(\)\s*\{\s*connectedAccountId = undefined;/);
 });
+
+test("treasury preflight is read-only and pinned to the treasury account and CI artifact", () => {
+  const page = readFileSync(new URL("../treasury.html", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../src/treasury-preflight.js", import.meta.url), "utf8");
+  assert.match(page, /Read-only Deployment Preflight/);
+  assert.match(page, /veltron-treasury\\.testnet/);
+  assert.match(source, /const ACCOUNT="veltron-treasury\\.testnet"/);
+  assert.match(source, /338088/);
+  assert.match(source, /3ed0cf173950f319fce18fd6f286c899ea264c76d2e1f4fd1411b54ce3455d36/);
+  assert.match(source, /view_access_key_list/);
+  assert.match(source, /view_account/);
+  assert.match(source, /view_code/);
+  assert.doesNotMatch(page + source, /signAndSendTransaction|DeployContract|signMessage|wallet\\.connect|ft_transfer/);
+});
