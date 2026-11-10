@@ -64,3 +64,24 @@ The app then calls NEAR Connect's `wallet.signAndSendTransaction({ receiverId, a
 After the wallet request returns, the app reads finalized on-chain code and independently computes SHA-256 over the returned WASM bytes. It reports success only if the on-chain code matches the exact recorded artifact. If the code is not yet visible or differs, stop and do not initialize.
 
 **Initialization is intentionally not available in this change.** It must be a separate transaction review after the deployed code hash is verified, with its own current gas/deposit checks and wallet approval. Never combine deployment and initialization.
+
+
+## Dedicated treasury upgrade review page
+
+Open `treasury.html` for the separate `veltron-treasury.testnet` upgrade flow. This page is deliberately separate from the existing test-token deployment page.
+
+Before the wallet can be opened, the browser requires:
+- the selected treasury WASM to be exactly 338,235 bytes and match SHA-256 `66d3d95d8b4f7142cb47062051a93158994236a3791d83e994946af3dd5525af`;
+- Meteor to be connected as `veltron-treasury.testnet`;
+- the user to confirm that Meteor itself displays NEAR Testnet;
+- both NEAR RPC and FastNEAR to identify as Testnet and agree on finalized treasury code/account state;
+- the currently deployed treasury code to match the recorded pre-upgrade hash `3ed0cf173950f319fce18fd6f286c899ea264c76d2e1f4fd1411b54ce3455d36`;
+- both RPC providers to report at least one full-access key on the treasury account;
+- existing initialized treasury view state (financial position, pause status, commitments, pending transfers, token-balance audit) to be readable and structurally valid;
+- a live fee/storage estimate to leave the modeled deployment fee, projected storage reserve, and 0.05 NEAR margin covered by the account balance.
+
+After these checks, the page requests exactly one `DeployContract` action with signer and receiver both `veltron-treasury.testnet`. It does not expose `new`, any other initializer, token transfer, function call, or attached deposit. The user must inspect and approve the Meteor wallet prompt.
+
+After the wallet returns, the page verifies the finalized new code hash through both independent RPC providers. A returned wallet response without matching finalized code is not treated as success; do not retry or initialize until the read-only check resolves the state.
+
+**Important:** a full-access key existing on the account is not proof that the currently connected wallet key is that key. Meteor's exact signer/account preview and wallet authorization remain mandatory. This browser page has not yet been proven against a live Meteor signing session. CI browser tests are not a live wallet test, and no treasury upgrade is performed by CI.
