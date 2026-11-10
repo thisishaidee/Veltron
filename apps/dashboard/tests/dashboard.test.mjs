@@ -225,7 +225,7 @@ test("VTT amounts format exactly with six decimals and preserve large integer pr
   assert.equal(formatTokenAmount("10000000", 6), "10");
   assert.equal(formatTokenAmount("1", 6), "0.000001");
   assert.equal(formatTokenAmount("1000100", 6), "1.0001");
-  assert.equal(formatTokenAmount("1234567890123456789012345", 6), "1,234,567,890,123,456,789,012.345");
+  assert.equal(formatTokenAmount("1234567890123456789012345", 6), "1,234,567,890,123,456,789.012345");
   assert.throws(() => formatTokenAmount("10", 25), /Invalid token amount/);
 });
 
