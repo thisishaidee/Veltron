@@ -22,6 +22,7 @@ const RPCS=[
 let connector, accountId, networkConfirmed=false, artifactVerified=false, preflightSnapshot=null;
 let requestMayHaveBeenSubmitted=false;
 let deploymentInProgress=false;
+let preflightInProgress=false;
 let walletOwnershipVerified=false;
 let pendingWalletProofNonce;
 let signedMessageEventReceived=false;
@@ -52,8 +53,12 @@ function formatNear(value) {
   const amount=BigInt(value), unit=10n**24n;
   return (amount/unit).toString()+"."+((amount%unit).toString().padStart(24,"0").slice(0,6))+" NEAR";
 }
+function setPreflightEnabled() {
+  preflightButton.disabled=preflightInProgress||!(accountId===TREASURY_ACCOUNT&&walletOwnershipVerified&&networkConfirmed&&artifactVerified);
+}
 function setDeploymentEnabled() {
   deployButton.disabled=deploymentInProgress||!(accountId===TREASURY_ACCOUNT&&walletOwnershipVerified&&networkConfirmed&&artifactVerified&&preflightSnapshot);
+  setPreflightEnabled();
 }
 
 async function verifyNep413Proof(signedMessage,nonce) {
@@ -206,11 +211,14 @@ async function viewBoth(account,method,args={}) {
   return values[0];
 }
 async function runPreflight() {
+  if(preflightInProgress)return;
+  preflightInProgress=true;
   preflightButton.disabled=true;deployButton.disabled=true;preflightSnapshot=null;setDeploymentEnabled();
   preflightStatus.textContent="Checking artifact, wallet account, two Testnet RPCs, current code, initialized state and live fee parameters…";
   try {
     if(!artifactVerified)throw new Error("The exact CI treasury WASM has not passed its local hash check.");
     if(accountId!==TREASURY_ACCOUNT)throw new Error("Connect Meteor as "+TREASURY_ACCOUNT+".");
+    if(!walletOwnershipVerified)throw new Error("Verify exact wallet key ownership before preflight.");
     if(!networkConfirmed)throw new Error("Confirm that Meteor itself displays Testnet.");
     const file=artifactInput.files[0],wasmBytes=new Uint8Array(await file.arrayBuffer());
     const hash=await sha256Hex(wasmBytes);
@@ -282,7 +290,7 @@ async function runPreflight() {
   } catch(error) {
     preflightStatus.textContent="STOP — "+String(error?.message||error)+" No wallet request was made.";
     feeReview.textContent="Fee estimate unavailable until all preflight gates pass.";
-  } finally {preflightButton.disabled=false;setDeploymentEnabled();}
+  } finally {preflightInProgress=false;setDeploymentEnabled();}
 }
 preflightButton.addEventListener("click",runPreflight);
 
