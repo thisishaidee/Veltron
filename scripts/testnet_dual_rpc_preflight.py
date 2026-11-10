@@ -15,7 +15,7 @@ TREASURY = "veltron-treasury.testnet"
 OWNER = "haideedotxyz.testnet"
 AGENT = "veltron-agent.testnet"
 TOKEN_SHA256 = "5d5041336cc8fc92cc9ca11fff1f0b1f7ead33c4826c6d12013f957ba1e7c95b"
-TREASURY_SHA256 = "66d3d95d8b4f7142cb47062051a93158994236a3791d83e994946af3dd5525af"
+TREASURY_SHA256 = "3ed0cf173950f319fce18fd6f286c899ea264c76d2e1f4fd1411b54ce3455d36"
 EXPECTED_SUPPLY = "1000000000000"
 
 
@@ -94,7 +94,7 @@ def verify(provider, endpoint):
         treasury_hash = hashlib.sha256(base64.b64decode(code_b64)).hexdigest()
         if treasury_hash != TREASURY_SHA256:
             raise RuntimeError(f"{provider}: treasury has unexpected code hash {treasury_hash}")
-        treasury_status = "EXPECTED CODE PRESENT"
+        treasury_status = "VERIFIED PRE-UPGRADE CODE"
     else:
         treasury_status = "NO CONTRACT CODE"
 
@@ -112,7 +112,7 @@ def verify(provider, endpoint):
         "treasury_storage_usage": treasury_account.get("storage_usage"),
         "treasury_code": treasury_status,
     }
-    print(f"{provider} verified state: " + json.dumps(result, sort_keys=True))
+    print(f"{provider} verified pre-upgrade state: " + json.dumps(result, sort_keys=True))
     return result
 
 
@@ -120,5 +120,5 @@ print("VELTRON DUAL-RPC FINALIZED TESTNET VERIFICATION — READ ONLY")
 results = {name: verify(name, url) for name, url in RPCS.items()}
 if results["NEAR"] != results["FastNear"]:
     raise SystemExit("FAIL: independent RPC providers returned different finalized account/contract state.")
-print("PASS: NEAR and FastNear agree on finalized VTT and treasury state.")
+print("PASS: NEAR and FastNear agree on finalized VTT and pre-upgrade treasury state.")
 print("No transaction was constructed, signed, or submitted.")
