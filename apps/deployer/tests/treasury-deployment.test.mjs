@@ -36,7 +36,7 @@ test("constructs exactly one DeployContract action from verified bytes",()=>{
 test("calculates fee, storage reserve and safety margin with integer arithmetic",()=>{
   const result=calculateTreasuryDeployBudget({
     balance:"100000000000000000000000000",
-    storageUsage:182,
+    storageUsage:300182,oldCodeBytes:300000,
     wasmBytes:NEW_TREASURY_WASM_BYTES,
     storageAmountPerByte:"10000000000000000000",
     gasPrice:"100000000",minGasPurchasePrice:"100000000",
@@ -49,12 +49,32 @@ test("calculates fee, storage reserve and safety margin with integer arithmetic"
   assert.equal(result.hasSufficientBalance,true);
   assert.equal(result.safetyMarginYocto,"50000000000000000000000");
   assert.ok(BigInt(result.requiredBalanceYocto)>BigInt(result.storageReserveYocto));
+  assert.equal(result.storageReserveYocto,(338417n*10000000000000000000n).toString());
+});
+
+test("replaces old contract bytes instead of double-counting both WASM files",()=>{
+  const result=calculateTreasuryDeployBudget({
+    balance:"100000000000000000000000000",storageUsage:400000,oldCodeBytes:300000,
+    wasmBytes:NEW_TREASURY_WASM_BYTES,storageAmountPerByte:"10000000000000000000",
+    gasPrice:"100",minGasPurchasePrice:"100",
+    costs:{deploy:{send_sir:"1",execution:"1"},deployPerByte:{send_sir:"1",execution:"1"},receipt:{send_sir:"1",execution:"1"}}
+  });
+  assert.equal(result.storageReserveYocto,(438235n*10000000000000000000n).toString());
+});
+
+test("rejects impossible storage accounting when old code exceeds reported storage usage",()=>{
+  assert.throws(()=>calculateTreasuryDeployBudget({
+    balance:"100000000000000000000000000",storageUsage:100,oldCodeBytes:300000,
+    wasmBytes:NEW_TREASURY_WASM_BYTES,storageAmountPerByte:"10000000000000000000",
+    gasPrice:"100",minGasPurchasePrice:"100",
+    costs:{deploy:{send_sir:"1",execution:"1"},deployPerByte:{send_sir:"1",execution:"1"},receipt:{send_sir:"1",execution:"1"}}
+  }),/exceeds the account/);
 });
 
 test("prices prepaid execution at the NEP-642 minimum gas purchase price when higher",()=>{
   const result=calculateTreasuryDeployBudget({
     balance:"999999999999999999999999999",
-    storageUsage:182,wasmBytes:NEW_TREASURY_WASM_BYTES,
+    storageUsage:300182,oldCodeBytes:300000,wasmBytes:NEW_TREASURY_WASM_BYTES,
     storageAmountPerByte:"10000000000000000000",
     gasPrice:"100",minGasPurchasePrice:"1000",
     costs:{
@@ -72,7 +92,7 @@ test("prices prepaid execution at the NEP-642 minimum gas purchase price when hi
 
 test("fails closed when treasury cannot cover storage, fee and margin",()=>{
   const result=calculateTreasuryDeployBudget({
-    balance:"100",storageUsage:182,wasmBytes:NEW_TREASURY_WASM_BYTES,
+    balance:"100",storageUsage:300182,oldCodeBytes:300000,wasmBytes:NEW_TREASURY_WASM_BYTES,
     storageAmountPerByte:"10000000000000000000",gasPrice:"100000000",minGasPurchasePrice:"100000000",
     costs:{deploy:{send_sir:"100",execution:"200"},deployPerByte:{send_sir:"2",execution:"3"},receipt:{send_sir:"11",execution:"13"}}
   });
