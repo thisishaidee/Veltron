@@ -124,6 +124,13 @@ async function view(endpoint,account,method,args={}) {
     request_type:"call_function",finality:"final",account_id:account,method_name:method,args_base64:encoded
   }));
 }
+async function viewBoth(account,method,args={}) {
+  const values=await Promise.all(RPCS.map(endpoint=>view(endpoint,account,method,args)));
+  if(JSON.stringify(values[0])!==JSON.stringify(values[1])) {
+    throw new Error("Independent RPC providers disagree on treasury view method "+method+".");
+  }
+  return values[0];
+}
 async function runPreflight() {
   preflightButton.disabled=true;deployButton.disabled=true;preflightSnapshot=null;setDeploymentEnabled();
   preflightStatus.textContent="Checking artifact, wallet account, two Testnet RPCs, current code, initialized state and live fee parameters…";
@@ -165,13 +172,12 @@ async function runPreflight() {
     const accountValues=accounts.map(x=>({amount:x.result.amount,storage_usage:x.result.storage_usage,code_hash:x.result.code_hash}));
     if(JSON.stringify(accountValues[0])!==JSON.stringify(accountValues[1]))throw new Error("Independent RPCs disagree on finalized treasury account state.");
     const latestHeight=Math.min(...blocks.map(x=>x.result.header.height));
-    const primary=RPCS[0];
     const state=await Promise.all([
-      view(primary,TREASURY_ACCOUNT,"get_financial_position"),
-      view(primary,TREASURY_ACCOUNT,"get_pause_status"),
-      view(primary,TREASURY_ACCOUNT,"get_commitments"),
-      view(primary,TREASURY_ACCOUNT,"get_pending_transfers"),
-      view(primary,TREASURY_ACCOUNT,"get_token_balance_audit")
+      viewBoth(TREASURY_ACCOUNT,"get_financial_position"),
+      viewBoth(TREASURY_ACCOUNT,"get_pause_status"),
+      viewBoth(TREASURY_ACCOUNT,"get_commitments"),
+      viewBoth(TREASURY_ACCOUNT,"get_pending_transfers"),
+      viewBoth(TREASURY_ACCOUNT,"get_token_balance_audit")
     ]);
     const [position,paused,commitments,pending,audit]=state;
     if(position?.safety_reserve!== "200000000")throw new Error("Existing safety reserve is unexpected: "+JSON.stringify(position));
@@ -181,6 +187,9 @@ async function runPreflight() {
     if(typeof paused!=="boolean"||!Array.isArray(commitments?.commitments)||!Array.isArray(pending)||typeof audit?.audit_pending!=="boolean") {
       throw new Error("Existing treasury state did not pass structural validation.");
     }
+    if(!paused) throw new Error("STOP: pause the treasury through its owner-controlled process before a code upgrade.");
+    if(pending.length!==0) throw new Error("STOP: pending transfers exist. Wait for them to resolve before upgrading.");
+    if(audit.audit_pending) throw new Error("STOP: a token-balance audit callback is pending. Wait for it to finish before upgrading.");
     const config=configs[0].result.runtime_config, block=blocks[0].result;
     const action=config.transaction_costs.action_creation_config,receipt=config.transaction_costs.action_receipt_creation_config;
     const budget=calculateTreasuryDeployBudget({
