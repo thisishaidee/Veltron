@@ -98,3 +98,6 @@ jobs:
           npx --yes near-cli-rs@0.31.1 account list-keys veltron-token.testnet network-config testnet now
       - name: Read current veltron-token Testnet access keys
         run: npx --yes near-cli-rs@0.31.1 account list-keys veltron-token.testnet network-config testnet now
+
+      - name: Read current veltron-treasury Testnet access keys
+        run: npx --yes near-cli-rs@0.31.1 account list-keys veltron-treasury.testnet network-config testnet now
