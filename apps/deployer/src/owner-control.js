@@ -102,7 +102,8 @@ $("verify-owner").addEventListener("click",async()=>{
  }catch(e){status("proof","OWNER PROOF NOT COMPLETED — "+(e.message||String(e))+". No transaction was sent.");}
  finally{$("verify-owner").disabled=accountId!==OWNER;}
 });
-\n$("network-confirm").addEventListener("change",()=>{preflightOK=false;snapshot=null;$("pause").disabled=true;});
+
+$("network-confirm").addEventListener("change",()=>{preflightOK=false;snapshot=null;$("pause").disabled=true;});
 $("preflight").addEventListener("click",runPreflight);
 $("pause").addEventListener("click",async()=>{
  if(!preflightOK||!snapshot||snapshot.paused||accountId!==OWNER||!proofOK||!$("network-confirm").checked||requesting)return;
