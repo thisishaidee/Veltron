@@ -129,6 +129,7 @@ function initializeWallet() {
       walletAccount.textContent=accountId||"No account returned";
       walletNetwork.textContent="Not independently verified — confirm Testnet in Meteor itself";
       walletOwnershipVerified=false;
+      verifyWalletKeyButton.disabled=!accountId;
       verifyWalletKeyStatus.textContent="Not verified. Request a harmless signed-message proof to verify the exact connected key.";
       walletStatus.textContent=accountId
         ?"Wallet connected. Connection does not prove the active wallet network. Confirm Testnet inside Meteor before preflight."
@@ -142,7 +143,7 @@ function initializeWallet() {
     });
     connector.on("wallet:signInAndSignMessage",event=>{signedMessageEventReceived=true;void handleSignedMessageEvent(event,pendingWalletProofNonce);});
     connector.on("wallet:signOut",()=>{
-      accountId=undefined; preflightSnapshot=null; networkConfirmed=false;walletOwnershipVerified=false;pendingWalletProofNonce=undefined;
+      accountId=undefined; preflightSnapshot=null; networkConfirmed=false;walletOwnershipVerified=false;pendingWalletProofNonce=undefined;verifyWalletKeyButton.disabled=true;
       walletAccount.textContent="Not connected";walletNetwork.textContent="Not independently verified";
       walletStatus.textContent="Wallet disconnected.";confirmButton.disabled=true;preflightButton.disabled=true;setDeploymentEnabled();
     });
