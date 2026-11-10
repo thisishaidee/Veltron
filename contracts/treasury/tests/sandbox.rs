@@ -1991,3 +1991,153 @@ async fn sandbox_pause_blocks_commitment_settlement_without_losing_obligation() 
 
     Ok(())
 }
+
+
+#[tokio::test]
+async fn sandbox_only_owner_can_update_or_cancel_commitments_and_totals_reconcile() -> anyhow::Result<()> {
+    let worker = near_workspaces::sandbox().await?;
+    let owner = worker.dev_create_account().await?;
+    let agent = worker.dev_create_account().await?;
+    let attacker = worker.dev_create_account().await?;
+    let vendor = worker.dev_create_account().await?;
+    let replacement_vendor = worker.dev_create_account().await?;
+
+    let token = worker.dev_deploy(TOKEN_WASM).await?;
+    token
+        .call("new")
+        .args_json(json!({
+            "owner_id": owner.id(),
+            "total_supply": "10000",
+            "metadata": {
+                "spec": "ft-1.0.0",
+                "name": "VELTRON Test Token",
+                "symbol": "VTT",
+                "decimals": 6
+            }
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    let treasury = worker.dev_deploy(TREASURY_WASM).await?;
+    treasury
+        .call("new")
+        .args_json(json!({
+            "owner_id": owner.id(),
+            "token_id": token.id(),
+            "agent_id": agent.id(),
+            "max_per_transaction": "500",
+            "safety_reserve": "100"
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    register_token_account(&owner, &token, treasury.id().as_str()).await?;
+    register_token_account(&owner, &token, vendor.id().as_str()).await?;
+    register_token_account(&owner, &token, replacement_vendor.id().as_str()).await?;
+
+    owner
+        .call(token.id(), "ft_transfer_call")
+        .args_json(json!({
+            "receiver_id": treasury.id(),
+            "amount": "1000",
+            "memo": "Fund commitment administration test",
+            "msg": ""
+        }))
+        .deposit(NearToken::from_yoctonear(1))
+        .transact()
+        .await?
+        .into_result()?;
+
+    owner
+        .call(treasury.id(), "create_commitment")
+        .args_json(json!({
+            "id": "admin-invoice",
+            "recipient_id": vendor.id(),
+            "amount": "300",
+            "description": "Original vendor obligation"
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    // The configured agent and an unrelated account cannot rewrite or erase
+    // an obligation. Failed calls must leave both the record and total intact.
+    for unauthorized in [&agent, &attacker] {
+        let update = unauthorized
+            .call(treasury.id(), "update_commitment")
+            .args_json(json!({
+                "id": "admin-invoice",
+                "recipient_id": replacement_vendor.id(),
+                "amount": "1",
+                "description": "Unauthorized rewrite"
+            }))
+            .transact()
+            .await?;
+        assert!(update.into_result().is_err());
+
+        let cancel = unauthorized
+            .call(treasury.id(), "cancel_commitment")
+            .args_json(json!({ "id": "admin-invoice" }))
+            .transact()
+            .await?;
+        assert!(cancel.into_result().is_err());
+    }
+
+    let after_unauthorized_attempts =
+        view_json(&treasury, "get_financial_position", json!({})).await?;
+    let original_commitment =
+        view_json(&treasury, "get_commitments", json!({ "from_id": null, "limit": 25 })).await?;
+    assert_eq!(after_unauthorized_attempts["treasury_balance"], "1000");
+    assert_eq!(after_unauthorized_attempts["active_commitments"], "300");
+    assert_eq!(after_unauthorized_attempts["spendable_balance"], "600");
+    assert_eq!(original_commitment["commitments"][0]["recipient_id"], vendor.id().as_str());
+    assert_eq!(original_commitment["commitments"][0]["amount"], "300");
+
+    // The owner may deliberately revise the obligation; the aggregate ledger
+    // must move from 300 to 400 and spendable funds must fall by exactly 100.
+    owner
+        .call(treasury.id(), "update_commitment")
+        .args_json(json!({
+            "id": "admin-invoice",
+            "recipient_id": replacement_vendor.id(),
+            "amount": "400",
+            "description": "Revised vendor obligation"
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    let after_owner_update =
+        view_json(&treasury, "get_financial_position", json!({})).await?;
+    let updated_commitment =
+        view_json(&treasury, "get_commitments", json!({ "from_id": null, "limit": 25 })).await?;
+    assert_eq!(after_owner_update["treasury_balance"], "1000");
+    assert_eq!(after_owner_update["active_commitments"], "400");
+    assert_eq!(after_owner_update["spendable_balance"], "500");
+    assert_eq!(updated_commitment["commitments"][0]["recipient_id"], replacement_vendor.id().as_str());
+    assert_eq!(updated_commitment["commitments"][0]["amount"], "400");
+    assert_eq!(updated_commitment["commitments"][0]["description"], "Revised vendor obligation");
+
+    // Owner cancellation releases exactly the revised commitment, not the
+    // safety reserve, and removes the indexed record.
+    owner
+        .call(treasury.id(), "cancel_commitment")
+        .args_json(json!({ "id": "admin-invoice" }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    let after_owner_cancel =
+        view_json(&treasury, "get_financial_position", json!({})).await?;
+    let commitments_after_cancel =
+        view_json(&treasury, "get_commitments", json!({ "from_id": null, "limit": 25 })).await?;
+    assert_eq!(after_owner_cancel["treasury_balance"], "1000");
+    assert_eq!(after_owner_cancel["active_commitments"], "0");
+    assert_eq!(after_owner_cancel["safety_reserve"], "100");
+    assert_eq!(after_owner_cancel["spendable_balance"], "900");
+    assert_eq!(commitments_after_cancel["commitments"], json!([]));
+
+    Ok(())
+}
