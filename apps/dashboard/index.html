@@ -53,7 +53,7 @@
   <div class="notice">
     <strong>Read-only monitor.</strong> This dashboard reads finalized Testnet state only.
     It does not connect a wallet, request signatures, submit transactions, or move tokens.
-    Amounts are shown in raw token units until token decimals are independently verified.
+    Amounts are displayed in VTT only after the dashboard verifies the token contract metadata.
   </div>
 
   <div id="message" class="notice" role="status" aria-live="polite">Loading treasury state…</div>
@@ -91,13 +91,13 @@
 </main>
 
 <script type="module">
-  import { readTreasurySnapshot, callView } from "./src/dashboard.mjs";
+  import { readTreasurySnapshot, callView, formatTokenAmount } from "./src/dashboard.mjs";
   let nextCommitmentCursor = null;
   let commitmentRows = [];
 
   const byId = id => document.getElementById(id);
   const raw = value => value == null ? "—" : String(value);
-  const amount = value => raw(value);
+  let tokenDecimals = null;\n  const amount = value => value == null ? "—" : tokenDecimals === null ? raw(value) : formatTokenAmount(value, tokenDecimals) + " VTT";
   const safe = value => String(value ?? "—");
   const table = (headers, rows) => {
     if (!rows.length) return '<div class="empty">Nothing to display yet.</div>';
@@ -146,7 +146,7 @@
         return;
       }
 
-      const p = data.position;
+      tokenDecimals = data.tokenMetadata.decimals;\n      const p = data.position;
       byId("balance").textContent = amount(p.treasury_balance);
       byId("commitments-total").textContent = amount(p.active_commitments);
       byId("reserve").textContent = amount(p.safety_reserve);
@@ -174,7 +174,7 @@
           ? "No successful token-balance audit has been recorded."
           : "Last observed token balance: " + amount(audit.observed_token_balance) + " · Ledger at observation: " + amount(audit.ledger_balance_at_observation) + " · Observed at (ns): " + raw(audit.observed_at_ns);
       byId("connection-status").textContent = "Connected to NEAR Testnet · read-only";
-      byId("message").textContent = "Finalized treasury state loaded. No wallet is connected and no transaction has been requested.";
+      byId("message").textContent = "Finalized treasury state loaded. Token metadata verified: " + data.tokenMetadata.symbol + " (" + data.tokenMetadata.decimals + " decimals). No wallet is connected and no transaction has been requested.";
     } catch (error) {
       byId("connection-status").textContent = "Read failed";
       byId("message").textContent = error.message + " If the treasury has not been deployed and initialized, this is expected.";
