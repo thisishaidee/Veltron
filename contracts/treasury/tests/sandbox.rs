@@ -1844,3 +1844,150 @@ async fn sandbox_agent_cannot_spend_commitment_reserved_funds() -> anyhow::Resul
 
     Ok(())
 }
+
+#[tokio::test]
+async fn sandbox_pause_blocks_commitment_settlement_without_losing_obligation() -> anyhow::Result<()> {
+    let worker = near_workspaces::sandbox().await?;
+    let owner = worker.dev_create_account().await?;
+    let agent = worker.dev_create_account().await?;
+    let vendor = worker.dev_create_account().await?;
+
+    let token = worker.dev_deploy(TOKEN_WASM).await?;
+    token
+        .call("new")
+        .args_json(json!({
+            "owner_id": owner.id(),
+            "total_supply": "10000",
+            "metadata": {
+                "spec": "ft-1.0.0",
+                "name": "VELTRON Test Token",
+                "symbol": "VTT",
+                "decimals": 6
+            }
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    let treasury = worker.dev_deploy(TREASURY_WASM).await?;
+    treasury
+        .call("new")
+        .args_json(json!({
+            "owner_id": owner.id(),
+            "token_id": token.id(),
+            "agent_id": agent.id(),
+            "max_per_transaction": "500",
+            "safety_reserve": "100"
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    register_token_account(&owner, &token, treasury.id().as_str()).await?;
+    register_token_account(&owner, &token, vendor.id().as_str()).await?;
+
+    owner
+        .call(token.id(), "ft_transfer_call")
+        .args_json(json!({
+            "receiver_id": treasury.id(),
+            "amount": "1000",
+            "memo": "Fund paused settlement test",
+            "msg": ""
+        }))
+        .deposit(NearToken::from_yoctonear(1))
+        .transact()
+        .await?
+        .into_result()?;
+
+    owner
+        .call(treasury.id(), "create_commitment")
+        .args_json(json!({
+            "id": "paused-invoice",
+            "recipient_id": vendor.id(),
+            "amount": "300",
+            "description": "Invoice retained while emergency pause is active"
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    owner
+        .call(treasury.id(), "set_paused")
+        .args_json(json!({ "paused": true }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    // The emergency pause must block even owner-authorized settlement.
+    let blocked_settlement = owner
+        .call(treasury.id(), "settle_commitment")
+        .args_json(json!({ "id": "paused-invoice" }))
+        .max_gas()
+        .transact()
+        .await?;
+    assert!(blocked_settlement.into_result().is_err());
+
+    let while_paused = view_json(&treasury, "get_financial_position", json!({})).await?;
+    let pending_while_paused =
+        view_json(&treasury, "get_pending_transfers", json!({})).await?;
+    let vendor_while_paused =
+        view_json(&token, "ft_balance_of", json!({ "account_id": vendor.id() })).await?;
+    let commitments_while_paused =
+        view_json(&treasury, "get_commitments", json!({ "from_id": null, "limit": 25 })).await?;
+
+    assert_eq!(view_json(&treasury, "get_pause_status", json!({})).await?, true);
+    assert_eq!(while_paused["treasury_balance"], "1000");
+    assert_eq!(while_paused["active_commitments"], "300");
+    assert_eq!(while_paused["spendable_balance"], "600");
+    assert_eq!(while_paused["pending_discretionary"], "0");
+    assert_eq!(pending_while_paused, json!([]));
+    assert_eq!(vendor_while_paused, "0");
+    assert_eq!(commitments_while_paused["commitments"][0]["id"], "paused-invoice");
+    assert_eq!(
+        commitments_while_paused["commitments"][0]["settlement_pending"],
+        false
+    );
+
+    // Once the owner lifts the pause, the same obligation remains settleable.
+    owner
+        .call(treasury.id(), "set_paused")
+        .args_json(json!({ "paused": false }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    let resumed_settlement = owner
+        .call(treasury.id(), "settle_commitment")
+        .args_json(json!({ "id": "paused-invoice" }))
+        .max_gas()
+        .transact()
+        .await?;
+    resumed_settlement.clone().into_result()?;
+    let callback_receipt = resumed_settlement
+        .receipt_outcomes()
+        .iter()
+        .find(|receipt| receipt.logs.iter().any(|log| log == "VELTRON_TRANSFER_SUCCESS:0"))
+        .expect("settlement callback must succeed after owner unpauses treasury");
+    assert!(
+        callback_receipt.gas_burnt.as_gas() < 5_000_000_000_000,
+        "commitment settlement callback exceeded 5 Tgas"
+    );
+
+    let final_position = view_json(&treasury, "get_financial_position", json!({})).await?;
+    let final_vendor_balance =
+        view_json(&token, "ft_balance_of", json!({ "account_id": vendor.id() })).await?;
+    let final_commitments =
+        view_json(&treasury, "get_commitments", json!({ "from_id": null, "limit": 25 })).await?;
+    let final_pending = view_json(&treasury, "get_pending_transfers", json!({})).await?;
+
+    assert_eq!(view_json(&treasury, "get_pause_status", json!({})).await?, false);
+    assert_eq!(final_position["treasury_balance"], "700");
+    assert_eq!(final_position["active_commitments"], "0");
+    assert_eq!(final_position["spendable_balance"], "600");
+    assert_eq!(final_position["pending_discretionary"], "0");
+    assert_eq!(final_vendor_balance, "300");
+    assert_eq!(final_commitments["commitments"].as_array().unwrap().len(), 0);
+    assert_eq!(final_pending, json!([]));
+
+    Ok(())
+}
