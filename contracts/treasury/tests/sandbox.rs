@@ -2261,3 +2261,104 @@ async fn sandbox_safety_reserve_is_owner_only_and_cannot_make_treasury_insolvent
 
     Ok(())
 }
+
+#[tokio::test]
+async fn sandbox_external_account_cannot_invoke_private_transfer_callback() -> anyhow::Result<()> {
+    let worker = near_workspaces::sandbox().await?;
+    let owner = worker.dev_create_account().await?;
+    let agent = worker.dev_create_account().await?;
+    let attacker = worker.dev_create_account().await?;
+    let vendor = worker.dev_create_account().await?;
+
+    let token = worker.dev_deploy(TOKEN_WASM).await?;
+    token
+        .call("new")
+        .args_json(json!({
+            "owner_id": owner.id(),
+            "total_supply": "10000",
+            "metadata": {
+                "spec": "ft-1.0.0",
+                "name": "VELTRON Test Token",
+                "symbol": "VTT",
+                "decimals": 6
+            }
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    let treasury = worker.dev_deploy(TREASURY_WASM).await?;
+    treasury
+        .call("new")
+        .args_json(json!({
+            "owner_id": owner.id(),
+            "token_id": token.id(),
+            "agent_id": agent.id(),
+            "max_per_transaction": "500",
+            "safety_reserve": "100"
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    register_token_account(&owner, &token, treasury.id().as_str()).await?;
+    register_token_account(&owner, &token, vendor.id().as_str()).await?;
+
+    owner
+        .call(token.id(), "ft_transfer_call")
+        .args_json(json!({
+            "receiver_id": treasury.id(),
+            "amount": "1000",
+            "memo": "Fund private callback boundary test",
+            "msg": ""
+        }))
+        .deposit(NearToken::from_yoctonear(1))
+        .transact()
+        .await?
+        .into_result()?;
+
+    owner
+        .call(treasury.id(), "create_commitment")
+        .args_json(json!({
+            "id": "private-callback-invoice",
+            "recipient_id": vendor.id(),
+            "amount": "200",
+            "description": "Callback must only be callable by treasury"
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    // Complete one genuine settlement so callback ID 0 is known to the
+    // contract. The attacker then attempts to invoke the private method.
+    owner
+        .call(treasury.id(), "settle_commitment")
+        .args_json(json!({ "id": "private-callback-invoice" }))
+        .max_gas()
+        .transact()
+        .await?
+        .into_result()?;
+
+    let before_attack = view_json(&treasury, "get_financial_position", json!({})).await?;
+    assert_eq!(before_attack["treasury_balance"], "800");
+    assert_eq!(before_attack["active_commitments"], "0");
+
+    let forged = attacker
+        .call(treasury.id(), "on_transfer_complete")
+        .args_json(json!({ "transfer_id": 0 }))
+        .transact()
+        .await?;
+    assert!(forged.into_result().is_err(), "external callback call must be rejected");
+
+    let after_attack = view_json(&treasury, "get_financial_position", json!({})).await?;
+    let commitments =
+        view_json(&treasury, "get_commitments", json!({ "from_id": null, "limit": 25 })).await?;
+    let pending = view_json(&treasury, "get_pending_transfers", json!({})).await?;
+    assert_eq!(after_attack["treasury_balance"], "800");
+    assert_eq!(after_attack["active_commitments"], "0");
+    assert_eq!(commitments["commitments"], json!([]));
+    assert_eq!(pending, json!([]));
+
+    Ok(())
+}
+
