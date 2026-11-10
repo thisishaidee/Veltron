@@ -24,6 +24,7 @@ on:
       - "scripts/testnet_token_state_preflight.py"
       - "scripts/testnet_treasury_state_preflight.py"
       - "scripts/testnet_dual_rpc_preflight.py"
+      - "scripts/testnet_treasury_initialized_preflight.py"
       - ".github/workflows/contract.yml"
   workflow_dispatch:
 
