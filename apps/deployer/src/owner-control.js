@@ -21,14 +21,10 @@ async function view(method,args={}){
 }
 async function hash(bytes){return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",bytes)),b=>b.toString(16).padStart(2,"0")).join("");}
 async function verifyInitOwner(){
- const tx=await both("tx",[INIT_TX,OWNER]);
- if(tx?.status?.Failure)throw new Error("Treasury initialization transaction failed.");
- const actions=tx?.transaction?.actions||[];
- const init=actions.find(a=>a.FunctionCall?.method_name==="new");
- if(!init)throw new Error("Recorded initialization transaction does not contain the expected new() call.");
- const args=JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(init.FunctionCall.args),c=>c.charCodeAt(0))));
- if(args.owner_id!==OWNER||tx.transaction.receiver_id!==TREASURY)throw new Error("Initialization transaction does not prove the expected treasury owner.");
- return {owner:args.owner_id,signer:tx.transaction.signer_id,receiver:tx.transaction.receiver_id};
+ const txs=await Promise.all(RPCS.map(e=>rpc(e,"tx",[INIT_TX,OWNER])));
+ const summarize=tx=>{if(tx?.status?.Failure)throw new Error("Treasury initialization transaction failed.");const action=(tx?.transaction?.actions||[]).find(a=>a.FunctionCall?.method_name==="new");if(!action)throw new Error("Recorded initialization transaction does not contain the expected new() call.");const args=JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(action.FunctionCall.args),c=>c.charCodeAt(0))));return {owner:args.owner_id,signer:tx.transaction.signer_id,receiver:tx.transaction.receiver_id};};
+ const summaries=txs.map(summarize);if(JSON.stringify(summaries[0])!==JSON.stringify(summaries[1]))throw new Error("RPC providers disagree on the original initialization transaction.");
+ const result=summaries[0];if(result.owner!==OWNER||result.receiver!==TREASURY)throw new Error("Initialization transaction does not prove the expected treasury owner.");return result;
 }
 async function runPreflight(){
  preflightOK=false;snapshot=null;$("pause").disabled=true;$("preflight").disabled=true;
@@ -39,10 +35,12 @@ async function runPreflight(){
   const networks=await Promise.all(RPCS.map(async e=>{const s=await rpc(e,"status",[]);if(s.chain_id!=="testnet")throw new Error(e.name+" is not Testnet");return s.chain_id;}));
   const init=await verifyInitOwner();
   if(init.signer!==OWNER)throw new Error("Initialization signer is not the configured owner account.");
-  const keys=await both("query",{request_type:"view_access_key_list",finality:"final",account_id:OWNER});
-  if(!keys.keys?.some(k=>k.access_key.permission==="FullAccess"&&k.public_key===window.__veltronProofKey))throw new Error("The signed-message key is not a current FullAccess key on the owner account.");
-  const code=await both("query",{request_type:"view_code",finality:"final",account_id:TREASURY});
-  const codeHash=await hash(Uint8Array.from(atob(code.code_base64),c=>c.charCodeAt(0)));
+  const keyLists=await Promise.all(RPCS.map(e=>rpc(e,"query",{request_type:"view_access_key_list",finality:"final",account_id:OWNER})));
+  const keySummary=list=>(list.keys||[]).map(k=>({public_key:k.public_key,permission:k.access_key.permission})).sort((a,b)=>a.public_key.localeCompare(b.public_key));
+  if(JSON.stringify(keySummary(keyLists[0]))!==JSON.stringify(keySummary(keyLists[1]))||!keySummary(keyLists[0]).some(k=>k.permission==="FullAccess"&&k.public_key===window.__veltronProofKey))throw new Error("The signed-message key is not a matching FullAccess key on both Testnet providers.");
+  const codes=await Promise.all(RPCS.map(e=>rpc(e,"query",{request_type:"view_code",finality:"final",account_id:TREASURY})));
+  if(codes[0].code_base64!==codes[1].code_base64)throw new Error("RPC providers disagree on treasury code.");
+  const codeHash=await hash(Uint8Array.from(atob(codes[0].code_base64),c=>c.charCodeAt(0)));
   if(codeHash!==OLD_HASH)throw new Error("Treasury code hash differs from the reviewed existing deployment. Stop.");
   const [paused,position,commitments,pending,audit]=await Promise.all([
    view("get_pause_status"),view("get_financial_position"),view("get_commitments"),view("get_pending_transfers"),view("get_token_balance_audit")
