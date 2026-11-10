@@ -458,6 +458,13 @@ impl Veltron {
         transfer_id: u64,
         #[callback_result] result: Result<(), PromiseError>,
     ) {
+        // Defense in depth: direct Rust calls in tests must enforce the same
+        // account boundary as NEAR's generated #[private] dispatch wrapper.
+        require!(
+            env::predecessor_account_id() == env::current_account_id(),
+            "Private callback"
+        );
+
         let transfer = self.pending.remove(&transfer_id)
             .unwrap_or_else(|| env::panic_str("Pending transfer not found"));
 
