@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Read-only verification of the initialized VELTRON treasury on NEAR Testnet.
 
-Accepts both pre-registration and post-registration VTT storage states so CI
-continues to validate the treasury through the next funding milestones.
+Accepts both pre-registration and post-registration VTT storage states. The expected hashes identify the reviewed build; this check intentionally fails until Testnet is upgraded to that exact build.
 Never constructs, signs, or submits a transaction.
 """
 import base64
@@ -13,7 +12,7 @@ import urllib.request
 RPC = "https://rpc.testnet.near.org"
 TREASURY = "veltron-treasury.testnet"
 TOKEN = "veltron-token.testnet"
-TREASURY_SHA256 = "3ed0cf173950f319fce18fd6f286c899ea264c76d2e1f4fd1411b54ce3455d36"
+TREASURY_SHA256 = "66d3d95d8b4f7142cb47062051a93158994236a3791d83e994946af3dd5525af"
 TOKEN_SHA256 = "5d5041336cc8fc92cc9ca11fff1f0b1f7ead33c4826c6d12013f957ba1e7c95b"
 EXPECTED_RESERVE = "200000000"
 EXPECTED_STORAGE_MIN = "1250000000000000000000"
