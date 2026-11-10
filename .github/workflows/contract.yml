@@ -21,6 +21,7 @@ on:
       - "rust-toolchain.toml"
       - "contracts/**"
       - "scripts/testnet_fee_preflight.py"
+      - "scripts/testnet_treasury_fee_preflight.py"
       - "scripts/testnet_token_state_preflight.py"
       - "scripts/testnet_treasury_state_preflight.py"
       - "scripts/testnet_dual_rpc_preflight.py"
