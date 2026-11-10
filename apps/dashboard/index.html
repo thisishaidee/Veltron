@@ -97,7 +97,8 @@
 
   const byId = id => document.getElementById(id);
   const raw = value => value == null ? "—" : String(value);
-  let tokenDecimals = null;\n  const amount = value => value == null ? "—" : tokenDecimals === null ? raw(value) : formatTokenAmount(value, tokenDecimals) + " VTT";
+  let tokenDecimals = null;
+  const amount = value => value == null ? "—" : tokenDecimals === null ? raw(value) : formatTokenAmount(value, tokenDecimals) + " VTT";
   const safe = value => String(value ?? "—");
   const table = (headers, rows) => {
     if (!rows.length) return '<div class="empty">Nothing to display yet.</div>';
@@ -146,7 +147,8 @@
         return;
       }
 
-      tokenDecimals = data.tokenMetadata.decimals;\n      const p = data.position;
+      tokenDecimals = data.tokenMetadata.decimals;
+      const p = data.position;
       byId("balance").textContent = amount(p.treasury_balance);
       byId("commitments-total").textContent = amount(p.active_commitments);
       byId("reserve").textContent = amount(p.safety_reserve);
