@@ -31,7 +31,8 @@
     <p>Expected current on-chain SHA-256 (pre-upgrade):<br><code>3ed0cf173950f319fce18fd6f286c899ea264c76d2e1f4fd1411b54ce3455d36</code></p>
     <p class="muted">The old hash is a strict guard. If either RPC reports unknown code or a different hash, this page stops. It will not overwrite an unexpected contract.</p>
     <label for="treasury-wasm">Select <code>veltron_treasury.wasm</code> from the matching successful GitHub Actions artifact</label>
-    <input id="treasury-wasm" type="file" accept=".wasm,application/wasm">
+    <input id="treasury-wasm" type="file" aria-describedby="file-picker-help">
+    <p id="file-picker-help" class="muted">iPhone tip: tap Choose File, select Browse, open Downloads, unzip the GitHub Actions artifact if it is a ZIP, then select <code>veltron_treasury.wasm</code>. The picker intentionally has no file-type filter because iOS may hide WASM files. VELTRON checks the exact byte count and SHA-256 after selection, so other files cannot pass.</p>
     <p id="artifact-status" class="status" role="status" aria-live="polite">Artifact not checked.</p>
   </section>
   <section class="panel">
