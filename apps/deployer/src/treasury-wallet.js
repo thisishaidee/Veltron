@@ -291,9 +291,10 @@ async function runPreflight() {
     if(audit.audit_pending) throw new Error("STOP: a token-balance audit callback is pending. Wait for it to finish before upgrading.");
     const config=configs[0].result.runtime_config, block=blocks[0].result;
     const action=config.transaction_costs.action_creation_config,receipt=config.transaction_costs.action_receipt_creation_config;
+    const oldCodeBytes=Uint8Array.from(atob(codes[0].result.code_base64),c=>c.charCodeAt(0)).length;
     const budget=calculateTreasuryDeployBudget({
       balance:accountValues[0].amount,storageUsage:accountValues[0].storage_usage,
-      wasmBytes:wasmBytes.length,storageAmountPerByte:config.storage_amount_per_byte,
+      oldCodeBytes,wasmBytes:wasmBytes.length,storageAmountPerByte:config.storage_amount_per_byte,
       gasPrice:block.header.gas_price,
       minGasPurchasePrice:configs[0].result.runtime_config?.min_gas_purchase_price,
       costs:{deploy:action.deploy_contract_cost,deployPerByte:action.deploy_contract_cost_per_byte,receipt}
