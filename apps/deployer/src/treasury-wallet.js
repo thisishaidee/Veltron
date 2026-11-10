@@ -16,7 +16,7 @@ const preflightButton=$("#run-preflight"), preflightStatus=$("#preflight-status"
 const deployButton=$("#deploy-treasury"), deploymentStatus=$("#deployment-status");
 const verifyButton=$("#verify-upgraded-code"), feeReview=$("#fee-review");
 const RPCS=[
-  {name:"NEAR RPC",url:"https://rpc.testnet.near.org"},
+  {name:"dRPC",url:"https://near-testnet.drpc.org"},
   {name:"FastNEAR",url:"https://rpc.testnet.fastnear.com"}
 ];
 let connector, accountId, networkConfirmed=false, artifactVerified=false, preflightSnapshot=null;
