@@ -7,9 +7,10 @@
     "build": "esbuild src/wallet.js --bundle --format=esm --outfile=dist/wallet.js",
     "test:executor": "node --test tests/meteor-executor.test.mjs",
     "test:deployment": "node --test scripts/deployment-checks.mjs",
-    "test:all": "npm run test:executor && npm run test:deployment && npm run test:transfer",
-    "build:transfer": "esbuild src/transfer.js --bundle --format=esm --outfile=dist/transfer.js",
-    "test:transfer": "node --test tests/treasury-transfer.test.mjs"
+    "test:all": "npm run test:executor && npm run test:deployment && npm run test:transfer && npm run test:audit",
+    "build:transfer": "esbuild src/transfer.js --bundle --format=esm --outfile=dist/transfer.js && esbuild src/audit.js --bundle --format=esm --outfile=dist/audit.js",
+    "test:transfer": "node --test tests/treasury-transfer.test.mjs",
+    "test:audit": "node --test tests/treasury-audit.test.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.56.1",
