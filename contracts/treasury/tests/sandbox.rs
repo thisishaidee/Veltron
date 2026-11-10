@@ -1586,3 +1586,99 @@ async fn sandbox_paused_treasury_rejects_agent_payment_without_state_change() ->
 
     Ok(())
 }
+
+
+#[tokio::test]
+async fn sandbox_only_owner_can_pause_and_unpause_treasury() -> anyhow::Result<()> {
+    let worker = near_workspaces::sandbox().await?;
+    let owner = worker.dev_create_account().await?;
+    let agent = worker.dev_create_account().await?;
+    let attacker = worker.dev_create_account().await?;
+    let token = worker.dev_create_account().await?;
+
+    let treasury = worker.dev_deploy(TREASURY_WASM).await?;
+    treasury
+        .call("new")
+        .args_json(json!({
+            "owner_id": owner.id(),
+            "token_id": token.id(),
+            "agent_id": agent.id(),
+            "max_per_transaction": "500",
+            "safety_reserve": "100"
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    // Neither the configured agent nor an unrelated account may activate
+    // the emergency pause.
+    let agent_pause_attempt = agent
+        .call(treasury.id(), "set_paused")
+        .args_json(json!({ "paused": true }))
+        .transact()
+        .await?;
+    assert!(agent_pause_attempt.into_result().is_err());
+    assert_eq!(
+        view_json(&treasury, "get_pause_status", json!({})).await?,
+        false
+    );
+
+    let attacker_pause_attempt = attacker
+        .call(treasury.id(), "set_paused")
+        .args_json(json!({ "paused": true }))
+        .transact()
+        .await?;
+    assert!(attacker_pause_attempt.into_result().is_err());
+    assert_eq!(
+        view_json(&treasury, "get_pause_status", json!({})).await?,
+        false
+    );
+
+    // The owner can activate the pause, but neither non-owner can reverse it.
+    owner
+        .call(treasury.id(), "set_paused")
+        .args_json(json!({ "paused": true }))
+        .transact()
+        .await?
+        .into_result()?;
+    assert_eq!(
+        view_json(&treasury, "get_pause_status", json!({})).await?,
+        true
+    );
+
+    let agent_unpause_attempt = agent
+        .call(treasury.id(), "set_paused")
+        .args_json(json!({ "paused": false }))
+        .transact()
+        .await?;
+    assert!(agent_unpause_attempt.into_result().is_err());
+    assert_eq!(
+        view_json(&treasury, "get_pause_status", json!({})).await?,
+        true
+    );
+
+    let attacker_unpause_attempt = attacker
+        .call(treasury.id(), "set_paused")
+        .args_json(json!({ "paused": false }))
+        .transact()
+        .await?;
+    assert!(attacker_unpause_attempt.into_result().is_err());
+    assert_eq!(
+        view_json(&treasury, "get_pause_status", json!({})).await?,
+        true
+    );
+
+    // Only the owner can restore outgoing-transfer availability.
+    owner
+        .call(treasury.id(), "set_paused")
+        .args_json(json!({ "paused": false }))
+        .transact()
+        .await?
+        .into_result()?;
+    assert_eq!(
+        view_json(&treasury, "get_pause_status", json!({})).await?,
+        false
+    );
+
+    Ok(())
+}
