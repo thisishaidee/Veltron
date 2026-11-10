@@ -214,3 +214,70 @@ test("deployed treasury snapshot reads all five contract views and preserves the
   assert.equal(snapshot.pending[0].kind.Discretionary.recipient_id, "vendor.testnet");
   assert.equal(snapshot.audit.observed_token_balance, largeAmount);
 });
+
+
+test("VTT amounts format exactly with six decimals and preserve large integer precision", () => {
+  assert.equal(formatTokenAmount("10000000", 6), "10");
+  assert.equal(formatTokenAmount("1", 6), "0.000001");
+  assert.equal(formatTokenAmount("1000100", 6), "1.0001");
+  assert.equal(formatTokenAmount("1234567890123456789012345", 6), "1,234,567,890,123,456,789,012.345");
+  assert.throws(() => formatTokenAmount("10", 25), /Invalid token amount/);
+});
+
+test("deployed snapshot verifies the VTT metadata before returning balances", async () => {
+  let metadataRead = false;
+  const fakeFetch = async (_url, options) => {
+    const body = JSON.parse(options.body);
+    if (body.method === "status") return rpcJson({ chain_id: "testnet" });
+    if (body.params.request_type === "view_account") {
+      return rpcJson({ amount: "1000000000000000000000000", storage_usage: 182, code_hash: "deployed-code" });
+    }
+    if (body.params.account_id === TOKEN_ACCOUNT) {
+      metadataRead = true;
+      return rpcJson({ result: viewBytes({
+        spec: "ft-1.0.0", name: "VELTRON Test Token", symbol: "VTT", decimals: 6
+      }) });
+    }
+    const methodName = body.params.method_name;
+    const fixtures = {
+      get_financial_position: {
+        treasury_balance: "10000000", active_commitments: "0", safety_reserve: "200000000",
+        pending_discretionary: "0", spendable_balance: "0"
+      },
+      get_pause_status: false,
+      get_commitments: { commitments: [], next_cursor: null },
+      get_pending_transfers: [],
+      get_token_balance_audit: {
+        audit_pending: false, observed_token_balance: "10000000",
+        ledger_balance_at_observation: "10000000", observed_at_ns: "1794290693959351726"
+      }
+    };
+    return rpcJson({ result: viewBytes(fixtures[methodName]) });
+  };
+  const snapshot = await readTreasurySnapshot(fakeFetch);
+  assert.equal(metadataRead, true);
+  assert.equal(snapshot.tokenMetadata.symbol, "VTT");
+  assert.equal(snapshot.tokenMetadata.decimals, 6);
+});
+
+test("deployed snapshot refuses unexpected token decimals", async () => {
+  const fakeFetch = async (_url, options) => {
+    const body = JSON.parse(options.body);
+    if (body.method === "status") return rpcJson({ chain_id: "testnet" });
+    if (body.params.request_type === "view_account") {
+      return rpcJson({ amount: "1000000000000000000000000", storage_usage: 182, code_hash: "deployed-code" });
+    }
+    if (body.params.account_id === TOKEN_ACCOUNT) {
+      return rpcJson({ result: viewBytes({ spec: "ft-1.0.0", name: "Wrong token", symbol: "VTT", decimals: 18 }) });
+    }
+    const fixtures = {
+      get_financial_position: { treasury_balance: "0", active_commitments: "0", safety_reserve: "0", pending_discretionary: "0", spendable_balance: "0" },
+      get_pause_status: false,
+      get_commitments: { commitments: [], next_cursor: null },
+      get_pending_transfers: [],
+      get_token_balance_audit: { audit_pending: false, observed_token_balance: null, ledger_balance_at_observation: null, observed_at_ns: null }
+    };
+    return rpcJson({ result: viewBytes(fixtures[body.params.method_name]) });
+  };
+  await assert.rejects(readTreasurySnapshot(fakeFetch), /Expected VTT with 6 decimals/);
+});
