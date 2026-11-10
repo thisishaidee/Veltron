@@ -155,7 +155,8 @@ async function runPreflight() {
       storage_amount_per_byte:item.result.runtime_config?.storage_amount_per_byte,
       deploy:item.result.runtime_config?.transaction_costs?.action_creation_config?.deploy_contract_cost,
       deployPerByte:item.result.runtime_config?.transaction_costs?.action_creation_config?.deploy_contract_cost_per_byte,
-      receipt:item.result.runtime_config?.transaction_costs?.action_receipt_creation_config
+      receipt:item.result.runtime_config?.transaction_costs?.action_receipt_creation_config,
+      minGasPurchasePrice:item.result.min_gas_purchase_price
     });
     if(JSON.stringify(feeShape(configs[0]))!==JSON.stringify(feeShape(configs[1]))) {
       throw new Error("Independent RPC providers disagree on finalized deployment fee/storage parameters.");
@@ -197,11 +198,12 @@ async function runPreflight() {
       balance:accountValues[0].amount,storageUsage:accountValues[0].storage_usage,
       wasmBytes:wasmBytes.length,storageAmountPerByte:config.storage_amount_per_byte,
       gasPrice:block.header.gas_price,
+      minGasPurchasePrice:configs[0].result.min_gas_purchase_price,
       costs:{deploy:action.deploy_contract_cost,deployPerByte:action.deploy_contract_cost_per_byte,receipt}
     });
     if(!budget.hasSufficientBalance)throw new Error("Treasury balance does not cover projected storage reserve, deployment fee and 0.05 NEAR safety margin.");
     preflightSnapshot={hash,wasmBytes,blockHeight:latestHeight,budget,oldHash:computedOldHashes[0],account:accountValues[0],position,paused,commitments,pending,audit};
-    feeReview.textContent="Fresh finalized-block estimate — deployment fee: "+formatNear(budget.feeYocto)+"; projected storage reserve: "+formatNear(budget.storageReserveYocto)+"; additional safety margin: "+formatNear(budget.safetyMarginYocto)+". Existing balance: "+formatNear(accountValues[0].amount)+". This is an estimate, not a wallet quote.";
+    feeReview.textContent="NEP-642 estimate — send fee: "+formatNear(budget.sendFeeYocto)+"; prepaid execution fee: "+formatNear(budget.executionFeeYocto)+"; total deployment transaction fee: "+formatNear(budget.feeYocto)+"; projected storage reserve: "+formatNear(budget.storageReserveYocto)+"; additional safety margin: "+formatNear(budget.safetyMarginYocto)+". Existing balance: "+formatNear(accountValues[0].amount)+". This is an estimate, not a wallet quote.";
     preflightStatus.textContent="PASS — both RPCs confirm Testnet and the expected old treasury code; initialized state is readable and structurally valid. Block checked: "+latestHeight+". The new artifact hash matches. No transaction has been sent.";
     verifyButton.disabled=false;
   } catch(error) {
