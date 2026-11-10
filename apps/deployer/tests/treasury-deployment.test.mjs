@@ -113,6 +113,12 @@ test("wallet preflight has independent RPC, old-code, initialized-state and new-
   assert.match(source,/pending.length!==0/);
   assert.match(source,/audit.audit_pending/);
   assert.match(source,/Both independent Testnet RPC providers are required/);
+  assert.match(source,/WALLET_PROOF_MESSAGE/);
+  assert.match(source,/verifyNep413Proof/);
+  assert.match(source,/crypto\.subtle\.verify/);
+  assert.match(source,/view_access_key/);
+  assert.match(source,/permission!==\"FullAccess\"/);
+  assert.match(source,/walletOwnershipVerified/);
   assert.match(source,/let deploymentInProgress=false/);
   assert.match(source,/if\(deploymentInProgress\)return/);
   assert.match(source,/deployButton\.disabled=deploymentInProgress\|\|/);
