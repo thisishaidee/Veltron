@@ -19,6 +19,7 @@ const RPCS=[
 ];
 let connector, accountId, networkConfirmed=false, artifactVerified=false, preflightSnapshot=null;
 let requestMayHaveBeenSubmitted=false;
+let deploymentInProgress=false;
 
 async function rpc(endpoint,method,params) {
   const response=await fetch(endpoint.url,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({jsonrpc:"2.0",id:"veltron-treasury-preflight",method,params})});
@@ -47,7 +48,7 @@ function formatNear(value) {
   return (amount/unit).toString()+"."+((amount%unit).toString().padStart(24,"0").slice(0,6))+" NEAR";
 }
 function setDeploymentEnabled() {
-  deployButton.disabled=!(accountId===TREASURY_ACCOUNT&&networkConfirmed&&artifactVerified&&preflightSnapshot);
+  deployButton.disabled=deploymentInProgress||!(accountId===TREASURY_ACCOUNT&&networkConfirmed&&artifactVerified&&preflightSnapshot);
 }
 async function verifyArtifact() {
   artifactVerified=false; preflightSnapshot=null; setDeploymentEnabled();
@@ -224,6 +225,8 @@ verifyButton.addEventListener("click",async()=>{
   finally{verifyButton.disabled=false;}
 });
 deployButton.addEventListener("click",async()=>{
+  if(deploymentInProgress)return;
+  deploymentInProgress=true;
   deployButton.disabled=true;requestMayHaveBeenSubmitted=false;
   deploymentStatus.textContent="Repeating fresh preflight immediately before opening Meteor…";
   try {
@@ -248,6 +251,6 @@ deployButton.addEventListener("click",async()=>{
   } catch(error) {
     deploymentStatus.textContent=(requestMayHaveBeenSubmitted?"REQUEST STATUS UNCERTAIN — do not retry until on-chain code is checked. ":"PREFLIGHT STOPPED BEFORE WALLET REQUEST — ")+String(error?.message||error);
     verifyButton.disabled=requestMayHaveBeenSubmitted?false:true;
-  } finally {setDeploymentEnabled();}
+  } finally {deploymentInProgress=false;setDeploymentEnabled();}
 });
 checkRpcNetworks().catch(error=>{rpcNetwork.textContent="NOT VERIFIED — "+String(error?.message||error);});
