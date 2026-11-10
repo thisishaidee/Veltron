@@ -57,9 +57,15 @@ deploy_per_byte = action["deploy_contract_cost_per_byte"]
 deploy_send_gas = int(deploy_base["send_sir"]) + TREASURY_WASM_BYTES * int(deploy_per_byte["send_sir"])
 deploy_exec_gas = int(deploy_base["execution"]) + TREASURY_WASM_BYTES * int(deploy_per_byte["execution"])
 receipt = costs["action_receipt_creation_config"]
-receipt_gas = int(receipt["send_sir"]) + int(receipt["execution"])
-transaction_fee_gas = deploy_send_gas + deploy_exec_gas + receipt_gas
-transaction_fee_yocto = transaction_fee_gas * gas_price
+receipt_send_gas = int(receipt["send_sir"])
+receipt_exec_gas = int(receipt["execution"])
+send_gas = deploy_send_gas + receipt_send_gas
+execution_gas = deploy_exec_gas + receipt_exec_gas
+min_gas_purchase_price = int(config.get("min_gas_purchase_price", gas_price))
+receipt_gas_price = max(gas_price, min_gas_purchase_price)
+send_fee_yocto = send_gas * gas_price
+execution_fee_yocto = execution_gas * receipt_gas_price
+transaction_fee_yocto = send_fee_yocto + execution_fee_yocto
 deploy_action_fee_yocto = deploy_send_gas * gas_price
 
 account = rpc("query", {
@@ -105,9 +111,11 @@ print(f"Gas price: {gas_price} yoctoNEAR/gas")
 print(f"Treasury WASM bytes (expected CI build): {TREASURY_WASM_BYTES}")
 print(f"Expected new treasury WASM SHA-256: {EXPECTED_TREASURY_SHA256}")
 print(f"Verified existing on-chain treasury SHA-256: {existing_hash}")
+print(f"Minimum gas purchase price: {min_gas_purchase_price} yoctoNEAR/gas")
+print(f"Receipt gas price used for prepaid execution: {receipt_gas_price} yoctoNEAR/gas")
 print(f"DeployContract send gas: {deploy_send_gas}")
 print(f"DeployContract action send fee: {deploy_action_fee_yocto / YOCTO:.12f} NEAR")
-print(f"One-action transaction fee estimate (receipt + DeployContract send/execution): {transaction_fee_yocto / YOCTO:.12f} NEAR")
+print(f"One-action transaction fee estimate (send gas at current price + prepaid execution at receipt price): {transaction_fee_yocto / YOCTO:.12f} NEAR")
 print("Fee estimate excludes signature-verification gas, initialization, and later transactions.")
 print(f"Treasury balance: {balance / YOCTO:.12f} NEAR")
 print(f"Current storage usage: {current_storage} bytes")
