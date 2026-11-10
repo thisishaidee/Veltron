@@ -134,14 +134,14 @@ async function runPreflight() {
     const file=artifactInput.files[0],wasmBytes=new Uint8Array(await file.arrayBuffer());
     const hash=await sha256Hex(wasmBytes);
     if(wasmBytes.length!==NEW_TREASURY_WASM_BYTES||hash!==NEW_TREASURY_WASM_SHA256)throw new Error("Selected artifact changed or no longer matches the recorded hash.");
-    const [networkChecks,blocks,accounts,codes,configs,keyLists]=await Promise.all([
+    const [networkChecks,blocks,accounts,codes,keyLists]=await Promise.all([
       Promise.all(RPCS.map(async endpoint=>{const s=await rpc(endpoint,"status",[]);if(s.chain_id!=="testnet")throw new Error(endpoint.name+" is not Testnet");return s.chain_id;})),
       eachRpc("block",{finality:"final"}),
       eachRpc("query",accountQuery(TREASURY_ACCOUNT)),
       eachRpc("query",codeQuery(TREASURY_ACCOUNT)),
-      eachRpc("EXPERIMENTAL_protocol_config",{block_id:"final"}),
       eachRpc("query",{request_type:"view_access_key_list",finality:"final",account_id:TREASURY_ACCOUNT})
     ]);
+    const configs=await eachRpc("EXPERIMENTAL_protocol_config",{block_id:blocks[0].result.header.height});
     for(const item of keyLists) {
       const keys=item.result?.keys;
       if(!Array.isArray(keys)||!keys.some(entry=>entry?.access_key?.permission==="FullAccess")) {
