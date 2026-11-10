@@ -1327,6 +1327,42 @@ mod tests {
     }
 
     #[test]
+    fn external_account_cannot_forge_successful_commitment_callback() {
+        let mut contract = setup("owner.near");
+        contract.treasury_balance = 1_000;
+        contract.create_commitment(
+            "callback-guard".to_string(),
+            account("vendor.near"),
+            U128(200),
+            "Protected vendor obligation".to_string(),
+        );
+        contract.settle_commitment("callback-guard".to_string());
+
+        // Simulate an external caller trying to invoke the private callback.
+        let mut attacker_context = VMContextBuilder::new();
+        attacker_context.current_account_id(account("treasury.near"));
+        attacker_context.predecessor_account_id(account("attacker.near"));
+        testing_env!(attacker_context.build());
+
+        let forged_callback = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            contract.on_transfer_complete(0, Ok(()));
+        }));
+        assert!(forged_callback.is_err(), "external callback invocation must be rejected");
+
+        // The failed authorization must leave all settlement state untouched.
+        let position = contract.get_financial_position();
+        assert_eq!(position.treasury_balance.0, 1_000);
+        assert_eq!(position.active_commitments.0, 200);
+        assert_eq!(position.spendable_balance.0, 700);
+        let commitments = contract.get_commitments(None, None).commitments;
+        assert_eq!(commitments.len(), 1);
+        assert!(commitments[0].settlement_pending);
+        assert_eq!(commitments[0].recipient_id, account("vendor.near"));
+        assert_eq!(commitments[0].amount.0, 200);
+        assert_eq!(contract.get_pending_transfers().len(), 1);
+    }
+
+    #[test]
     fn pending_commitment_cannot_be_updated_or_cancelled_until_callback() {
         let mut contract = setup("owner.near");
         contract.treasury_balance = 1_000;
