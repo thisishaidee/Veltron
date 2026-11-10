@@ -2,9 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   TREASURY_ACCOUNT,
+  TOKEN_ACCOUNT,
   VIEW_METHODS,
   buildViewRequest,
   decodeViewResult,
+  formatTokenAmount,
   readTreasurySnapshot
 } from "../src/dashboard.mjs";
 
