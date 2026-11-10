@@ -86,7 +86,12 @@ except RuntimeError as exc:
         raise
 
 if deployed:
-    raise SystemExit("STOP: treasury already has contract code; do not use this pre-deployment estimate.")
+    print("VELTRON TREASURY DEPLOYMENT COST PREFLIGHT — READ ONLY")
+    print(f"Finalized Testnet block: {height} ({block['header']['hash']})")
+    print("Treasury account already has deployed contract code.")
+    print("Skipping the pre-deployment cost estimate; use the live deployment and storage verification steps instead.")
+    print("No transaction was constructed, signed, or submitted.")
+    raise SystemExit(0)
 if TREASURY_WASM_BYTES <= 0:
     raise SystemExit("FAIL: invalid treasury WASM size.")
 
