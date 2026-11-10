@@ -9,6 +9,26 @@ export async function sha256Hex(bytes) {
   return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
 }
 
+export function base58Decode(value) {
+  const alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+  if (typeof value !== "string" || value.length === 0) throw new TypeError("Base58 value must be a non-empty string.");
+  let number = 0n;
+  for (const character of value) {
+    const digit = alphabet.indexOf(character);
+    if (digit < 0) throw new Error("Invalid base58 key/signature.");
+    number = number * 58n + BigInt(digit);
+  }
+  const body = [];
+  while (number > 0n) {
+    body.push(Number(number & 255n));
+    number >>= 8n;
+  }
+  body.reverse();
+  let leadingZeroes = 0;
+  while (leadingZeroes < value.length && value[leadingZeroes] === "1") leadingZeroes++;
+  return new Uint8Array([...new Array(leadingZeroes).fill(0), ...body]);
+}
+
 function integer(value, label) {
   if (typeof value === "bigint") return value;
   if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) return BigInt(value);
