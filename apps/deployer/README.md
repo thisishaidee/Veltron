@@ -5,7 +5,7 @@ This directory contains a browser-only Testnet deployer with artifact verificati
 ## What it does
 - Accepts the two WASM files extracted from the recorded GitHub Actions artifact.
 - Computes SHA-256 with the browser Web Crypto API.
-- Compares each file against hashes recorded from CI run for commit `the exact reviewed commit shown in the latest successful Contract checks run`.
+- Compares each file against the SHA-256 values recorded from the exact reviewed CI artifact. The current reference values are also shown in `index.html`.
 - Configures NEAR Connect for Testnet and enables wallets advertising Testnet support.
 - Reads the connected account ID from the wallet sign-in event.
 - Checks the configured VELTRON RPC endpoint with a read-only NEAR status request and reports Testnet only when the response says `chain_id: "testnet"`.
