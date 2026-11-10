@@ -4,8 +4,11 @@
 Reads finalized Testnet protocol parameters, treasury account state, and VTT
 storage bounds. It never constructs, signs, or submits a transaction.
 """
+import base64
+import hashlib
 import json
 import urllib.request
+from pathlib import Path
 
 RPC = "https://rpc.testnet.near.org"
 TREASURY = "veltron-treasury.testnet"
@@ -27,7 +30,6 @@ def rpc(method, params, request_id):
 
 
 def view(account_id, method, args=None):
-    import base64
     encoded = base64.b64encode(json.dumps(args or {}, separators=(",", ":")).encode()).decode()
     result = rpc("query", {
         "request_type": "call_function",
@@ -72,10 +74,6 @@ projected_storage = current_storage + TREASURY_WASM_BYTES
 projected_storage_reserve = projected_storage * storage_per_byte
 vtt_bounds = view(TOKEN, "storage_balance_bounds")
 vtt_minimum = int(vtt_bounds["min"])
-
-import base64
-import hashlib
-from pathlib import Path
 
 WASM = Path("target/wasm32-unknown-unknown/release/veltron_treasury.wasm")
 if not WASM.is_file():
