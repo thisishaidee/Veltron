@@ -62,11 +62,11 @@ async function readAuditState() {
 
 function renderAuditState(state) {
   $("pending").textContent = state.audit.audit_pending ? "Yes — wait; do not submit another request" : "No";
-  $("observed-token").textContent = formatVtt(state.audit.observed_token_balance?.[0] ?? state.audit.observed_token_balance);
-  $("observed-ledger").textContent = formatVtt(state.audit.ledger_balance_at_observation?.[0] ?? state.audit.ledger_balance_at_observation);
+  $("observed-token").textContent = formatVtt(state.audit.observed_token_balance);
+  $("observed-ledger").textContent = formatVtt(state.audit.ledger_balance_at_observation);
   $("actual-token").textContent = formatVtt(state.tokenBalance);
   $("current-ledger").textContent = formatVtt(state.position.treasury_balance);
-  $("observed-at").textContent = state.audit.observed_at_ns?.[0] ?? state.audit.observed_at_ns ?? "Not recorded";
+  $("observed-at").textContent = state.audit.observed_at_ns ?? "Not recorded";
 }
 
 async function refreshReadOnly() {
@@ -140,7 +140,7 @@ $("preflight").addEventListener("click", async () => {
 });
 
 $("request-audit").addEventListener("click", async () => {
-  if (!preflightPassed || accountId !== OWNER || requestStarted) return;
+  if (!preflightPassed || accountId !== OWNER || !$("network-confirm").checked || requestStarted) return;
   requestStarted = true;
   setReady(false);
   $("request-status").textContent = "Opening Meteor for the audit request. Check the transaction details before approving.";
@@ -196,3 +196,5 @@ $("read-only").addEventListener("click", async () => {
     $("read-only").disabled = false;
   }
 });
+
+$("network-confirm").addEventListener("change", () => setReady(false));
