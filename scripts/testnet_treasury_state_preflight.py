@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Read-only verification of the VELTRON treasury Testnet deployment.
 
-Compares the finalized on-chain contract bytes with the treasury WASM built
-from this exact checkout. This script never signs or submits transactions.
+Verifies both sides of the pre-upgrade boundary: finalized on-chain code must match the recorded previous build, and local WASM must match the reviewed new build. This is a pre-deployment check, not a post-deploy code-match check. It never signs or submits transactions.
 """
 import base64
 import hashlib
@@ -14,6 +13,9 @@ import urllib.request
 RPC = "https://rpc.testnet.near.org"
 ACCOUNT = "veltron-treasury.testnet"
 WASM = pathlib.Path("target/wasm32-unknown-unknown/release/veltron_treasury.wasm")
+EXPECTED_NEW_SHA256 = "66d3d95d8b4f7142cb47062051a93158994236a3791d83e994946af3dd5525af"
+EXPECTED_NEW_BYTES = 338_235
+EXPECTED_EXISTING_SHA256 = "3ed0cf173950f319fce18fd6f286c899ea264c76d2e1f4fd1411b54ce3455d36"
 
 
 def rpc(method, params, request_id):
@@ -43,6 +45,11 @@ if not WASM.is_file():
 
 local_bytes = WASM.read_bytes()
 local_hash = hashlib.sha256(local_bytes).hexdigest()
+if len(local_bytes) != EXPECTED_NEW_BYTES or local_hash != EXPECTED_NEW_SHA256:
+    raise SystemExit(
+        f"FAIL: local treasury WASM is not the reviewed new artifact "
+        f"(bytes={len(local_bytes)}, sha256={local_hash})."
+    )
 
 print("VELTRON TREASURY READ-ONLY TESTNET DEPLOYMENT CHECK")
 print(f"RPC endpoint: {RPC}")
@@ -90,11 +97,13 @@ deployed_hash = hashlib.sha256(deployed_bytes).hexdigest()
 print(f"On-chain treasury WASM bytes: {len(deployed_bytes)}")
 print(f"On-chain treasury WASM SHA-256: {deployed_hash}")
 
-if deployed_hash != local_hash:
-    print("TREASURY DEPLOYMENT STATUS: CONTRACT CODE EXISTS, BUT DOES NOT MATCH THIS BUILD")
-    raise SystemExit("FAIL: stop; do not initialize or redeploy until the code difference is explained.")
+if deployed_hash != EXPECTED_EXISTING_SHA256:
+    print("TREASURY DEPLOYMENT STATUS: UNKNOWN OR UNREVIEWED CODE")
+    raise SystemExit("FAIL: on-chain treasury is not the recorded pre-upgrade version. Stop and investigate.")
 
-print("TREASURY DEPLOYMENT STATUS: VERIFIED CODE MATCH")
-print("The finalized on-chain treasury WASM matches the artifact built from this exact checkout.")
-print("This verifies code deployment only; it does not prove the contract is initialized or safe for real funds.")
+print("TREASURY DEPLOYMENT STATUS: VERIFIED PRE-UPGRADE CODE")
+print("The existing finalized treasury matches the recorded previous build.")
+print("The local treasury WASM matches the reviewed new build.")
+print("READY FOR DEPLOYMENT REVIEW ONLY — the new build is NOT deployed.")
+print("This check does not authorize deployment or prove post-upgrade safety.")
 print("No transaction was constructed, signed, or submitted.")
