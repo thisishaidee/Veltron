@@ -61,9 +61,9 @@ receipt_send_gas = int(receipt["send_sir"])
 receipt_exec_gas = int(receipt["execution"])
 send_gas = deploy_send_gas + receipt_send_gas
 execution_gas = deploy_exec_gas + receipt_exec_gas
-if "min_gas_purchase_price" not in config:
-    raise SystemExit("FAIL: protocol config omitted min_gas_purchase_price; refusing to understate the execution fee.")
-min_gas_purchase_price = int(config["min_gas_purchase_price"])
+if "min_gas_purchase_price" not in runtime:
+    raise SystemExit("FAIL: runtime_config omitted min_gas_purchase_price; refusing to understate the execution fee.")
+min_gas_purchase_price = int(runtime["min_gas_purchase_price"])
 receipt_gas_price = max(gas_price, min_gas_purchase_price)
 send_fee_yocto = send_gas * gas_price
 execution_fee_yocto = execution_gas * receipt_gas_price
