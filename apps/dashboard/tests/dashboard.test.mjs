@@ -198,6 +198,9 @@ test("deployed treasury snapshot reads all five contract views and preserves the
         code_hash: "deployed-contract-code-hash"
       });
     }
+    if (body.params.account_id === TOKEN_ACCOUNT) {
+      return rpcJson({ result: viewBytes({ spec: "ft-1.0.0", name: "VELTRON Test Token", symbol: "VTT", decimals: 6 }) });
+    }
     const methodName = body.params.method_name;
     calledMethods.push(methodName);
     assert.equal(body.params.account_id, TREASURY_ACCOUNT);
