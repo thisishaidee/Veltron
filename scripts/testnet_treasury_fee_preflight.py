@@ -10,8 +10,9 @@ import urllib.request
 RPC = "https://rpc.testnet.near.org"
 TREASURY = "veltron-treasury.testnet"
 TOKEN = "veltron-token.testnet"
-TREASURY_WASM_BYTES = 338_088
-EXPECTED_TREASURY_SHA256 = "3ed0cf173950f319fce18fd6f286c899ea264c76d2e1f4fd1411b54ce3455d36"
+TREASURY_WASM_BYTES = 338_235
+EXPECTED_TREASURY_SHA256 = "66d3d95d8b4f7142cb47062051a93158994236a3791d83e994946af3dd5525af"
+EXPECTED_EXISTING_TREASURY_SHA256 = "3ed0cf173950f319fce18fd6f286c899ea264c76d2e1f4fd1411b54ce3455d36"
 YOCTO = 10**24
 
 
@@ -72,28 +73,29 @@ projected_storage_reserve = projected_storage * storage_per_byte
 vtt_bounds = view(TOKEN, "storage_balance_bounds")
 vtt_minimum = int(vtt_bounds["min"])
 
-try:
-    code = rpc("query", {
-        "request_type": "view_code",
-        "finality": "final",
-        "account_id": TREASURY,
-    }, "treasury-code")
-    deployed = bool(code.get("code_base64"))
-except RuntimeError as exc:
-    if "contract code" in str(exc).lower() or "code not found" in str(exc).lower():
-        deployed = False
-    else:
-        raise
+import base64
+import hashlib
+from pathlib import Path
 
-if deployed:
-    print("VELTRON TREASURY DEPLOYMENT COST PREFLIGHT — READ ONLY")
-    print(f"Finalized Testnet block: {height} ({block['header']['hash']})")
-    print("Treasury account already has deployed contract code.")
-    print("Skipping the pre-deployment cost estimate; use the live deployment and storage verification steps instead.")
-    print("No transaction was constructed, signed, or submitted.")
-    raise SystemExit(0)
-if TREASURY_WASM_BYTES <= 0:
-    raise SystemExit("FAIL: invalid treasury WASM size.")
+WASM = Path("target/wasm32-unknown-unknown/release/veltron_treasury.wasm")
+if not WASM.is_file():
+    raise SystemExit(f"FAIL: expected treasury WASM artifact not found: {WASM}")
+local_wasm = WASM.read_bytes()
+local_hash = hashlib.sha256(local_wasm).hexdigest()
+if len(local_wasm) != TREASURY_WASM_BYTES or local_hash != EXPECTED_TREASURY_SHA256:
+    raise SystemExit(f"FAIL: local treasury WASM does not match recorded CI artifact (bytes={len(local_wasm)}, sha256={local_hash}).")
+
+code = rpc("query", {
+    "request_type": "view_code",
+    "finality": "final",
+    "account_id": TREASURY,
+}, "treasury-code")
+if not code.get("code_base64"):
+    raise SystemExit("FAIL: treasury contract code was not found; expected an existing initialized contract for this upgrade.")
+existing_hash = hashlib.sha256(base64.b64decode(code["code_base64"])).hexdigest()
+if existing_hash != EXPECTED_EXISTING_TREASURY_SHA256:
+    raise SystemExit(f"FAIL: on-chain treasury code differs from reviewed pre-upgrade version (actual={existing_hash}). Stop and investigate.")
+
 
 remaining_after_reserves = balance - projected_storage_reserve - vtt_minimum
 remaining_after_deploy_fee = remaining_after_reserves - transaction_fee_yocto
@@ -103,7 +105,8 @@ print(f"Finalized Testnet block: {height} ({block['header']['hash']})")
 print(f"Protocol version: {config.get('protocol_version', 'not returned')}")
 print(f"Gas price: {gas_price} yoctoNEAR/gas")
 print(f"Treasury WASM bytes (expected CI build): {TREASURY_WASM_BYTES}")
-print(f"Expected treasury WASM SHA-256: {EXPECTED_TREASURY_SHA256}")
+print(f"Expected new treasury WASM SHA-256: {EXPECTED_TREASURY_SHA256}")
+print(f"Verified existing on-chain treasury SHA-256: {existing_hash}")
 print(f"DeployContract send gas: {deploy_send_gas}")
 print(f"DeployContract action send fee: {deploy_action_fee_yocto / YOCTO:.12f} NEAR")
 print(f"One-action transaction fee estimate (receipt + DeployContract send/execution): {transaction_fee_yocto / YOCTO:.12f} NEAR")
