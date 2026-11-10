@@ -1299,6 +1299,34 @@ mod tests {
     }
 
     #[test]
+    #[should_panic(expected = "Settlement already pending")]
+    fn duplicate_commitment_settlement_is_rejected_while_first_transfer_is_pending() {
+        let mut contract = setup("owner.near");
+        contract.treasury_balance = 1_000;
+        contract.create_commitment(
+            "single-settlement".to_string(),
+            account("vendor.near"),
+            U128(200),
+            "Invoice must settle only once".to_string(),
+        );
+
+        // First call reserves the commitment and creates one pending transfer.
+        contract.settle_commitment("single-settlement".to_string());
+        let pending = contract.get_pending_transfers();
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].id.0, 0);
+        assert_eq!(pending[0].amount.0, 200);
+
+        let commitment = contract.get_commitments(None, None).commitments;
+        assert_eq!(commitment.len(), 1);
+        assert!(commitment[0].settlement_pending);
+        assert_eq!(contract.get_financial_position().active_commitments.0, 200);
+
+        // A duplicate owner request must panic before creating another transfer.
+        contract.settle_commitment("single-settlement".to_string());
+    }
+
+    #[test]
     fn pending_commitment_cannot_be_updated_or_cancelled_until_callback() {
         let mut contract = setup("owner.near");
         contract.treasury_balance = 1_000;
