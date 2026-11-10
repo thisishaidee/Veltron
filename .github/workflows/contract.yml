@@ -12,6 +12,7 @@ on:
       - "scripts/testnet_token_state_preflight.py"
       - "scripts/testnet_treasury_state_preflight.py"
       - "scripts/testnet_dual_rpc_preflight.py"
+      - "scripts/testnet_treasury_initialized_preflight.py"
       - ".github/workflows/contract.yml"
   pull_request:
     paths:
@@ -67,6 +68,8 @@ jobs:
         run: python3 scripts/testnet_treasury_state_preflight.py
       - name: Cross-check finalized VTT and treasury state with two independent RPC providers (read-only)
         run: python3 scripts/testnet_dual_rpc_preflight.py
+      - name: Verify initialized treasury and VTT registration state (read-only)
+        run: python3 scripts/testnet_treasury_initialized_preflight.py
       - name: Set up Node.js for CLI package check
         uses: actions/setup-node@v5
         with:
