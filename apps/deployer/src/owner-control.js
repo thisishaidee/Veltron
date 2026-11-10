@@ -75,21 +75,43 @@ async function verifySignedMessage(event,nonce){
  if(access.permission!=="FullAccess")throw Error("Signed key is not FullAccess.");
  window.__veltronProofKey=sm.publicKey;proofOK=true;status("proof","OWNER KEY VERIFIED — valid signed-message proof and FullAccess key. No transaction was sent.");
 }
-$("connect").addEventListener("click",async()=>{
- $("connect").disabled=true;
+function initializeWallet(){
  try{
   connector=new NearConnector({network:"testnet",features:{testnet:true,signMessage:true},footerBranding:null});
-  connector.on("wallet:signIn",e=>{accountId=e?.accounts?.[0]?.accountId||"";status("wallet",accountId?"Connected account: "+accountId:"No account returned.");$("preflight").disabled=accountId!==OWNER;$("verify-owner").disabled=accountId!==OWNER;});
-  connector.on("wallet:signInAndSignMessage",e=>{if(pendingNonce)void verifySignedMessage(e,pendingNonce).catch(err=>status("proof","OWNER PROOF FAILED — "+(err.message||String(err))));});
-  connector.on("wallet:signOut",()=>{accountId="";proofOK=false;preflightOK=false;snapshot=null;status("wallet","Disconnected.");$("preflight").disabled=true;$("pause").disabled=true;$("verify-owner").disabled=true;});
-  await connector.connect();
-  if(!accountId){const a=await connector.getAccounts?.();accountId=a?.[0]?.accountId||"";}
-  status("wallet",accountId?"Connected account: "+accountId:"Connection returned without account.");
-  $("preflight").disabled=accountId!==OWNER;$("verify-owner").disabled=accountId!==OWNER;
- }catch(e){status("wallet","Connection failed: "+(e.message||String(e)));}
+  connector.on("wallet:signIn",event=>{
+   accountId=event?.accounts?.[0]?.accountId||"";
+   status("wallet",accountId?"Connected account: "+accountId:"Wallet connection returned no account.");
+   $("preflight").disabled=accountId!==OWNER;
+   $("verify-owner").disabled=accountId!==OWNER;
+   if(event?.source==="signInAndSignMessage"||event?.accounts?.[0]?.signedMessage){
+    if(pendingNonce)void verifySignedMessage(event,pendingNonce).catch(err=>status("proof","OWNER PROOF FAILED — "+(err.message||String(err))));
+   }
+  });
+  connector.on("wallet:signInAndSignMessage",event=>{
+   if(pendingNonce)void verifySignedMessage(event,pendingNonce).catch(err=>status("proof","OWNER PROOF FAILED — "+(err.message||String(err))));
+  });
+  connector.on("wallet:signOut",()=>{
+   accountId="";proofOK=false;preflightOK=false;snapshot=null;pendingNonce=null;
+   status("wallet","Disconnected.");status("proof","Owner identity is not verified.");
+   $("preflight").disabled=true;$("pause").disabled=true;$("verify-owner").disabled=true;
+  });
+  status("wallet","Wallet connector ready. Tap Connect Meteor Wallet to open the wallet chooser.");
+ }catch(e){status("wallet","Wallet connector failed to initialize: "+(e.message||String(e)));}
+}
+initializeWallet();
+$("connect").addEventListener("click",async()=>{
+ if(!connector){status("wallet","Wallet connector is not ready. Reload this page.");return;}
+ $("connect").disabled=true;status("wallet","Opening NEAR wallet chooser…");
+ try{
+  const result=await connector.connect();
+  const returned=result?.accounts?.[0]?.accountId;
+  if(returned){accountId=returned;status("wallet","Connected account: "+accountId);}
+  else if(!accountId)status("wallet","Wallet chooser returned without an account. Complete the connection in Meteor, then return to this page.");
+  $("preflight").disabled=accountId!==OWNER;
+  $("verify-owner").disabled=accountId!==OWNER;
+ }catch(e){status("wallet","Connection not completed: "+(e.message||String(e)));}
  finally{$("connect").disabled=false;}
 });
-
 $("verify-owner").addEventListener("click",async()=>{
  if(!connector||accountId!==OWNER)return;
  $("verify-owner").disabled=true;proofOK=false;preflightOK=false;$("pause").disabled=true;
