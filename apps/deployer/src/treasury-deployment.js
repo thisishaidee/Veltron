@@ -36,7 +36,7 @@ function integer(value, label) {
   throw new TypeError(label + " must be a non-negative integer.");
 }
 
-export function calculateTreasuryDeployBudget({balance, storageUsage, wasmBytes, storageAmountPerByte, gasPrice, minGasPurchasePrice, costs}) {
+export function calculateTreasuryDeployBudget({balance, storageUsage, oldCodeBytes, wasmBytes, storageAmountPerByte, gasPrice, minGasPurchasePrice, costs}) {
   const baseSend = integer(costs.deploy.send_sir, "DeployContract send fee");
   const perByteSend = integer(costs.deployPerByte.send_sir, "DeployContract per-byte send fee");
   const baseExec = integer(costs.deploy.execution, "DeployContract execution fee");
@@ -54,7 +54,12 @@ export function calculateTreasuryDeployBudget({balance, storageUsage, wasmBytes,
   const sendFeeYocto = sendGas * currentGasPrice;
   const executionFeeYocto = executionGas * receiptGasPrice;
   const feeYocto = sendFeeYocto + executionFeeYocto;
-  const projectedStorage = integer(storageUsage, "Storage usage") + bytes;
+  // view_account.storage_usage already includes the currently deployed local contract code.
+  // DeployContract replaces that code, so reserve only the net storage change.
+  const currentStorage = integer(storageUsage, "Storage usage");
+  const previousCodeBytes = integer(oldCodeBytes, "Existing contract code bytes");
+  if (currentStorage < previousCodeBytes) throw new RangeError("Existing contract code size exceeds the account's reported storage usage.");
+  const projectedStorage = currentStorage - previousCodeBytes + bytes;
   const storageReserveYocto = projectedStorage * integer(storageAmountPerByte, "Storage amount per byte");
   const safetyMarginYocto = 50000000000000000000000n;
   const required = storageReserveYocto + feeYocto + safetyMarginYocto;
