@@ -1,4 +1,7 @@
 export const TREASURY_ACCOUNT = "veltron-treasury.testnet";
+export const TOKEN_ACCOUNT = "veltron-token.testnet";
+export const EXPECTED_TOKEN_SYMBOL = "VTT";
+export const EXPECTED_TOKEN_DECIMALS = 6;
 
 export const RPC_URLS = [
   "https://rpc.testnet.fastnear.com",
@@ -46,6 +49,22 @@ export function decodeViewResult(resultBytes) {
   return JSON.parse(new TextDecoder().decode(new Uint8Array(resultBytes)));
 }
 
+export function formatTokenAmount(rawValue, decimals) {
+  if (rawValue == null || !Number.isInteger(decimals) || decimals < 0 || decimals > 24) {
+    throw new Error("Invalid token amount or decimals.");
+  }
+  const value = BigInt(rawValue);
+  const negative = value < 0n;
+  const absolute = negative ? -value : value;
+  const scale = 10n ** BigInt(decimals);
+  const whole = absolute / scale;
+  const fraction = absolute % scale;
+  const groupedWhole = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(whole);
+  if (decimals === 0 || fraction === 0n) return (negative ? "-" : "") + groupedWhole;
+  const fractionalText = fraction.toString().padStart(decimals, "0").replace(/0+$/, "");
+  return (negative ? "-" : "") + groupedWhole + "." + fractionalText;
+}
+
 export async function rpcRequest(method, params, fetchImpl = fetch) {
   let lastError;
   for (const url of RPC_URLS) {
@@ -72,6 +91,21 @@ export async function callView(methodName, args = {}, fetchImpl = fetch) {
   return decodeViewResult(result.result);
 }
 
+export async function readTokenMetadata(fetchImpl = fetch) {
+  const result = await rpcRequest("query", {
+    request_type: "call_function",
+    finality: "final",
+    account_id: TOKEN_ACCOUNT,
+    method_name: "ft_metadata",
+    args_base64: toBase64Utf8({})
+  }, fetchImpl);
+  const metadata = decodeViewResult(result.result);
+  if (metadata.symbol !== EXPECTED_TOKEN_SYMBOL || metadata.decimals !== EXPECTED_TOKEN_DECIMALS) {
+    throw new Error("Unexpected VELTRON token metadata. Expected VTT with 6 decimals; refusing to format balances.");
+  }
+  return metadata;
+}
+
 export async function readTreasurySnapshot(fetchImpl = fetch) {
   const status = await rpcRequest("status", [], fetchImpl);
   if (status.chain_id !== "testnet") {
@@ -89,12 +123,13 @@ export async function readTreasurySnapshot(fetchImpl = fetch) {
     return { deployed: false, account, network: status.chain_id };
   }
 
-  const [position, paused, commitments, pending, audit] = await Promise.all([
+  const [position, paused, commitments, pending, audit, tokenMetadata] = await Promise.all([
     callView("get_financial_position", {}, fetchImpl),
     callView("get_pause_status", {}, fetchImpl),
     callView("get_commitments", { from_id: null, limit: 50 }, fetchImpl),
     callView("get_pending_transfers", {}, fetchImpl),
-    callView("get_token_balance_audit", {}, fetchImpl)
+    callView("get_token_balance_audit", {}, fetchImpl),
+    readTokenMetadata(fetchImpl)
   ]);
 
   return {
@@ -105,6 +140,7 @@ export async function readTreasurySnapshot(fetchImpl = fetch) {
     paused,
     commitments,
     pending,
-    audit
+    audit,
+    tokenMetadata
   };
 }
