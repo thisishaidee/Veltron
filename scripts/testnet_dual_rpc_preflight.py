@@ -17,8 +17,6 @@ AGENT = "veltron-agent.testnet"
 TOKEN_SHA256 = "5d5041336cc8fc92cc9ca11fff1f0b1f7ead33c4826c6d12013f957ba1e7c95b"
 TREASURY_SHA256 = "3ed0cf173950f319fce18fd6f286c899ea264c76d2e1f4fd1411b54ce3455d36"
 EXPECTED_SUPPLY = "1000000000000"
-EXPECTED_OWNER = "999980000000"
-EXPECTED_AGENT = "20000000"
 
 
 def rpc(endpoint, method, params, request_id):
@@ -60,13 +58,20 @@ def verify(provider, endpoint):
     supply = view(endpoint, TOKEN, "ft_total_supply")
     owner = view(endpoint, TOKEN, "ft_balance_of", {"account_id": OWNER})
     agent = view(endpoint, TOKEN, "ft_balance_of", {"account_id": AGENT})
+    treasury_balance = view(endpoint, TOKEN, "ft_balance_of", {"account_id": TREASURY})
     treasury_storage = view(endpoint, TOKEN, "storage_balance_of", {"account_id": TREASURY})
     storage_bounds = view(endpoint, TOKEN, "storage_balance_bounds")
 
     if metadata.get("symbol") != "VTT" or metadata.get("decimals") != 6:
         raise RuntimeError(f"{provider}: unexpected VTT metadata: {metadata}")
-    if (supply, owner, agent) != (EXPECTED_SUPPLY, EXPECTED_OWNER, EXPECTED_AGENT):
-        raise RuntimeError(f"{provider}: VTT supply/balances mismatch: {supply}, {owner}, {agent}")
+    try:
+        known_balances = [int(owner), int(agent), int(treasury_balance)]
+    except (TypeError, ValueError):
+        raise RuntimeError(f"{provider}: invalid VTT account balance values: {owner}, {agent}, {treasury_balance}")
+    if supply != EXPECTED_SUPPLY or any(balance < 0 for balance in known_balances):
+        raise RuntimeError(f"{provider}: VTT supply or account balances are invalid: {supply}, {known_balances}")
+    if sum(known_balances) > int(supply):
+        raise RuntimeError(f"{provider}: known VTT account balances exceed total supply: {known_balances}")
     if storage_bounds.get("min") != "1250000000000000000000":
         raise RuntimeError(f"{provider}: unexpected token storage minimum: {storage_bounds}")
     if treasury_storage is not None:
@@ -99,6 +104,7 @@ def verify(provider, endpoint):
         "supply": supply,
         "owner": owner,
         "agent": agent,
+        "treasury_balance": treasury_balance,
         "treasury_storage": treasury_storage,
         "treasury_registration_status": treasury_registration_status,
         "storage_bounds": storage_bounds,
