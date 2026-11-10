@@ -7,11 +7,16 @@
     "build": "esbuild src/wallet.js --bundle --format=esm --outfile=dist/wallet.js",
     "test:executor": "node --test tests/meteor-executor.test.mjs",
     "test:deployment": "node --test scripts/deployment-checks.mjs",
-    "test:all": "npm run test:executor && npm run test:deployment"
+    "test:all": "npm run test:executor && npm run test:deployment && npm run test:transfer",
+    "build:transfer": "esbuild src/transfer.js --bundle --format=esm --outfile=dist/transfer.js",
+    "test:transfer": "node --test tests/treasury-transfer.test.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.56.1",
     "@hot-labs/near-connect": "0.11.4",
     "esbuild": "0.25.11"
+  },
+  "engines": {
+    "node": "26.x"
   }
 }
