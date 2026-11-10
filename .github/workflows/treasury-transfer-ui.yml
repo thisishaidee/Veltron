@@ -1,0 +1,34 @@
+name: Treasury transfer UI checks
+
+on:
+  pull_request:
+    paths:
+      - "apps/deployer/**"
+      - ".github/workflows/treasury-transfer-ui.yml"
+  push:
+    paths:
+      - "apps/deployer/**"
+      - ".github/workflows/treasury-transfer-ui.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  transfer-ui:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/deployer
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/deployer/package-lock.json
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Build wallet-connected transfer page
+        run: npm run build:transfer
+      - name: Run treasury transfer safety tests
+        run: npm run test:transfer
