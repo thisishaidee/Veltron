@@ -1423,14 +1423,35 @@ mod tests {
         );
         contract.settle_commitment("invoice-2".to_string());
 
+        // While the transfer is in flight, the obligation remains locked and
+        // exactly one pending transfer represents the attempted settlement.
+        let in_flight = contract.get_commitments(None, None).commitments;
+        assert_eq!(in_flight.len(), 1);
+        assert!(in_flight[0].settlement_pending);
+        assert_eq!(in_flight[0].recipient_id, account("vendor.near"));
+        assert_eq!(in_flight[0].amount.0, 200);
+        assert_eq!(in_flight[0].description, "Vendor invoice");
+        assert_eq!(contract.get_pending_transfers().len(), 1);
+        assert_eq!(contract.get_financial_position().active_commitments.0, 200);
+
         callback_context();
         contract.on_transfer_complete(0, Err(PromiseError::Failed));
 
+        // Failure must not debit funds or erase/rewrite the obligation. It
+        // clears the pending transfer and unlocks the same commitment for retry.
         let commitments = contract.get_commitments(None, None).commitments;
         assert_eq!(commitments.len(), 1);
         assert!(!commitments[0].settlement_pending);
+        assert_eq!(commitments[0].id, "invoice-2");
+        assert_eq!(commitments[0].recipient_id, account("vendor.near"));
         assert_eq!(commitments[0].amount.0, 200);
-        assert_eq!(contract.get_financial_position().treasury_balance.0, 1_000);
+        assert_eq!(commitments[0].description, "Vendor invoice");
+        assert!(contract.get_pending_transfers().is_empty());
+
+        let position = contract.get_financial_position();
+        assert_eq!(position.treasury_balance.0, 1_000);
+        assert_eq!(position.active_commitments.0, 200);
+        assert_eq!(position.spendable_balance.0, 700);
     }
 
     #[test]
