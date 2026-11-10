@@ -67,10 +67,15 @@ def verify(provider, endpoint):
         raise RuntimeError(f"{provider}: unexpected VTT metadata: {metadata}")
     if (supply, owner, agent) != (EXPECTED_SUPPLY, EXPECTED_OWNER, EXPECTED_AGENT):
         raise RuntimeError(f"{provider}: VTT supply/balances mismatch: {supply}, {owner}, {agent}")
-    if treasury_storage is not None:
-        raise RuntimeError(f"{provider}: treasury unexpectedly already registered: {treasury_storage}")
     if storage_bounds.get("min") != "1250000000000000000000":
         raise RuntimeError(f"{provider}: unexpected token storage minimum: {storage_bounds}")
+    if treasury_storage is not None:
+        registered_total = int(treasury_storage.get("total", "0"))
+        if registered_total < int(storage_bounds["min"]):
+            raise RuntimeError(f"{provider}: treasury storage registration is underfunded: {treasury_storage}")
+        treasury_registration_status = "REGISTERED"
+    else:
+        treasury_registration_status = "NOT REGISTERED"
 
     treasury_account = query(endpoint, "view_account", TREASURY)
     try:
@@ -95,6 +100,7 @@ def verify(provider, endpoint):
         "owner": owner,
         "agent": agent,
         "treasury_storage": treasury_storage,
+        "treasury_registration_status": treasury_registration_status,
         "storage_bounds": storage_bounds,
         "treasury_balance": treasury_account.get("amount"),
         "treasury_storage_usage": treasury_account.get("storage_usage"),
