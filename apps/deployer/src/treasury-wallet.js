@@ -99,7 +99,6 @@ async function verifyArtifact() {
   artifactVerified=false; preflightSnapshot=null; setDeploymentEnabled();
   const file=artifactInput.files?.[0];
   if(!file){artifactStatus.textContent="Select the treasury WASM from the exact successful CI artifact.";return;}
-  if(!file.name.endsWith(".wasm")){artifactStatus.textContent="Rejected: select a .wasm file.";return;}
   try {
     const bytes=new Uint8Array(await file.arrayBuffer());
     const hash=await sha256Hex(bytes);
