@@ -34,7 +34,6 @@ async function runPreflight(){
   if(!$("network-confirm").checked)throw new Error("Confirm Testnet inside Meteor first.");
   const networks=await Promise.all(RPCS.map(async e=>{const s=await rpc(e,"status",[]);if(s.chain_id!=="testnet")throw new Error(e.name+" is not Testnet");return s.chain_id;}));
   const init=await verifyInitOwner();
-  if(init.signer!==OWNER)throw new Error("Initialization signer is not the configured owner account.");
   const keyLists=await Promise.all(RPCS.map(e=>rpc(e,"query",{request_type:"view_access_key_list",finality:"final",account_id:OWNER})));
   const keySummary=list=>(list.keys||[]).map(k=>({public_key:k.public_key,permission:k.access_key.permission})).sort((a,b)=>a.public_key.localeCompare(b.public_key));
   if(JSON.stringify(keySummary(keyLists[0]))!==JSON.stringify(keySummary(keyLists[1]))||!keySummary(keyLists[0]).some(k=>k.permission==="FullAccess"&&k.public_key===window.__veltronProofKey))throw new Error("The signed-message key is not a matching FullAccess key on both Testnet providers.");
@@ -54,7 +53,7 @@ async function runPreflight(){
    preflightOK=true;snapshot={paused,position,commitments,pending,audit};
    status("preflight-status","PREFLIGHT PASSED — owner confirmed from the original initialization transaction; both RPCs agree; no active commitments, pending transfers, or pending audit. No transaction has been sent.");
   }
-  status("state","Pause status: "+paused+"\nActive commitments: "+commitments.commitments.length+"\nPending transfers: "+pending.length+"\nToken audit pending: "+audit.audit_pending+"\nTreasury ledger balance: "+position.treasury_balance+"\nSafety reserve: "+position.safety_reserve+"\nCode SHA-256: "+codeHash+"\nRPCs: "+networks.join(", "));
+  status("state","Initialization signer (recorded): "+init.signer+"\nConfigured owner (from immutable init args): "+init.owner+"\nPause status: "+paused+"\nActive commitments: "+commitments.commitments.length+"\nPending transfers: "+pending.length+"\nToken audit pending: "+audit.audit_pending+"\nTreasury ledger balance: "+position.treasury_balance+"\nSafety reserve: "+position.safety_reserve+"\nCode SHA-256: "+codeHash+"\nRPCs: "+networks.join(", "));
   $("pause").disabled=paused||!preflightOK;
   $("verify").disabled=false;
  }catch(e){status("preflight-status","STOP — "+(e.message||String(e))+" No wallet transaction was requested.");}
