@@ -1356,3 +1356,136 @@ async fn sandbox_repeated_commitment_create_cancel_does_not_accumulate_storage()
 
     Ok(())
 }
+
+#[tokio::test]
+async fn sandbox_agent_cannot_spend_committed_funds_and_owner_can_settle() -> anyhow::Result<()> {
+    let worker = near_workspaces::sandbox().await?;
+    let owner = worker.dev_create_account().await?;
+    let agent = worker.dev_create_account().await?;
+    let vendor = worker.dev_create_account().await?;
+
+    let token = worker.dev_deploy(TOKEN_WASM).await?;
+    token
+        .call("new")
+        .args_json(json!({
+            "owner_id": owner.id(),
+            "total_supply": "10000",
+            "metadata": {
+                "spec": "ft-1.0.0",
+                "name": "VELTRON Test Token",
+                "symbol": "VTT",
+                "decimals": 6
+            }
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    let treasury = worker.dev_deploy(TREASURY_WASM).await?;
+    treasury
+        .call("new")
+        .args_json(json!({
+            "owner_id": owner.id(),
+            "token_id": token.id(),
+            "agent_id": agent.id(),
+            "max_per_transaction": "800",
+            "safety_reserve": "100"
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    register_token_account(&owner, &token, treasury.id().as_str()).await?;
+    register_token_account(&owner, &token, vendor.id().as_str()).await?;
+
+    owner
+        .call(token.id(), "ft_transfer_call")
+        .args_json(json!({
+            "receiver_id": treasury.id(),
+            "amount": "1000",
+            "memo": "Fund commitment protection scenario",
+            "msg": ""
+        }))
+        .deposit(NearToken::from_yoctonear(1))
+        .transact()
+        .await?
+        .into_result()?;
+
+    owner
+        .call(treasury.id(), "create_commitment")
+        .args_json(json!({
+            "id": "protected-invoice",
+            "recipient_id": vendor.id(),
+            "amount": "300",
+            "description": "Funds reserved for a vendor obligation"
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    let protected_position =
+        view_json(&treasury, "get_financial_position", json!({})).await?;
+    assert_eq!(protected_position["treasury_balance"], "1000");
+    assert_eq!(protected_position["active_commitments"], "300");
+    assert_eq!(protected_position["safety_reserve"], "100");
+    assert_eq!(protected_position["spendable_balance"], "600");
+
+    // The agent's transaction cap permits 700, but only 600 is spendable.
+    // This request must fail because the commitment and reserve are protected.
+    let blocked_payment = agent
+        .call(treasury.id(), "request_payment")
+        .args_json(json!({
+            "recipient_id": vendor.id(),
+            "amount": "700",
+            "memo": "Must not consume committed funds"
+        }))
+        .max_gas()
+        .transact()
+        .await?;
+    assert!(blocked_payment.into_result().is_err());
+
+    let after_blocked_payment =
+        view_json(&treasury, "get_financial_position", json!({})).await?;
+    let pending_after_block =
+        view_json(&treasury, "get_pending_transfers", json!({})).await?;
+    assert_eq!(after_blocked_payment["treasury_balance"], "1000");
+    assert_eq!(after_blocked_payment["active_commitments"], "300");
+    assert_eq!(after_blocked_payment["pending_discretionary"], "0");
+    assert_eq!(after_blocked_payment["spendable_balance"], "600");
+    assert_eq!(pending_after_block, json!([]));
+
+    // The owner can settle the obligation through the real NEP-141 transfer
+    // and callback. The commitment is removed only after successful settlement.
+    let settlement = owner
+        .call(treasury.id(), "settle_commitment")
+        .args_json(json!({ "id": "protected-invoice" }))
+        .max_gas()
+        .transact()
+        .await?;
+    settlement.clone().into_result()?;
+    assert!(
+        settlement.receipt_outcomes().iter().any(|receipt| {
+            receipt.logs.iter().any(|log| log == "VELTRON_TRANSFER_SUCCESS:0")
+        }),
+        "successful commitment settlement callback must be present"
+    );
+
+    let final_position =
+        view_json(&treasury, "get_financial_position", json!({})).await?;
+    let final_commitments =
+        view_json(&treasury, "get_commitments", json!({ "from_id": null, "limit": 25 })).await?;
+    let final_pending =
+        view_json(&treasury, "get_pending_transfers", json!({})).await?;
+    let vendor_balance =
+        view_json(&token, "ft_balance_of", json!({ "account_id": vendor.id() })).await?;
+
+    assert_eq!(final_position["treasury_balance"], "700");
+    assert_eq!(final_position["active_commitments"], "0");
+    assert_eq!(final_position["pending_discretionary"], "0");
+    assert_eq!(final_position["spendable_balance"], "600");
+    assert_eq!(final_commitments["commitments"], json!([]));
+    assert_eq!(final_pending, json!([]));
+    assert_eq!(vendor_balance, "300");
+
+    Ok(())
+}
