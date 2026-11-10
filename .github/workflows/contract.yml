@@ -8,6 +8,7 @@ on:
       - "rust-toolchain.toml"
       - "contracts/**"
       - "scripts/testnet_fee_preflight.py"
+      - "scripts/testnet_treasury_fee_preflight.py"
       - "scripts/testnet_token_state_preflight.py"
       - "scripts/testnet_treasury_state_preflight.py"
       - "scripts/testnet_dual_rpc_preflight.py"
@@ -58,6 +59,8 @@ jobs:
         run: cargo test --locked -p veltron-test-token --test sandbox -- --nocapture
       - name: Read current NEAR Testnet deployment fee parameters
         run: python3 scripts/testnet_fee_preflight.py
+      - name: Calculate treasury-specific Testnet deployment and storage costs (read-only)
+        run: python3 scripts/testnet_treasury_fee_preflight.py
       - name: Verify deployed VTT code and initialization state (read-only)
         run: python3 scripts/testnet_token_state_preflight.py
       - name: Verify treasury deployment code against this build (read-only)
