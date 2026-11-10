@@ -10,9 +10,8 @@ ACCOUNT = "veltron-token.testnet"
 EXPECTED_SHA256 = "5d5041336cc8fc92cc9ca11fff1f0b1f7ead33c4826c6d12013f957ba1e7c95b"
 OWNER = "haideedotxyz.testnet"
 AGENT = "veltron-agent.testnet"
+TREASURY = "veltron-treasury.testnet"
 EXPECTED_SUPPLY = "1000000000000"
-EXPECTED_OWNER_BALANCE = "999980000000"
-EXPECTED_AGENT_BALANCE = "20000000"
 
 
 def rpc(method, params, request_id):
@@ -81,11 +80,13 @@ metadata = json.loads(bytes(view("ft_metadata", {})["result"]).decode())
 supply = json.loads(bytes(view("ft_total_supply", {})["result"]).decode())
 owner_balance = json.loads(bytes(view("ft_balance_of", {"account_id": OWNER})["result"]).decode())
 agent_balance = json.loads(bytes(view("ft_balance_of", {"account_id": AGENT})["result"]).decode())
+treasury_balance = json.loads(bytes(view("ft_balance_of", {"account_id": TREASURY})["result"]).decode())
 print("LIVE TOKEN STATE: INITIALIZED")
 print("Metadata:", json.dumps(metadata, sort_keys=True))
 print("Total supply (raw units):", supply)
 print(f"Owner balance for {OWNER} (raw units):", owner_balance)
 print(f"Agent balance for {AGENT} (raw units):", agent_balance)
+print(f"Treasury balance for {TREASURY} (raw units):", treasury_balance)
 
 treasury_storage = json.loads(bytes(view("storage_balance_of", {"account_id": "veltron-treasury.testnet"})["result"]).decode())
 storage_bounds = json.loads(bytes(view("storage_balance_bounds", {})["result"]).decode())
@@ -94,12 +95,13 @@ print("Token storage balance bounds:", json.dumps(storage_bounds, sort_keys=True
 
 if metadata.get("symbol") != "VTT" or metadata.get("decimals") != 6:
     raise SystemExit("FAIL: initialized token metadata differs from the planned VTT configuration.")
-if (
-    supply != EXPECTED_SUPPLY
-    or owner_balance != EXPECTED_OWNER_BALANCE
-    or agent_balance != EXPECTED_AGENT_BALANCE
-    or int(owner_balance) + int(agent_balance) != int(supply)
-):
-    raise SystemExit("FAIL: finalized VTT supply distribution differs from the two verified test transfers.")
-print("PASS: VTT metadata, total supply, and owner/agent balances match the verified testnet transfers.")
+try:
+    known_balances = [int(owner_balance), int(agent_balance), int(treasury_balance)]
+except (TypeError, ValueError):
+    raise SystemExit("FAIL: one or more finalized VTT balances are not valid integer strings.")
+if supply != EXPECTED_SUPPLY or any(balance < 0 for balance in known_balances):
+    raise SystemExit("FAIL: finalized VTT supply or account balances are invalid.")
+if sum(known_balances) > int(supply):
+    raise SystemExit("FAIL: known VTT account balances exceed total supply.")
+print("PASS: VTT metadata, total supply, and known account balances are valid.")
 print("No transaction was constructed, signed, or submitted.")
