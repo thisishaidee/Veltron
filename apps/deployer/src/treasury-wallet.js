@@ -142,6 +142,16 @@ async function runPreflight() {
       eachRpc("query",{request_type:"view_access_key_list",finality:"final",account_id:TREASURY_ACCOUNT})
     ]);
     const configs=await eachRpc("EXPERIMENTAL_protocol_config",{block_id:blocks[0].result.header.height});
+    const feeShape=item=>({
+      protocol_version:item.result.protocol_version,
+      storage_amount_per_byte:item.result.runtime_config?.storage_amount_per_byte,
+      deploy:item.result.runtime_config?.transaction_costs?.action_creation_config?.deploy_contract_cost,
+      deployPerByte:item.result.runtime_config?.transaction_costs?.action_creation_config?.deploy_contract_cost_per_byte,
+      receipt:item.result.runtime_config?.transaction_costs?.action_receipt_creation_config
+    });
+    if(JSON.stringify(feeShape(configs[0]))!==JSON.stringify(feeShape(configs[1]))) {
+      throw new Error("Independent RPC providers disagree on finalized deployment fee/storage parameters.");
+    }
     for(const item of keyLists) {
       const keys=item.result?.keys;
       if(!Array.isArray(keys)||!keys.some(entry=>entry?.access_key?.permission==="FullAccess")) {
