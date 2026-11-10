@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#101820">
+  <title>VELTRON Treasury — Testnet Deployment Review</title>
+  <style>
+    :root{color-scheme:dark;font:16px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#101820;color:#edf2f4}
+    *{box-sizing:border-box}body{width:min(100% - 32px,760px);margin:0 auto;padding:clamp(18px,4vw,32px) 0 max(40px,env(safe-area-inset-bottom))}
+    h1{font-size:clamp(1.55rem,5vw,1.9rem);line-height:1.2;margin:0 0 .5rem}h2{font-size:1.1rem;margin:0 0 .75rem}
+    p,li{color:#c5d0d6}.panel{min-width:0;border:1px solid #40515c;border-radius:12px;padding:clamp(12px,3.5vw,18px);margin:16px 0}
+    code{overflow-wrap:anywhere;word-break:break-word;color:#b8e1dd}.status{padding:12px;border-radius:8px;background:#263640;margin-top:12px;overflow-wrap:anywhere;white-space:pre-wrap}
+    label{display:block;font-weight:650;margin:14px 0 6px}input[type=file]{display:block;width:100%;max-width:100%;min-width:0;padding:10px;background:#1b2932;border:1px solid #52636d;border-radius:8px;color:#edf2f4}
+    button{width:100%;padding:13px 16px;margin:10px 0;border:0;border-radius:8px;background:#b8e1dd;color:#101820;font:inherit;font-weight:750}
+    button:disabled{opacity:.45}.warn{border-left:4px solid #e2a84b;padding-left:12px}.muted{font-size:.9rem;color:#9eafb8}
+    @media(min-width:900px){body{padding-top:40px}.panel{padding:20px}}
+  </style>
+</head>
+<body>
+  <h1>VELTRON Treasury — Testnet Deployment</h1>
+  <p>This dedicated page reviews one upgrade of <code>veltron-treasury.testnet</code>. It does not initialize the contract, transfer tokens, or change account permissions.</p>
+  <section class="panel warn">
+    <strong>TESTNET ONLY — do not use mainnet.</strong>
+    <p>Never enter or upload a seed phrase, private key, or wallet backup. The only transaction this page can request is one <code>DeployContract</code> action to <code>veltron-treasury.testnet</code>. You must inspect and approve it in Meteor yourself.</p>
+  </section>
+  <section class="panel">
+    <h2>Exact build being reviewed</h2>
+    <p>New treasury WASM size: <strong>338,235 bytes</strong></p>
+    <p>New SHA-256:<br><code id="expected-new-hash">66d3d95d8b4f7142cb47062051a93158994236a3791d83e994946af3dd5525af</code></p>
+    <p>Expected current on-chain SHA-256 (pre-upgrade):<br><code>3ed0cf173950f319fce18fd6f286c899ea264c76d2e1f4fd1411b54ce3455d36</code></p>
+    <p class="muted">The old hash is a strict guard. If either RPC reports unknown code or a different hash, this page stops. It will not overwrite an unexpected contract.</p>
+    <label for="treasury-wasm">Select <code>veltron_treasury.wasm</code> from the matching successful GitHub Actions artifact</label>
+    <input id="treasury-wasm" type="file" accept=".wasm,application/wasm">
+    <p id="artifact-status" class="status" role="status" aria-live="polite">Artifact not checked.</p>
+  </section>
+  <section class="panel">
+    <h2>Connect Meteor Wallet</h2>
+    <p>Connect using Meteor on NEAR Testnet. Connecting does not authorize a transaction.</p>
+    <button id="connect-wallet" type="button" disabled>Loading wallet connector…</button>
+    <p id="wallet-status" class="status" role="status" aria-live="polite">Preparing wallet connector…</p>
+    <p>Connected account: <strong id="wallet-account">Not connected</strong></p>
+    <p>Wallet network: <strong id="wallet-network">Not independently verified</strong></p>
+    <p>Independent RPC network: <strong id="rpc-network">Not checked</strong></p>
+  </section>
+  <section class="panel">
+    <h2>Deployment preflight</h2>
+    <ul>
+      <li>Network: NEAR Testnet only</li>
+      <li>Signer: <code>veltron-treasury.testnet</code></li>
+      <li>Receiver: <code>veltron-treasury.testnet</code></li>
+      <li>Action count: exactly one</li>
+      <li>Action: <code>DeployContract</code></li>
+      <li>Initialization: excluded</li>
+      <li>Attached deposit: none</li>
+      <li>Token transfers: none</li>
+    </ul>
+    <button id="confirm-testnet" type="button" aria-pressed="false" disabled>Confirm: Meteor itself displays NEAR Testnet</button>
+    <p id="network-confirmation" class="muted" role="status" aria-live="polite">Check the network inside Meteor before confirming.</p>
+    <button id="run-preflight" type="button" disabled>Run fresh read-only preflight</button>
+    <p id="preflight-status" class="status" role="status" aria-live="polite">Preflight has not run.</p>
+  </section>
+  <section class="panel">
+    <h2>Final wallet review</h2>
+    <p class="warn"><strong>Do not approve unless Meteor shows all of these exact details:</strong></p>
+    <ul>
+      <li>Network: Testnet</li>
+      <li>Signer: <code>veltron-treasury.testnet</code></li>
+      <li>Receiver: <code>veltron-treasury.testnet</code></li>
+      <li>One action only: <code>DeployContract</code></li>
+      <li>No initialization method, token transfer, function call, or attached deposit</li>
+    </ul>
+    <p id="fee-review" class="status">The fee and storage reserve will be calculated from a fresh finalized Testnet block during preflight.</p>
+    <button id="deploy-treasury" type="button" disabled>Review treasury upgrade in Meteor</button>
+    <p id="deployment-status" class="status" role="status" aria-live="polite">Locked until artifact, wallet, network confirmation, old code hash, initialized state, and fee checks pass.</p>
+    <button id="verify-upgraded-code" type="button" disabled>Verify finalized treasury code (read-only)</button>
+    <p class="muted">After approval, the page will compare finalized code through two independent RPC providers. If the wallet response is uncertain or the hash is not visible, do not retry deployment; use the read-only verification first.</p>
+  </section>
+  <section class="panel">
+    <h2>What happens after deployment?</h2>
+    <p>Only the contract code changes. NEAR's DeployContract action does not run an initializer. Existing state must be re-read and validated after the upgrade. We will separately verify the new code hash, initialized state, reserve, commitments, pause status, pending transfers, token audit, account balance, and storage.</p>
+    <p><strong>No initialization or token movement is available on this page.</strong> The existing treasury state must not be reset.</p>
+  </section>
+  <p class="muted">A CI pass and a matching local file do not prove a live wallet approval. The wallet prompt is the final authority for what you sign. No transaction is sent until you explicitly press the review button and approve in Meteor.</p>
+  <script type="module" src="./dist/treasury-wallet.js"></script>
+</body>
+</html>
