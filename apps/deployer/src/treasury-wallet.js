@@ -237,7 +237,7 @@ async function runPreflight() {
       deploy:item.result.runtime_config?.transaction_costs?.action_creation_config?.deploy_contract_cost,
       deployPerByte:item.result.runtime_config?.transaction_costs?.action_creation_config?.deploy_contract_cost_per_byte,
       receipt:item.result.runtime_config?.transaction_costs?.action_receipt_creation_config,
-      minGasPurchasePrice:item.result.min_gas_purchase_price
+      minGasPurchasePrice:item.result.runtime_config?.min_gas_purchase_price
     });
     if(JSON.stringify(feeShape(configs[0]))!==JSON.stringify(feeShape(configs[1]))) {
       throw new Error("Independent RPC providers disagree on finalized deployment fee/storage parameters.");
@@ -279,7 +279,7 @@ async function runPreflight() {
       balance:accountValues[0].amount,storageUsage:accountValues[0].storage_usage,
       wasmBytes:wasmBytes.length,storageAmountPerByte:config.storage_amount_per_byte,
       gasPrice:block.header.gas_price,
-      minGasPurchasePrice:configs[0].result.min_gas_purchase_price,
+      minGasPurchasePrice:configs[0].result.runtime_config?.min_gas_purchase_price,
       costs:{deploy:action.deploy_contract_cost,deployPerByte:action.deploy_contract_cost_per_byte,receipt}
     });
     if(!budget.hasSufficientBalance)throw new Error("Treasury balance does not cover projected storage reserve, deployment fee and 0.05 NEAR safety margin.");
