@@ -4,8 +4,15 @@ import test from "node:test";
 import {
   TREASURY_ACCOUNT, NEW_TREASURY_WASM_BYTES, NEW_TREASURY_WASM_SHA256,
   OLD_TREASURY_WASM_SHA256, calculateTreasuryDeployBudget,
-  buildTreasuryDeployAction, requestTreasuryDeploy
+  buildTreasuryDeployAction, requestTreasuryDeploy, base58Decode
 } from "../src/treasury-deployment.js";
+
+test("decodes Base58 leading zero bytes without adding an extra byte",()=>{
+  assert.deepEqual([...base58Decode("12")],[0,1]);
+  assert.deepEqual([...base58Decode("1")],[0]);
+  assert.deepEqual([...base58Decode("1112")],[0,0,0,1]);
+  assert.throws(()=>base58Decode("0"),/Invalid base58/);
+});
 
 test("pins the exact reviewed new and existing treasury artifact identities",()=>{
   assert.equal(TREASURY_ACCOUNT,"veltron-treasury.testnet");
