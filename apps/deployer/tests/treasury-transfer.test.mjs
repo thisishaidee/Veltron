@@ -17,7 +17,7 @@ test("only the reviewed 10 VTT ft_transfer_call is constructed",()=>{
  assert.doesNotMatch(js,/ft_transfer["']/);
 });
 test("preflight checks finalized metadata, registration, balance and empty treasury ledger",()=>{
- for(const value of ["finality:"+"final","storage_balance_of","ft_balance_of","get_financial_position","chain_id!=="+"testnet"])assert.ok(js.includes(value));
+ for(const value of ["finality:\"final\"","storage_balance_of","ft_balance_of","get_financial_position","chain_id!==\"testnet\""])assert.ok(js.includes(value));
  assert.match(js,/treasury_balance\)!==0n/);
 });
 test("transaction is gated on owner account, Testnet confirmation and passed preflight",()=>{
