@@ -32,7 +32,7 @@ test("calculates fee, storage reserve and safety margin with integer arithmetic"
     storageUsage:182,
     wasmBytes:NEW_TREASURY_WASM_BYTES,
     storageAmountPerByte:"10000000000000000000",
-    gasPrice:"100000000",
+    gasPrice:"100000000",minGasPurchasePrice:"100000000",
     costs:{
       deploy:{send_sir:"100",execution:"200"},
       deployPerByte:{send_sir:"2",execution:"3"},
@@ -44,10 +44,29 @@ test("calculates fee, storage reserve and safety margin with integer arithmetic"
   assert.ok(BigInt(result.requiredBalanceYocto)>BigInt(result.storageReserveYocto));
 });
 
+test("prices prepaid execution at the NEP-642 minimum gas purchase price when higher",()=>{
+  const result=calculateTreasuryDeployBudget({
+    balance:"999999999999999999999999999",
+    storageUsage:182,wasmBytes:NEW_TREASURY_WASM_BYTES,
+    storageAmountPerByte:"10000000000000000000",
+    gasPrice:"100",minGasPurchasePrice:"1000",
+    costs:{
+      deploy:{send_sir:"100",execution:"200"},
+      deployPerByte:{send_sir:"2",execution:"3"},
+      receipt:{send_sir:"11",execution:"13"}
+    }
+  });
+  assert.equal(result.sendGas,"676581");
+  assert.equal(result.executionGas,"1014918");
+  assert.equal(result.sendFeeYocto,"67658100");
+  assert.equal(result.executionFeeYocto,"1014918000");
+  assert.equal(result.feeYocto,"1082576100");
+});
+
 test("fails closed when treasury cannot cover storage, fee and margin",()=>{
   const result=calculateTreasuryDeployBudget({
     balance:"100",storageUsage:182,wasmBytes:NEW_TREASURY_WASM_BYTES,
-    storageAmountPerByte:"10000000000000000000",gasPrice:"100000000",
+    storageAmountPerByte:"10000000000000000000",gasPrice:"100000000",minGasPurchasePrice:"100000000",
     costs:{deploy:{send_sir:"100",execution:"200"},deployPerByte:{send_sir:"2",execution:"3"},receipt:{send_sir:"11",execution:"13"}}
   });
   assert.equal(result.hasSufficientBalance,false);
