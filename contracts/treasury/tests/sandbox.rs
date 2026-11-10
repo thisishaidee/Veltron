@@ -1489,3 +1489,100 @@ async fn sandbox_agent_cannot_spend_committed_funds_and_owner_can_settle() -> an
 
     Ok(())
 }
+
+#[tokio::test]
+async fn sandbox_paused_treasury_rejects_agent_payment_without_state_change() -> anyhow::Result<()> {
+    let worker = near_workspaces::sandbox().await?;
+    let owner = worker.dev_create_account().await?;
+    let agent = worker.dev_create_account().await?;
+    let vendor = worker.dev_create_account().await?;
+
+    let token = worker.dev_deploy(TOKEN_WASM).await?;
+    token
+        .call("new")
+        .args_json(json!({
+            "owner_id": owner.id(),
+            "total_supply": "10000",
+            "metadata": {
+                "spec": "ft-1.0.0",
+                "name": "VELTRON Test Token",
+                "symbol": "VTT",
+                "decimals": 6
+            }
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    let treasury = worker.dev_deploy(TREASURY_WASM).await?;
+    treasury
+        .call("new")
+        .args_json(json!({
+            "owner_id": owner.id(),
+            "token_id": token.id(),
+            "agent_id": agent.id(),
+            "max_per_transaction": "500",
+            "safety_reserve": "100"
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    register_token_account(&owner, &token, treasury.id().as_str()).await?;
+    register_token_account(&owner, &token, vendor.id().as_str()).await?;
+
+    owner
+        .call(token.id(), "ft_transfer_call")
+        .args_json(json!({
+            "receiver_id": treasury.id(),
+            "amount": "1000",
+            "memo": "Fund pause protection test",
+            "msg": ""
+        }))
+        .deposit(NearToken::from_yoctonear(1))
+        .transact()
+        .await?
+        .into_result()?;
+
+    let before = view_json(&treasury, "get_financial_position", json!({})).await?;
+    assert_eq!(before["treasury_balance"], "1000");
+    assert_eq!(before["spendable_balance"], "900");
+
+    owner
+        .call(treasury.id(), "set_paused")
+        .args_json(json!({ "paused": true }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    let paused = view_json(&treasury, "get_pause_status", json!({})).await?;
+    assert_eq!(paused, true);
+
+    let rejected_payment = agent
+        .call(treasury.id(), "request_payment")
+        .args_json(json!({
+            "recipient_id": vendor.id(),
+            "amount": "200",
+            "memo": "Must be blocked while paused"
+        }))
+        .max_gas()
+        .transact()
+        .await?;
+    assert!(
+        rejected_payment.into_result().is_err(),
+        "agent payment must fail while the treasury is paused"
+    );
+
+    let after = view_json(&treasury, "get_financial_position", json!({})).await?;
+    let pending = view_json(&treasury, "get_pending_transfers", json!({})).await?;
+    let vendor_balance =
+        view_json(&token, "ft_balance_of", json!({ "account_id": vendor.id() })).await?;
+
+    assert_eq!(after["treasury_balance"], "1000");
+    assert_eq!(after["spendable_balance"], "900");
+    assert_eq!(after["pending_discretionary"], "0");
+    assert_eq!(pending, json!([]));
+    assert_eq!(vendor_balance, "0");
+
+    Ok(())
+}
