@@ -4,7 +4,7 @@ const INIT_TX="9QuWeKSVogmVyxVNJxrjnFocz94pZjBmMgwByZ4yk71q";
 const OLD_HASH="3ed0cf173950f319fce18fd6f286c899ea264c76d2e1f4fd1411b54ce3455d36";
 const RPCS=[{name:"NEAR RPC",url:"https://rpc.testnet.near.org"},{name:"FastNEAR",url:"https://rpc.testnet.fastnear.com"}];
 const $=id=>document.getElementById(id);
-let connector,accountId="",proofOK=false,preflightOK=false,snapshot=null,requesting=false;
+let connector,accountId="",proofOK=false,preflightOK=false,snapshot=null,requesting=false,pendingNonce=null;
 function status(id,msg){$(id).textContent=msg;}
 async function rpc(ep,method,params){
  const r=await fetch(ep.url,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({jsonrpc:"2.0",id:"veltron-owner-control",method,params})});
@@ -79,16 +79,30 @@ $("connect").addEventListener("click",async()=>{
  $("connect").disabled=true;
  try{
   connector=new NearConnector({network:"testnet",features:{testnet:true,signMessage:true},footerBranding:null});
-  connector.on("wallet:signIn",e=>{accountId=e?.accounts?.[0]?.accountId||"";status("wallet",accountId?"Connected account: "+accountId:"No account returned.");$("preflight").disabled=accountId!==OWNER;});
-  connector.on("wallet:signOut",()=>{accountId="";proofOK=false;preflightOK=false;snapshot=null;status("wallet","Disconnected.");$("preflight").disabled=true;$("pause").disabled=true;});
+  connector.on("wallet:signIn",e=>{accountId=e?.accounts?.[0]?.accountId||"";status("wallet",accountId?"Connected account: "+accountId:"No account returned.");$("preflight").disabled=accountId!==OWNER;$("verify-owner").disabled=accountId!==OWNER;});
+  connector.on("wallet:signInAndSignMessage",e=>{if(pendingNonce)void verifySignedMessage(e,pendingNonce).catch(err=>status("proof","OWNER PROOF FAILED — "+(err.message||String(err))));});
+  connector.on("wallet:signOut",()=>{accountId="";proofOK=false;preflightOK=false;snapshot=null;status("wallet","Disconnected.");$("preflight").disabled=true;$("pause").disabled=true;$("verify-owner").disabled=true;});
   await connector.connect();
   if(!accountId){const a=await connector.getAccounts?.();accountId=a?.[0]?.accountId||"";}
   status("wallet",accountId?"Connected account: "+accountId:"Connection returned without account.");
-  $("preflight").disabled=accountId!==OWNER;
+  $("preflight").disabled=accountId!==OWNER;$("verify-owner").disabled=accountId!==OWNER;
  }catch(e){status("wallet","Connection failed: "+(e.message||String(e)));}
  finally{$("connect").disabled=false;}
 });
-$("network-confirm").addEventListener("change",()=>{preflightOK=false;snapshot=null;$("pause").disabled=true;});
+
+$("verify-owner").addEventListener("click",async()=>{
+ if(!connector||accountId!==OWNER)return;
+ $("verify-owner").disabled=true;proofOK=false;preflightOK=false;$("pause").disabled=true;
+ try{
+  const nonce=crypto.getRandomValues(new Uint8Array(32));pendingNonce=nonce;
+  status("proof","Requesting a harmless NEP-413 signed message. This is not a blockchain transaction.");
+  const result=await connector.connect({signMessageParams:{message:"VELTRON owner control — harmless Testnet identity proof; no transaction authorized.",recipient:location.host,nonce}});
+  if(result?.accounts?.[0]?.signedMessage)await verifySignedMessage(result,nonce);
+  else status("proof","Wallet returned without a signed-message result. No ownership proof accepted.");
+ }catch(e){status("proof","OWNER PROOF NOT COMPLETED — "+(e.message||String(e))+". No transaction was sent.");}
+ finally{$("verify-owner").disabled=accountId!==OWNER;}
+});
+\n$("network-confirm").addEventListener("change",()=>{preflightOK=false;snapshot=null;$("pause").disabled=true;});
 $("preflight").addEventListener("click",runPreflight);
 $("pause").addEventListener("click",async()=>{
  if(!preflightOK||!snapshot||snapshot.paused||accountId!==OWNER||!proofOK||!$("network-confirm").checked||requesting)return;
