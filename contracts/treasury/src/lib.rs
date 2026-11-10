@@ -1299,6 +1299,70 @@ mod tests {
     }
 
     #[test]
+    fn pending_commitment_cannot_be_updated_or_cancelled_until_callback() {
+        let mut contract = setup("owner.near");
+        contract.treasury_balance = 1_000;
+        contract.create_commitment(
+            "locked-invoice".to_string(),
+            account("vendor.near"),
+            U128(200),
+            "Original invoice".to_string(),
+        );
+
+        // Starting settlement sets the lock before the asynchronous transfer
+        // callback executes. The obligation remains visible while in flight.
+        contract.settle_commitment("locked-invoice".to_string());
+        let pending = contract.get_commitments(None, None).commitments;
+        assert_eq!(pending.len(), 1);
+        assert!(pending[0].settlement_pending);
+        assert_eq!(pending[0].recipient_id, account("vendor.near"));
+        assert_eq!(pending[0].amount.0, 200);
+        assert_eq!(contract.get_pending_transfers().len(), 1);
+
+        // Even the owner cannot rewrite or erase the obligation while its
+        // settlement transfer is unresolved.
+        let update = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            contract.update_commitment(
+                "locked-invoice".to_string(),
+                account("attacker.near"),
+                U128(1),
+                "Attempted rewrite".to_string(),
+            );
+        }));
+        assert!(update.is_err(), "update must be rejected while settlement is pending");
+
+        let after_update_attempt = contract.get_commitments(None, None).commitments;
+        assert_eq!(after_update_attempt.len(), 1);
+        assert_eq!(after_update_attempt[0].recipient_id, account("vendor.near"));
+        assert_eq!(after_update_attempt[0].amount.0, 200);
+        assert_eq!(after_update_attempt[0].description, "Original invoice");
+        assert!(after_update_attempt[0].settlement_pending);
+        assert_eq!(contract.get_financial_position().active_commitments.0, 200);
+
+        let cancel = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            contract.cancel_commitment("locked-invoice".to_string());
+        }));
+        assert!(cancel.is_err(), "cancel must be rejected while settlement is pending");
+
+        let after_cancel_attempt = contract.get_commitments(None, None).commitments;
+        assert_eq!(after_cancel_attempt.len(), 1);
+        assert_eq!(after_cancel_attempt[0].recipient_id, account("vendor.near"));
+        assert_eq!(after_cancel_attempt[0].amount.0, 200);
+        assert!(after_cancel_attempt[0].settlement_pending);
+        assert_eq!(contract.get_financial_position().active_commitments.0, 200);
+        assert_eq!(contract.get_pending_transfers().len(), 1);
+
+        // Once the callback succeeds, the lock clears as the obligation is
+        // settled and removed; no stale commitment remains.
+        callback_context();
+        contract.on_transfer_complete(0, Ok(()));
+        assert!(contract.get_commitments(None, None).commitments.is_empty());
+        assert_eq!(contract.get_financial_position().treasury_balance.0, 800);
+        assert_eq!(contract.get_financial_position().active_commitments.0, 0);
+        assert!(contract.get_pending_transfers().is_empty());
+    }
+
+    #[test]
     fn successful_commitment_settlement_reduces_balance_and_removes_commitment() {
         let mut contract = setup("owner.near");
         contract.treasury_balance = 1_000;
