@@ -28,10 +28,26 @@ let pendingWalletProofNonce;
 let signedMessageEventReceived=false;
 
 async function rpc(endpoint,method,params) {
-  const response=await fetch(endpoint.url,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({jsonrpc:"2.0",id:"veltron-treasury-preflight",method,params})});
-  const payload=await response.json();
-  if(!response.ok||payload.error) throw new Error(endpoint.name+" "+method+": "+(payload.error?.message||response.statusText));
-  return payload.result;
+  let lastError;
+  for(let attempt=1;attempt<=3;attempt++) {
+    try {
+      const controller=new AbortController();
+      const timeout=setTimeout(()=>controller.abort(),15000);
+      let response;
+      try {
+        response=await fetch(endpoint.url,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({jsonrpc:"2.0",id:"veltron-treasury-preflight",method,params}),signal:controller.signal});
+      } finally {clearTimeout(timeout);}
+      const payload=await response.json();
+      if(!response.ok||payload.error) throw new Error(endpoint.name+" "+method+": "+(payload.error?.message||response.statusText));
+      if(payload.result===undefined) throw new Error(endpoint.name+" "+method+": RPC response did not contain a result.");
+      return payload.result;
+    } catch(error) {
+      lastError=error;
+      if(attempt<3) await new Promise(resolve=>setTimeout(resolve,500*attempt));
+    }
+  }
+  const detail=lastError?.name==="AbortError"?"request timed out after 15 seconds":String(lastError?.message||lastError);
+  throw new Error(endpoint.name+" "+method+" failed after 3 attempts: "+detail);
 }
 async function eachRpc(method,params) {
   const results=[];
