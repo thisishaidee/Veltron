@@ -2141,3 +2141,123 @@ async fn sandbox_only_owner_can_update_or_cancel_commitments_and_totals_reconcil
 
     Ok(())
 }
+
+
+#[tokio::test]
+async fn sandbox_safety_reserve_is_owner_only_and_cannot_make_treasury_insolvent() -> anyhow::Result<()> {
+    let worker = near_workspaces::sandbox().await?;
+    let owner = worker.dev_create_account().await?;
+    let agent = worker.dev_create_account().await?;
+    let attacker = worker.dev_create_account().await?;
+    let vendor = worker.dev_create_account().await?;
+
+    let token = worker.dev_deploy(TOKEN_WASM).await?;
+    token
+        .call("new")
+        .args_json(json!({
+            "owner_id": owner.id(),
+            "total_supply": "10000",
+            "metadata": {
+                "spec": "ft-1.0.0",
+                "name": "VELTRON Test Token",
+                "symbol": "VTT",
+                "decimals": 6
+            }
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    let treasury = worker.dev_deploy(TREASURY_WASM).await?;
+    treasury
+        .call("new")
+        .args_json(json!({
+            "owner_id": owner.id(),
+            "token_id": token.id(),
+            "agent_id": agent.id(),
+            "max_per_transaction": "500",
+            "safety_reserve": "100"
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    register_token_account(&owner, &token, treasury.id().as_str()).await?;
+    register_token_account(&owner, &token, vendor.id().as_str()).await?;
+
+    owner
+        .call(token.id(), "ft_transfer_call")
+        .args_json(json!({
+            "receiver_id": treasury.id(),
+            "amount": "1000",
+            "memo": "Fund safety reserve boundary test",
+            "msg": ""
+        }))
+        .deposit(NearToken::from_yoctonear(1))
+        .transact()
+        .await?
+        .into_result()?;
+
+    owner
+        .call(treasury.id(), "create_commitment")
+        .args_json(json!({
+            "id": "reserve-test-invoice",
+            "recipient_id": vendor.id(),
+            "amount": "300",
+            "description": "Obligation protected during reserve changes"
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    // The agent and an unrelated account cannot alter the reserve.
+    for unauthorized in [&agent, &attacker] {
+        let attempt = unauthorized
+            .call(treasury.id(), "set_safety_reserve")
+            .args_json(json!({ "amount": "1" }))
+            .transact()
+            .await?;
+        assert!(attempt.into_result().is_err());
+    }
+
+    let after_unauthorized =
+        view_json(&treasury, "get_financial_position", json!({})).await?;
+    assert_eq!(after_unauthorized["treasury_balance"], "1000");
+    assert_eq!(after_unauthorized["active_commitments"], "300");
+    assert_eq!(after_unauthorized["safety_reserve"], "100");
+    assert_eq!(after_unauthorized["spendable_balance"], "600");
+
+    // A reserve of 701 would require 1,001 tokens to cover the 300
+    // commitment plus reserve, so the owner update must revert atomically.
+    let insolvent_reserve = owner
+        .call(treasury.id(), "set_safety_reserve")
+        .args_json(json!({ "amount": "701" }))
+        .transact()
+        .await?;
+    assert!(insolvent_reserve.into_result().is_err());
+
+    let after_insolvent_attempt =
+        view_json(&treasury, "get_financial_position", json!({})).await?;
+    assert_eq!(after_insolvent_attempt["treasury_balance"], "1000");
+    assert_eq!(after_insolvent_attempt["active_commitments"], "300");
+    assert_eq!(after_insolvent_attempt["safety_reserve"], "100");
+    assert_eq!(after_insolvent_attempt["spendable_balance"], "600");
+
+    // A solvent owner-selected reserve is accepted and the spendable
+    // balance is recalculated from balance - commitments - reserve.
+    owner
+        .call(treasury.id(), "set_safety_reserve")
+        .args_json(json!({ "amount": "200" }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    let after_valid_update =
+        view_json(&treasury, "get_financial_position", json!({})).await?;
+    assert_eq!(after_valid_update["treasury_balance"], "1000");
+    assert_eq!(after_valid_update["active_commitments"], "300");
+    assert_eq!(after_valid_update["safety_reserve"], "200");
+    assert_eq!(after_valid_update["spendable_balance"], "500");
+
+    Ok(())
+}
