@@ -2,7 +2,7 @@ import {NearConnector} from "@hot-labs/near-connect";
 import {
   TREASURY_ACCOUNT, NEW_TREASURY_WASM_BYTES, NEW_TREASURY_WASM_SHA256,
   OLD_TREASURY_WASM_SHA256, calculateTreasuryDeployBudget,
-  sha256Hex, requestTreasuryDeploy, decodeViewResult
+  sha256Hex, requestTreasuryDeploy, decodeViewResult, base58Decode
 } from "./treasury-deployment.js";
 
 const $ = selector => document.querySelector(selector);
@@ -56,13 +56,6 @@ function setDeploymentEnabled() {
   deployButton.disabled=deploymentInProgress||!(accountId===TREASURY_ACCOUNT&&walletOwnershipVerified&&networkConfirmed&&artifactVerified&&preflightSnapshot);
 }
 
-function base58Decode(value) {
-  const alphabet="123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-  let bytes=[0];
-  for(const ch of value){let carry=alphabet.indexOf(ch);if(carry<0)throw new Error("Invalid base58 key/signature.");for(let i=0;i<bytes.length;i++){carry+=bytes[i]*58;bytes[i]=carry&255;carry>>=8;}while(carry){bytes.push(carry&255);carry>>=8;}}
-  for(let i=0;i<value.length-1&&value[i]==="1";i++)bytes.push(0);
-  return new Uint8Array(bytes.reverse());
-}
 async function verifyNep413Proof(signedMessage,nonce) {
   const publicKeyText=typeof signedMessage?.publicKey==="string"?signedMessage.publicKey:signedMessage?.publicKey?.toString?.();
   if(signedMessage?.accountId!==TREASURY_ACCOUNT||!publicKeyText?.startsWith("ed25519:")||!signedMessage?.signature)throw new Error("Signed message account, Ed25519 key, or signature is missing.");
