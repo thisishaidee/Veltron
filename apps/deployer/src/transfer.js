@@ -33,7 +33,8 @@ async function verifyState(){
  return {owner,treasury,position,metadata};
 }
 async function runPreflight(){
- setPreflight(false);$("preflight").disabled=true;$("preflight-status").textContent="Reading finalized Testnet state…";
+ setPreflight(false);
+ if(localStorage.getItem("veltron-vtt-treasury-deposit-attempted")==="true"){$("preflight-status").textContent="STOP — a transfer request was already attempted from this browser. Verify finalized chain state; do not submit a second request.";return;}$("preflight").disabled=true;$("preflight-status").textContent="Reading finalized Testnet state…";
  try{
   if(accountId!==OWNER)throw new Error("Connected signer must be "+OWNER+".");
   if(!$("network-confirm").checked)throw new Error("Confirm Testnet in Meteor itself first.");
@@ -83,7 +84,7 @@ $("connect").addEventListener("click",async()=>{
 $("preflight").addEventListener("click",runPreflight);
 $("send").addEventListener("click",async()=>{
  if(!preflightPassed||accountId!==OWNER||!$("network-confirm").checked||requestStarted)return;
- requestStarted=true;$("send").disabled=true;$("send-status").textContent="Opening Meteor approval. Inspect the exact transaction before approving.";
+ requestStarted=true;localStorage.setItem("veltron-vtt-treasury-deposit-attempted","true");$("send").disabled=true;$("send-status").textContent="Opening Meteor approval. Inspect the exact transaction before approving.";
  try{
   const wallet=await connector.wallet();
   const result=await wallet.signAndSendTransaction({network:"testnet",signerId:OWNER,receiverId:TOKEN,actions:[{type:"FunctionCall",params:{methodName:"ft_transfer_call",args:{receiver_id:TREASURY,amount:AMOUNT,memo:null,msg:""},gas:GAS,deposit:"1"}}]});
