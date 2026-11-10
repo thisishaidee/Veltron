@@ -94,4 +94,8 @@ test("wallet preflight has independent RPC, old-code, initialized-state and new-
   assert.match(source,/pending.length!==0/);
   assert.match(source,/audit.audit_pending/);
   assert.match(source,/Both independent Testnet RPC providers are required/);
+  assert.match(source,/let deploymentInProgress=false/);
+  assert.match(source,/if\(deploymentInProgress\)return/);
+  assert.match(source,/deployButton\.disabled=deploymentInProgress\|\|/);
+  assert.match(source,/finally\{deploymentInProgress=false;setDeploymentEnabled\(\);\}/);
 });
