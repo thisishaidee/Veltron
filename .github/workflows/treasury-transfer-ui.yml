@@ -32,3 +32,5 @@ jobs:
         run: npm run build:transfer
       - name: Run treasury transfer safety tests
         run: npm run test:transfer
+      - name: Run treasury audit safety tests
+        run: npm run test:audit
