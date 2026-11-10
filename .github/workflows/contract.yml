@@ -10,6 +10,7 @@ on:
       - "scripts/testnet_fee_preflight.py"
       - "scripts/testnet_token_state_preflight.py"
       - "scripts/testnet_treasury_state_preflight.py"
+      - "scripts/testnet_dual_rpc_preflight.py"
       - ".github/workflows/contract.yml"
   pull_request:
     paths:
@@ -18,6 +19,9 @@ on:
       - "rust-toolchain.toml"
       - "contracts/**"
       - "scripts/testnet_fee_preflight.py"
+      - "scripts/testnet_token_state_preflight.py"
+      - "scripts/testnet_treasury_state_preflight.py"
+      - "scripts/testnet_dual_rpc_preflight.py"
       - ".github/workflows/contract.yml"
   workflow_dispatch:
 
@@ -58,6 +62,8 @@ jobs:
         run: python3 scripts/testnet_token_state_preflight.py
       - name: Verify treasury deployment code against this build (read-only)
         run: python3 scripts/testnet_treasury_state_preflight.py
+      - name: Cross-check finalized VTT and treasury state with two independent RPC providers (read-only)
+        run: python3 scripts/testnet_dual_rpc_preflight.py
       - name: Set up Node.js for CLI package check
         uses: actions/setup-node@v5
         with:
@@ -89,6 +95,6 @@ jobs:
           npx --yes near-cli-rs@0.31.1 account add-key veltron-token.testnet grant-full-access autogenerate-new-keypair save-to-keychain network-config testnet --help
           npx --yes near-cli-rs@0.31.1 account add-key veltron-token.testnet grant-full-access autogenerate-new-keypair save-to-keychain network-config testnet sign-with-keychain --help
           npx --yes near-cli-rs@0.31.1 account delete-keys veltron-token.testnet public-keys network-config testnet --help
-          npx --yes near-cli-rs@0.31.1 account list-keys veltron-token.testnet network-config testnet --help
+          npx --yes near-cli-rs@0.31.1 account list-keys veltron-token.testnet network-config testnet now
       - name: Read current veltron-token Testnet access keys
         run: npx --yes near-cli-rs@0.31.1 account list-keys veltron-token.testnet network-config testnet now
