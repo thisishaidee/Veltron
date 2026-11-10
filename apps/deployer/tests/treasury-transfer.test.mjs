@@ -27,4 +27,6 @@ test("transaction is gated on owner account, Testnet confirmation and passed pre
 });
 test("uncertain wallet results explicitly prevent blind resubmission",()=>{
  assert.match(js,/do not retry/i);
+ assert.match(js,/veltron-vtt-treasury-deposit-attempted/);
+ assert.match(js,/localStorage\.setItem/);
 });
