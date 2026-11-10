@@ -1682,3 +1682,165 @@ async fn sandbox_only_owner_can_pause_and_unpause_treasury() -> anyhow::Result<(
 
     Ok(())
 }
+
+#[tokio::test]
+async fn sandbox_agent_cannot_spend_commitment_reserved_funds() -> anyhow::Result<()> {
+    let worker = near_workspaces::sandbox().await?;
+    let owner = worker.dev_create_account().await?;
+    let agent = worker.dev_create_account().await?;
+    let vendor = worker.dev_create_account().await?;
+
+    let token = worker.dev_deploy(TOKEN_WASM).await?;
+    token
+        .call("new")
+        .args_json(json!({
+            "owner_id": owner.id(),
+            "total_supply": "10000",
+            "metadata": {
+                "spec": "ft-1.0.0",
+                "name": "VELTRON Test Token",
+                "symbol": "VTT",
+                "decimals": 6
+            }
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    let treasury = worker.dev_deploy(TREASURY_WASM).await?;
+    treasury
+        .call("new")
+        .args_json(json!({
+            "owner_id": owner.id(),
+            "token_id": token.id(),
+            "agent_id": agent.id(),
+            "max_per_transaction": "700",
+            "safety_reserve": "100"
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    register_token_account(&owner, &token, treasury.id().as_str()).await?;
+    register_token_account(&owner, &token, vendor.id().as_str()).await?;
+
+    owner
+        .call(token.id(), "ft_transfer_call")
+        .args_json(json!({
+            "receiver_id": treasury.id(),
+            "amount": "1000",
+            "memo": "Fund commitment protection test",
+            "msg": ""
+        }))
+        .deposit(NearToken::from_yoctonear(1))
+        .transact()
+        .await?
+        .into_result()?;
+
+    owner
+        .call(treasury.id(), "create_commitment")
+        .args_json(json!({
+            "id": "protected-invoice",
+            "recipient_id": vendor.id(),
+            "amount": "300",
+            "description": "Funds reserved for a vendor obligation"
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    // Balance 1,000 - commitment 300 - reserve 100 = 600 spendable.
+    // The 601 request is below the 700 per-transaction cap, so only the
+    // commitment-aware spendable-balance check should reject it.
+    let over_commitment_request = agent
+        .call(treasury.id(), "request_payment")
+        .args_json(json!({
+            "recipient_id": vendor.id(),
+            "amount": "601",
+            "memo": "Must not consume committed funds"
+        }))
+        .max_gas()
+        .transact()
+        .await?;
+    assert!(over_commitment_request.into_result().is_err());
+
+    let after_rejection = view_json(&treasury, "get_financial_position", json!({})).await?;
+    let pending_after_rejection =
+        view_json(&treasury, "get_pending_transfers", json!({})).await?;
+    let vendor_after_rejection =
+        view_json(&token, "ft_balance_of", json!({ "account_id": vendor.id() })).await?;
+    let commitments_after_rejection =
+        view_json(&treasury, "get_commitments", json!({ "from_id": null, "limit": 25 })).await?;
+
+    assert_eq!(after_rejection["treasury_balance"], "1000");
+    assert_eq!(after_rejection["active_commitments"], "300");
+    assert_eq!(after_rejection["safety_reserve"], "100");
+    assert_eq!(after_rejection["spendable_balance"], "600");
+    assert_eq!(after_rejection["pending_discretionary"], "0");
+    assert_eq!(pending_after_rejection, json!([]));
+    assert_eq!(vendor_after_rejection, "0");
+    assert_eq!(
+        commitments_after_rejection["commitments"][0]["id"],
+        "protected-invoice"
+    );
+
+    // The exact spendable amount is permitted; the commitment and reserve
+    // remain fully covered after the real NEP-141 transfer callback completes.
+    let boundary_payment = agent
+        .call(treasury.id(), "request_payment")
+        .args_json(json!({
+            "recipient_id": vendor.id(),
+            "amount": "600",
+            "memo": "Spend only the uncommitted balance"
+        }))
+        .max_gas()
+        .transact()
+        .await?;
+    boundary_payment.clone().into_result()?;
+    let success_callback_receipt = boundary_payment
+        .receipt_outcomes()
+        .iter()
+        .find(|receipt| receipt.logs.iter().any(|log| log == "VELTRON_TRANSFER_SUCCESS:0"))
+        .expect("successful discretionary payment callback must be present");
+    assert!(
+        success_callback_receipt.gas_burnt.as_gas() < 5_000_000_000_000,
+        "discretionary callback exceeded 5 Tgas"
+    );
+
+    let final_position = view_json(&treasury, "get_financial_position", json!({})).await?;
+    let final_vendor_balance =
+        view_json(&token, "ft_balance_of", json!({ "account_id": vendor.id() })).await?;
+    let final_commitments =
+        view_json(&treasury, "get_commitments", json!({ "from_id": null, "limit": 25 })).await?;
+    let final_pending = view_json(&treasury, "get_pending_transfers", json!({})).await?;
+
+    assert_eq!(final_position["treasury_balance"], "400");
+    assert_eq!(final_position["active_commitments"], "300");
+    assert_eq!(final_position["safety_reserve"], "100");
+    assert_eq!(final_position["spendable_balance"], "0");
+    assert_eq!(final_position["pending_discretionary"], "0");
+    assert_eq!(final_vendor_balance, "600");
+    assert_eq!(final_commitments["commitments"][0]["id"], "protected-invoice");
+    assert_eq!(final_pending, json!([]));
+
+    // A further one-token request cannot cross into the protected obligation.
+    let final_overdraw_attempt = agent
+        .call(treasury.id(), "request_payment")
+        .args_json(json!({
+            "recipient_id": vendor.id(),
+            "amount": "1",
+            "memo": "Must remain blocked"
+        }))
+        .max_gas()
+        .transact()
+        .await?;
+    assert!(final_overdraw_attempt.into_result().is_err());
+
+    let after_final_rejection =
+        view_json(&treasury, "get_financial_position", json!({})).await?;
+    assert_eq!(after_final_rejection["treasury_balance"], "400");
+    assert_eq!(after_final_rejection["active_commitments"], "300");
+    assert_eq!(after_final_rejection["spendable_balance"], "0");
+
+    Ok(())
+}
