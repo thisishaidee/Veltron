@@ -15,6 +15,9 @@ test("dedicated treasury deployer renders with the upgrade locked",async({page})
   await expect(page.locator("#deploy-treasury")).toBeDisabled();
   await expect(page.locator("#verify-upgraded-code")).toBeDisabled();
   await expect(page.locator("#artifact-status")).toContainText("Artifact not checked");
+  // Do not set an accept filter: iOS Safari can hide .wasm files from the Files picker.
+  // The client verifies the exact byte count and SHA-256 after selection instead.
+  await expect(page.locator("#treasury-wasm")).not.toHaveAttribute("accept", /.*/);
   const dimensions=await page.evaluate(()=>({viewport:document.documentElement.clientWidth,content:document.documentElement.scrollWidth}));
   expect(dimensions.content).toBeLessThanOrEqual(dimensions.viewport);
 });
