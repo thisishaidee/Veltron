@@ -54,7 +54,6 @@ export async function requestTreasuryDeploy(wallet, signerId, code) {
     throw new Error("The connected wallet does not expose signAndSendTransaction.");
   }
   return wallet.signAndSendTransaction({
-    network:"testnet",
     signerId:TREASURY_ACCOUNT,
     receiverId:TREASURY_ACCOUNT,
     actions:[buildTreasuryDeployAction(code)]
