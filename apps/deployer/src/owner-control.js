@@ -71,8 +71,8 @@ async function verifySignedMessage(event,nonce){
  const data=new Uint8Array(parts.reduce((n,p)=>n+p.length,0));let off=0;for(const p of parts){data.set(p,off);off+=p.length;}
  const digest=await crypto.subtle.digest("SHA-256",data),pub=await crypto.subtle.importKey("raw",key,{name:"Ed25519"},false,["verify"]);
  if(!await crypto.subtle.verify({name:"Ed25519"},pub,sig,digest))throw Error("NEP-413 signature is invalid.");
- const access=await both("query",{request_type:"view_access_key",finality:"final",account_id:OWNER,public_key:sm.publicKey});
- if(access.permission!=="FullAccess")throw Error("Signed key is not FullAccess.");
+ const accessChecks=await Promise.all(RPCS.map(async ep=>rpc(ep,"query",{request_type:"view_access_key",finality:"final",account_id:OWNER,public_key:sm.publicKey})));
+ if(accessChecks.some(access=>access.permission!=="FullAccess"))throw Error("Signed key is not FullAccess on both independent Testnet RPCs.");
  window.__veltronProofKey=sm.publicKey;proofOK=true;status("proof","OWNER KEY VERIFIED — valid signed-message proof and FullAccess key. No transaction was sent.");
 }
 function initializeWallet(){
