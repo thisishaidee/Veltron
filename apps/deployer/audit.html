@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101820">
+<title>VELTRON — Treasury Balance Audit</title>
+<style>
+:root{color-scheme:dark;font:16px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#101820;color:#edf2f4}
+*{box-sizing:border-box}body{width:min(100% - 32px,720px);margin:auto;padding:24px 0 max(40px,env(safe-area-inset-bottom))}
+h1{font-size:1.65rem;line-height:1.2}h2{font-size:1.12rem}p,li{color:#c5d0d6}
+.panel{border:1px solid #40515c;border-radius:12px;padding:16px;margin:16px 0;overflow-wrap:anywhere}
+button{width:100%;padding:14px 16px;margin:8px 0;border:0;border-radius:9px;background:#b8e1dd;color:#101820;font:inherit;font-weight:750}
+button:disabled{opacity:.45}.status{padding:12px;background:#263640;border-radius:8px;white-space:pre-wrap;overflow-wrap:anywhere}
+.warn{border-left:4px solid #e2a84b;padding-left:12px}.muted{font-size:.9rem;color:#9eafb8}
+code{color:#b8e1dd;overflow-wrap:anywhere}.value{font-weight:750;color:#b8e1dd;overflow-wrap:anywhere}
+label{display:flex;gap:10px;align-items:flex-start;margin:14px 0}input{width:20px;height:20px;flex:0 0 auto}
+</style>
+</head>
+<body>
+<h1>VELTRON Treasury Balance Audit</h1>
+<p>A separate, Testnet-only page for requesting an observational snapshot of the treasury's NEP-141 token balance.</p>
+<section class="panel warn">
+<strong>TESTNET ONLY · AUDIT REQUEST ONLY</strong>
+<p>This page requests <code>refresh_token_balance_audit</code> on <code>veltron-treasury.testnet</code>. It does not transfer tokens, change the treasury ledger, reconcile surplus, change the safety reserve, or deploy a contract.</p>
+</section>
+<section class="panel">
+<h2>Exact transaction to review in Meteor</h2>
+<ul>
+<li>Network: <strong>NEAR Testnet</strong></li>
+<li>Signer: <code>haideedotxyz.testnet</code></li>
+<li>Contract / receiver: <code>veltron-treasury.testnet</code></li>
+<li>Method: <code>refresh_token_balance_audit</code></li>
+<li>Arguments: <code>{}</code></li>
+<li>Attached deposit: <strong>0 NEAR</strong></li>
+<li>Gas: <strong>30 Tgas</strong></li>
+</ul>
+<p class="muted">Reject any wallet request with a different account, contract, method, arguments, deposit, or network.</p>
+</section>
+<section class="panel">
+<h2>1 — Connect the owner wallet</h2>
+<button id="connect" type="button">Connect Meteor / NEAR wallet</button>
+<p id="wallet-status" class="status" role="status" aria-live="polite">Not connected.</p>
+<p>Account: <span id="wallet-account" class="value">Not connected</span></p>
+<label><input id="network-confirm" type="checkbox">I checked Meteor itself and it currently displays NEAR Testnet.</label>
+</section>
+<section class="panel">
+<h2>2 — Read-only preflight</h2>
+<button id="preflight" type="button" disabled>Check before audit request</button>
+<p id="preflight-status" class="status" role="status" aria-live="polite">Connect the owner account and confirm Testnet first.</p>
+</section>
+<section class="panel">
+<h2>3 — Request the audit</h2>
+<button id="request-audit" type="button" disabled>Request balance audit in Meteor</button>
+<p id="request-status" class="status" role="status" aria-live="polite">Disabled until preflight passes.</p>
+</section>
+<section class="panel">
+<h2>4 — Verify the recorded snapshot</h2>
+<button id="verify" type="button">Read audit result</button>
+<button id="read-only" type="button">Refresh read-only balances</button>
+<p id="read-status" class="status" role="status" aria-live="polite">No transaction is sent by read-only checks.</p>
+<p>Audit pending: <span id="pending" class="value">Not checked</span></p>
+<p>Observed token balance: <span id="observed-token" class="value">Not recorded</span></p>
+<p>Ledger at observation: <span id="observed-ledger" class="value">Not recorded</span></p>
+<p>Current token balance: <span id="actual-token" class="value">Not checked</span></p>
+<p>Current treasury ledger: <span id="current-ledger" class="value">Not checked</span></p>
+<p>Observation timestamp (ns): <span id="observed-at" class="value">Not recorded</span></p>
+<p id="verify-status" class="status" role="status" aria-live="polite">Waiting for a read-only check.</p>
+</section>
+<p class="muted">A recorded snapshot is an observation, not a security audit or a reconciliation. Never submit another request while an audit is pending. If wallet submission is uncertain, check the chain before trying again.</p>
+<script type="module" src="./dist/audit.js"></script>
+</body>
+</html>
