@@ -16,23 +16,34 @@ function integer(value, label) {
   throw new TypeError(label + " must be a non-negative integer.");
 }
 
-export function calculateTreasuryDeployBudget({balance, storageUsage, wasmBytes, storageAmountPerByte, gasPrice, costs}) {
+export function calculateTreasuryDeployBudget({balance, storageUsage, wasmBytes, storageAmountPerByte, gasPrice, minGasPurchasePrice, costs}) {
   const baseSend = integer(costs.deploy.send_sir, "DeployContract send fee");
   const perByteSend = integer(costs.deployPerByte.send_sir, "DeployContract per-byte send fee");
   const baseExec = integer(costs.deploy.execution, "DeployContract execution fee");
   const perByteExec = integer(costs.deployPerByte.execution, "DeployContract per-byte execution fee");
   const receiptSend = integer(costs.receipt.send_sir, "Receipt send fee");
   const receiptExec = integer(costs.receipt.execution, "Receipt execution fee");
-  const gas = baseSend + integer(wasmBytes, "WASM bytes") * perByteSend + baseExec +
-    integer(wasmBytes, "WASM bytes") * perByteExec + receiptSend + receiptExec;
-  const feeYocto = gas * integer(gasPrice, "Gas price");
-  const projectedStorage = integer(storageUsage, "Storage usage") + integer(wasmBytes, "WASM bytes");
+  const bytes = integer(wasmBytes, "WASM bytes");
+  const sendGas = receiptSend + baseSend + bytes * perByteSend;
+  const executionGas = receiptExec + baseExec + bytes * perByteExec;
+  const currentGasPrice = integer(gasPrice, "Gas price");
+  const receiptGasPrice = currentGasPrice > integer(minGasPurchasePrice, "Minimum gas purchase price")
+    ? currentGasPrice : integer(minGasPurchasePrice, "Minimum gas purchase price");
+  // NEP-642 prices transaction-to-receipt send gas at the current block price,
+  // and prepaid receipt execution gas at max(current price, min gas purchase price).
+  const sendFeeYocto = sendGas * currentGasPrice;
+  const executionFeeYocto = executionGas * receiptGasPrice;
+  const feeYocto = sendFeeYocto + executionFeeYocto;
+  const projectedStorage = integer(storageUsage, "Storage usage") + bytes;
   const storageReserveYocto = projectedStorage * integer(storageAmountPerByte, "Storage amount per byte");
   const safetyMarginYocto = 50000000000000000000000n;
   const required = storageReserveYocto + feeYocto + safetyMarginYocto;
   const available = integer(balance, "Account balance");
   return {
-    gas: gas.toString(),
+    sendGas: sendGas.toString(),
+    executionGas: executionGas.toString(),
+    sendFeeYocto: sendFeeYocto.toString(),
+    executionFeeYocto: executionFeeYocto.toString(),
     feeYocto: feeYocto.toString(),
     storageReserveYocto: storageReserveYocto.toString(),
     safetyMarginYocto: safetyMarginYocto.toString(),
