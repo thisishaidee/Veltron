@@ -66,7 +66,7 @@ test("requests only one DeployContract action to the treasury account",async()=>
   const wallet={signAndSendTransaction:async value=>{request=value;return "wallet-response";}};
   const result=await requestTreasuryDeploy(wallet,TREASURY_ACCOUNT,bytes);
   assert.equal(result,"wallet-response");
-  assert.equal(request.network,"testnet");
+  assert.equal(request.network,undefined);
   assert.equal(request.signerId,TREASURY_ACCOUNT);
   assert.equal(request.receiverId,TREASURY_ACCOUNT);
   assert.equal(request.actions.length,1);
@@ -89,5 +89,9 @@ test("wallet preflight has independent RPC, old-code, initialized-state and new-
   assert.match(source,/get_financial_position/);
   assert.match(source,/get_pending_transfers/);
   assert.match(source,/get_token_balance_audit/);
+  assert.match(source,/viewBoth\(TREASURY_ACCOUNT/);
+  assert.match(source,/if\(!paused\)/);
+  assert.match(source,/pending.length!==0/);
+  assert.match(source,/audit.audit_pending/);
   assert.match(source,/Both independent Testnet RPC providers are required/);
 });
