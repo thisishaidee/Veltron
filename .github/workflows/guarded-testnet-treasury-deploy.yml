@@ -150,7 +150,7 @@ jobs:
               for char in value:
                   number = number * 58 + alphabet.index(char)
               raw = number.to_bytes((number.bit_length() + 7) // 8, "big") if number else b""
-              return b"\\x00" * (len(value) - len(value.lstrip("1"))) + raw
+              return bytes([0]) * (len(value) - len(value.lstrip("1"))) + raw
           with open(sys.argv[1], encoding="utf-8") as f:
               key = json.load(f)
           if not isinstance(key, dict) or set(key) != {"public_key", "private_key"}:
