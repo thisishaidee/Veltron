@@ -91,10 +91,12 @@
 </main>
 
 <script type="module">
-  import { readTreasurySnapshot, callView } from "./src/dashboard.mjs";
+  import { readTreasurySnapshot, callView, isCurrentSnapshotRequest } from "./src/dashboard.mjs";
   let nextCommitmentCursor = null;
   let commitmentRows = [];
   let activeSnapshot = null;
+  let snapshotGeneration = 0;
+  let loadingCommitmentPage = false;
 
   const byId = id => document.getElementById(id);
   const raw = value => value == null ? "—" : String(value);
@@ -118,20 +120,33 @@
 
   async function loadMoreCommitments() {
     const button = byId("load-more");
+    if (loadingCommitmentPage || !activeSnapshot || !nextCommitmentCursor) return;
+    loadingCommitmentPage = true;
     button.disabled = true;
+    const requestGeneration = snapshotGeneration;
+    const requestSnapshot = activeSnapshot;
+    const requestCursor = nextCommitmentCursor;
     try {
-      const page = await callView("get_commitments", { from_id: nextCommitmentCursor, limit: 50 }, fetch, activeSnapshot);
+      const page = await callView("get_commitments", { from_id: requestCursor, limit: 50 }, fetch, requestSnapshot);
+      if (!isCurrentSnapshotRequest(requestGeneration, snapshotGeneration, requestSnapshot, activeSnapshot)) return;
       commitmentRows = commitmentRows.concat(page.commitments);
       nextCommitmentCursor = page.next_cursor;
       renderCommitments();
     } catch (error) {
-      byId("message").textContent = "Could not load the next commitment page: " + error.message;
+      if (isCurrentSnapshotRequest(requestGeneration, snapshotGeneration, requestSnapshot, activeSnapshot)) {
+        byId("message").textContent = "Could not load the next commitment page: " + error.message;
+      }
     } finally {
-      button.disabled = false;
+      if (isCurrentSnapshotRequest(requestGeneration, snapshotGeneration, requestSnapshot, activeSnapshot)) {
+        loadingCommitmentPage = false;
+        button.disabled = false;
+      }
     }
   }
 
   async function refresh() {
+    const requestGeneration = ++snapshotGeneration;
+    loadingCommitmentPage = false;
     const button = byId("refresh");
     button.disabled = true;
     byId("connection-status").textContent = "Reading finalized state…";
@@ -145,6 +160,7 @@
     byId("load-more").hidden = true;
     try {
       const data = await readTreasurySnapshot();
+      if (requestGeneration !== snapshotGeneration) return;
       activeSnapshot = data;
       byId("network").textContent = data.network;
       byId("code-hash").textContent = raw(data.account.code_hash);
@@ -179,11 +195,12 @@
       byId("connection-status").textContent = "Connected to NEAR Testnet · read-only";
       byId("message").textContent = "Finalized treasury state loaded at block " + data.block_hash + ". No wallet is connected and no transaction has been requested.";
     } catch (error) {
+      if (requestGeneration !== snapshotGeneration) return;
       activeSnapshot = null;
       byId("connection-status").textContent = "Read failed · no current snapshot";
       byId("message").textContent = error.message + " No previous financial values are being presented as current. Retry when the Testnet RPC is available.";
     } finally {
-      button.disabled = false;
+      if (requestGeneration === snapshotGeneration) button.disabled = false;
     }
   }
 
