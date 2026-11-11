@@ -11,11 +11,11 @@ This directory contains a browser-only Testnet deployer with artifact verificati
 - Checks the configured VELTRON RPC endpoint with a read-only NEAR status request and reports Testnet only when the response says `chain_id: "testnet"`.
 - Keeps the wallet's active network separately labelled as not independently verified.
 - Uses NEAR Connect's `wallet.signAndSendTransaction` API with one `DeployContract` action only after fresh checks and an explicit user click. Meteor must display the exact request for the user to inspect and approve.
+- The separate treasury-upgrade page requests a harmless NEP-413 signed-message proof to verify that the exact connected public key is a FullAccess key on both Testnet RPC providers. This is not a blockchain transaction and does not authorize deployment.
 
 ## What it deliberately does not do
-- The separate treasury-upgrade page requests a harmless NEP-413 signed-message proof to verify that the exact connected public key is a FullAccess key on both Testnet RPC providers. This is not a blockchain transaction and does not authorize deployment.
 - It never signs or submits automatically; only an explicit user action can open the wallet's approval flow.
-- It does not deploy the treasury contract or initialize either contract.
+- It does not deploy the treasury contract or initialize either contract automatically; the dedicated treasury page can only request one user-approved code-deployment action and exposes no initializer.
 - It does not treat a successful connection or CI source check as proof that the live wallet session will approve the action.
 - CI checks both a pinned Meteor executor snapshot and the live manifest/executor source at test time. This is compatibility evidence, not proof of a live wallet signature.
 - It does not accept private keys or seed phrases.
