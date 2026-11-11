@@ -16,6 +16,9 @@ on:
       - "Cargo.lock"
       - "contracts/**"
       - ".github/workflows/contract.yml"
+      - ".github/workflows/guarded-testnet-treasury-deploy.yml"
+      - "scripts/treasury_upgrade_state_guard.py"
+      - "scripts/test_treasury_upgrade_state_guard.py"
   workflow_dispatch:
 
 jobs:
