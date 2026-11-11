@@ -95,7 +95,7 @@ jobs:
       - name: Verify access-key-file CLI support without credentials
         run: |
           npx --yes near-cli-rs@0.31.1 --version
-          near contract deploy veltron-treasury.testnet use-file without-init-call network-config testnet sign-with-access-key-file --help
+          npx --yes near-cli-rs@0.31.1 contract deploy veltron-treasury.testnet use-file without-init-call network-config testnet sign-with-access-key-file --help
 
       - name: Publish read-only result
         run: |
