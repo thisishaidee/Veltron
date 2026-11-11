@@ -7,6 +7,9 @@ on:
       - "Cargo.lock"
       - "contracts/**"
       - ".github/workflows/contract.yml"
+      - ".github/workflows/guarded-testnet-treasury-deploy.yml"
+      - "scripts/treasury_upgrade_state_guard.py"
+      - "scripts/test_treasury_upgrade_state_guard.py"
   pull_request:
     paths:
       - "Cargo.toml"
@@ -20,6 +23,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Run guarded upgrade verifier unit tests
+        run: python3 -m unittest discover -s scripts -p 'test_*.py'
       - uses: dtolnay/rust-toolchain@stable
       - name: Run treasury contract tests
         run: cargo test -p veltron-treasury
