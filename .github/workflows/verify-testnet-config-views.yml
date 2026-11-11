@@ -23,7 +23,6 @@ jobs:
         shell: bash
         run: |
           python3 - <<'PY'
-          import base64
           import json
           import urllib.request
 
@@ -32,7 +31,7 @@ jobs:
           EXPECTED_AGENT = "veltron-agent.testnet"
           RPCS = (
               "https://rpc.testnet.near.org",
-              "https://free.rpc.fastnear.com",
+              "https://rpc.testnet.fastnear.com",
           )
 
           def view(rpc, method):
