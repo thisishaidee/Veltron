@@ -94,7 +94,10 @@ def all_commitments(endpoint):
             previous_id = commitment_id
 
         if next_cursor is None:
-            return commitments + entries
+            complete = commitments + entries
+            if len(complete) > 256:
+                raise RuntimeError("get_commitments exceeded the contract's 256-active-commitment limit")
+            return complete
         if not entries or next_cursor != entries[-1]["id"]:
             raise RuntimeError("get_commitments cursor does not match the final commitment ID")
         if next_cursor == cursor:
