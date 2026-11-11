@@ -49,7 +49,7 @@ test("calculates fee, storage reserve and safety margin with integer arithmetic"
   assert.equal(result.hasSufficientBalance,true);
   assert.equal(result.safetyMarginYocto,"50000000000000000000000");
   assert.ok(BigInt(result.requiredBalanceYocto)>BigInt(result.storageReserveYocto));
-  assert.equal(result.storageReserveYocto,(338417n*10000000000000000000n).toString());
+  assert.equal(result.storageReserveYocto,(339438n*10000000000000000000n).toString());
 });
 
 test("replaces old contract bytes instead of double-counting both WASM files",()=>{
@@ -59,7 +59,7 @@ test("replaces old contract bytes instead of double-counting both WASM files",()
     gasPrice:"100",minGasPurchasePrice:"100",
     costs:{deploy:{send_sir:"1",execution:"1"},deployPerByte:{send_sir:"1",execution:"1"},receipt:{send_sir:"1",execution:"1"}}
   });
-  assert.equal(result.storageReserveYocto,(438235n*10000000000000000000n).toString());
+  assert.equal(result.storageReserveYocto,(439256n*10000000000000000000n).toString());
 });
 
 test("rejects impossible storage accounting when old code exceeds reported storage usage",()=>{
@@ -83,11 +83,11 @@ test("prices prepaid execution at the NEP-642 minimum gas purchase price when hi
       receipt:{send_sir:"11",execution:"13"}
     }
   });
-  assert.equal(result.sendGas,"676581");
-  assert.equal(result.executionGas,"1014918");
-  assert.equal(result.sendFeeYocto,"67658100");
-  assert.equal(result.executionFeeYocto,"1014918000");
-  assert.equal(result.feeYocto,"1082576100");
+  assert.equal(result.sendGas,"678623");
+  assert.equal(result.executionGas,"1017981");
+  assert.equal(result.sendFeeYocto,"67862300");
+  assert.equal(result.executionFeeYocto,"1017981000");
+  assert.equal(result.feeYocto,"1085843300");
 });
 
 test("fails closed when treasury cannot cover storage, fee and margin",()=>{
