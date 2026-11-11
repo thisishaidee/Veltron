@@ -50,6 +50,17 @@ pub struct PendingTransferView {
 }
 
 #[near(serializers = [json])]
+pub struct OwnerConfig {
+    pub owner_id: AccountId,
+}
+
+#[near(serializers = [json])]
+pub struct AgentConfig {
+    pub agent_id: AccountId,
+    pub max_per_transaction: U128,
+}
+
+#[near(serializers = [json])]
 pub struct FinancialPosition {
     pub treasury_balance: U128,
     pub active_commitments: U128,
@@ -267,6 +278,19 @@ impl Veltron {
 
     pub fn get_pause_status(&self) -> bool {
         self.paused
+    }
+
+    /// Returns the configured treasury owner. Read-only; does not reveal keys or permissions.
+    pub fn get_owner(&self) -> AccountId {
+        self.owner_id.clone()
+    }
+
+    /// Returns the configured agent and its per-transaction cap.
+    pub fn get_agent_config(&self) -> AgentConfig {
+        AgentConfig {
+            agent_id: self.agent_id.clone(),
+            max_per_transaction: U128(self.max_per_transaction),
+        }
     }
 
     pub fn set_safety_reserve(&mut self, amount: U128) {
@@ -1773,6 +1797,33 @@ mod tests {
         );
         contract.paused = true;
         contract.settle_commitment("paused-invoice".to_string());
+    }
+
+    #[test]
+    fn owner_and_agent_configuration_views_return_initialized_values() {
+        let contract = Veltron::new(
+            account("owner.near"),
+            account("token.near"),
+            account("agent.near"),
+            U128(500),
+            U128(100),
+        );
+
+        assert_eq!(contract.get_owner(), account("owner.near"));
+        let agent_config = contract.get_agent_config();
+        assert_eq!(agent_config.agent_id, account("agent.near"));
+        assert_eq!(agent_config.max_per_transaction, U128(500));
+    }
+
+    #[test]
+    fn owner_and_agent_configuration_views_reflect_owner_agent_update() {
+        let mut contract = setup("owner.near");
+        contract.set_agent(account("replacement-agent.near"), U128(750));
+
+        assert_eq!(contract.get_owner(), account("owner.near"));
+        let agent_config = contract.get_agent_config();
+        assert_eq!(agent_config.agent_id, account("replacement-agent.near"));
+        assert_eq!(agent_config.max_per_transaction, U128(750));
     }
 
     #[test]
