@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101820"><title>VELTRON — Treasury Deposit</title>
+<style>
+:root{color-scheme:dark;font:16px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#101820;color:#edf2f4}
+*{box-sizing:border-box}body{width:min(100% - 32px,720px);margin:auto;padding:24px 0 max(40px,env(safe-area-inset-bottom))}
+h1{font-size:1.65rem;line-height:1.2}h2{font-size:1.12rem}p,li{color:#c5d0d6}
+.panel{border:1px solid #40515c;border-radius:12px;padding:16px;margin:16px 0;overflow-wrap:anywhere}
+button{width:100%;padding:14px 16px;margin:8px 0;border:0;border-radius:9px;background:#b8e1dd;color:#101820;font:inherit;font-weight:750}
+button:disabled{opacity:.45}.status{padding:12px;background:#263640;border-radius:8px;white-space:pre-wrap;overflow-wrap:anywhere}
+.warn{border-left:4px solid #e2a84b;padding-left:12px}.muted{font-size:.9rem;color:#9eafb8}
+code{color:#b8e1dd;overflow-wrap:anywhere}.balance{font-size:1.2rem;font-weight:750;color:#b8e1dd}
+label{display:flex;gap:10px;align-items:flex-start;margin:14px 0}input{width:20px;height:20px;flex:0 0 auto}
+</style>
+</head>
+<body>
+<h1>VELTRON Treasury Deposit</h1>
+<p>One controlled VTT deposit to the deployed VELTRON treasury using Meteor Wallet on NEAR Testnet.</p>
+<section class="panel warn"><strong>TESTNET ONLY · ONE 10 VTT TRANSFER</strong>
+<p>This page can request one wallet transaction after fresh read-only checks. It cannot access keys or recovery phrases. Approve only the exact transaction described below.</p></section>
+<section class="panel">
+<h2>Exact transaction</h2>
+<ul>
+<li>Network: NEAR Testnet</li><li>Signer: <code>haideedotxyz.testnet</code></li>
+<li>Token contract: <code>veltron-token.testnet</code></li><li>Method: <code>ft_transfer_call</code></li>
+<li>Token recipient: <code>veltron-treasury.testnet</code></li><li>Amount: <strong>10 VTT</strong> (10,000,000 base units)</li>
+<li>Message: empty string</li><li>Attached deposit: <strong>1 yoctoNEAR</strong></li><li>Gas: <strong>100 Tgas</strong></li>
+</ul>
+<p class="muted">The treasury receiver credits its internal ledger through ft_on_transfer. A plain ft_transfer is not used.</p>
+</section>
+<section class="panel">
+<h2>Step 1 — Connect owner wallet</h2>
+<button id="connect" type="button">Connect Meteor / NEAR wallet</button>
+<p id="account" class="status">Not connected</p>
+<label><input id="network-confirm" type="checkbox">I checked Meteor itself and it currently displays NEAR Testnet.</label>
+</section>
+<section class="panel">
+<h2>Step 2 — Read-only preflight</h2>
+<button id="preflight" type="button" disabled>Run fresh Testnet checks</button>
+<p id="preflight-status" class="status" role="status" aria-live="polite">Connect the owner account and confirm Testnet first.</p>
+<p>Owner VTT: <span id="owner" class="balance">Not checked</span></p>
+<p>Treasury VTT: <span id="treasury" class="balance">Not checked</span></p>
+<p>Treasury ledger: <span id="ledger" class="balance">Not checked</span></p>
+</section>
+<section class="panel">
+<h2>Step 3 — Wallet approval</h2>
+<p class="warn">Meteor must show signer <code>haideedotxyz.testnet</code>, receiver <code>veltron-token.testnet</code>, method <code>ft_transfer_call</code>, amount <code>10000000</code>, and deposit <code>1 yoctoNEAR</code>. Reject anything different.</p>
+<button id="send" type="button" disabled>Request 10 VTT transfer in Meteor</button>
+<p id="send-status" class="status" role="status" aria-live="polite">Disabled until the fresh preflight passes.</p>
+</section>
+<section class="panel">
+<h2>Step 4 — Verify finalized state</h2>
+<button id="verify" type="button">Verify balances and treasury ledger</button>
+<p id="verify-status" class="status" role="status" aria-live="polite">Read-only verification. Use this after wallet approval or if the wallet response is unclear.</p>
+</section>
+<p class="muted">If the wallet request outcome is uncertain, do not submit again. Use the read-only verification first. This is a Testnet demonstration, not a production security audit.</p>
+<script type="module" src="./dist/transfer.js"></script>
+</body></html>
