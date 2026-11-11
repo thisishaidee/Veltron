@@ -86,7 +86,7 @@ projected_storage_reserve = projected_storage * storage_per_byte
 vtt_bounds = view(TOKEN, "storage_balance_bounds")
 vtt_minimum = int(vtt_bounds["min"])
 
-WASM = Path("target/wasm32-unknown-unknown/release/veltron_treasury.wasm")
+WASM = Path("candidate-contract/target/wasm32-unknown-unknown/release/veltron_treasury.wasm")
 if not WASM.is_file():
     raise SystemExit(f"FAIL: expected treasury WASM artifact not found: {WASM}")
 local_wasm = WASM.read_bytes()
