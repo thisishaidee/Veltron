@@ -209,7 +209,7 @@ jobs:
               key = json.load(f)
           if set(key) != {"public_key", "private_key"}:
               raise SystemExit("Access-key secret must contain exactly public_key and private_key.")
-          if key["public_key"] != "ed25519:B5XwYhdSJH3C828uNtFDkaTmN7XUfQvka9Doj2YQwWRG":
+          if key["public_key"] != "ed25519:9igPiXMDj4UrbmZwotWuJtuRAP9BiTefweYwgndKBQNS":
               raise SystemExit("Access-key public key does not match the verified treasury FullAccess key.")
           if not isinstance(key["private_key"], str) or not key["private_key"].startswith("ed25519:"):
               raise SystemExit("Access-key private-key field has an invalid format.")
