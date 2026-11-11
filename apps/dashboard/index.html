@@ -94,6 +94,7 @@
   import { readTreasurySnapshot, callView } from "./src/dashboard.mjs";
   let nextCommitmentCursor = null;
   let commitmentRows = [];
+  let activeSnapshot = null;
 
   const byId = id => document.getElementById(id);
   const raw = value => value == null ? "—" : String(value);
@@ -119,7 +120,7 @@
     const button = byId("load-more");
     button.disabled = true;
     try {
-      const page = await callView("get_commitments", { from_id: nextCommitmentCursor, limit: 50 });
+      const page = await callView("get_commitments", { from_id: nextCommitmentCursor, limit: 50 }, fetch, activeSnapshot);
       commitmentRows = commitmentRows.concat(page.commitments);
       nextCommitmentCursor = page.next_cursor;
       renderCommitments();
@@ -135,8 +136,16 @@
     button.disabled = true;
     byId("connection-status").textContent = "Reading finalized state…";
     byId("message").textContent = "Checking network and treasury contract…";
+    activeSnapshot = null;
+    nextCommitmentCursor = null;
+    commitmentRows = [];
+    for (const id of ["balance","commitments-total","reserve","pending-total","spendable","code-hash","storage","commitment-count","pending-count","pause-state","audit-state"]) byId(id).textContent = "—";
+    byId("commitments-table").textContent = "Waiting for a fresh contract snapshot.";
+    byId("pending-table").textContent = "Waiting for a fresh contract snapshot.";
+    byId("load-more").hidden = true;
     try {
       const data = await readTreasurySnapshot();
+      activeSnapshot = data;
       byId("network").textContent = data.network;
       byId("code-hash").textContent = raw(data.account.code_hash);
       byId("storage").textContent = raw(data.account.storage_usage) + " bytes";
@@ -168,10 +177,11 @@
           ? "No successful token-balance audit has been recorded."
           : "Last observed token balance: " + amount(audit.observed_token_balance) + " · Ledger at observation: " + amount(audit.ledger_balance_at_observation) + " · Observed at (ns): " + raw(audit.observed_at_ns);
       byId("connection-status").textContent = "Connected to NEAR Testnet · read-only";
-      byId("message").textContent = "Finalized treasury state loaded. No wallet is connected and no transaction has been requested.";
+      byId("message").textContent = "Finalized treasury state loaded at block " + data.block_hash + ". No wallet is connected and no transaction has been requested.";
     } catch (error) {
-      byId("connection-status").textContent = "Read failed";
-      byId("message").textContent = error.message + " If the treasury has not been deployed and initialized, this is expected.";
+      activeSnapshot = null;
+      byId("connection-status").textContent = "Read failed · no current snapshot";
+      byId("message").textContent = error.message + " No previous financial values are being presented as current. Retry when the Testnet RPC is available.";
     } finally {
       button.disabled = false;
     }
