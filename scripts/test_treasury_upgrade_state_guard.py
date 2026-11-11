@@ -1,11 +1,40 @@
 import unittest
 from unittest.mock import patch
 
-from treasury_upgrade_state_guard import all_commitments
+from treasury_upgrade_state_guard import all_commitments, deployment_access_key, TREASURY_PUBLIC_KEY
 
 
 def commitment(identifier):
     return {"id": identifier}
+
+
+class DeploymentAccessKeyTests(unittest.TestCase):
+    def test_requires_exact_reviewed_full_access_key(self):
+        with patch(
+            "treasury_upgrade_state_guard.query",
+            return_value={"permission": "FullAccess", "nonce": 123},
+        ) as mocked:
+            result = deployment_access_key("test-rpc", "near")
+
+        self.assertEqual(result, {
+            "public_key": TREASURY_PUBLIC_KEY,
+            "permission": "FullAccess",
+        })
+        mocked.assert_called_once_with(
+            "test-rpc",
+            "view_access_key",
+            "veltron-treasury.testnet",
+            public_key=TREASURY_PUBLIC_KEY,
+        )
+
+    def test_rejects_function_call_or_missing_key(self):
+        for response in (
+            {"permission": {"FunctionCall": {"receiver_id": "other.testnet"}}},
+            {},
+        ):
+            with patch("treasury_upgrade_state_guard.query", return_value=response):
+                with self.assertRaisesRegex(RuntimeError, "missing or is not FullAccess"):
+                    deployment_access_key("test-rpc", "near")
 
 
 class CommitmentPaginationTests(unittest.TestCase):
