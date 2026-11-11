@@ -7,7 +7,8 @@ import {
   buildViewRequest,
   decodeViewResult,
   readTreasurySnapshot,
-  isCurrentSnapshotRequest
+  isCurrentSnapshotRequest,
+  classifyTokenAudit
 } from "../src/dashboard.mjs";
 
 const BLOCK_HASH = "finalized-block-hash";
@@ -117,4 +118,22 @@ test("stale pagination requests cannot update a refreshed snapshot", () => {
   assert.equal(isCurrentSnapshotRequest(1, 2, oldSnapshot, newSnapshot), false);
   assert.equal(isCurrentSnapshotRequest(2, 2, newSnapshot, newSnapshot), true);
   assert.equal(isCurrentSnapshotRequest(2, 2, oldSnapshot, newSnapshot), false);
+});
+
+
+test("token audit reports pending before comparing balances", () => {
+  assert.equal(classifyTokenAudit({ audit_pending: true, observed_token_balance: "10", ledger_balance_at_observation: "9" }), "pending");
+});
+
+test("token audit reports matched when raw integer balances are equal", () => {
+  assert.equal(classifyTokenAudit({ audit_pending: false, observed_token_balance: "10000000000000000001", ledger_balance_at_observation: "10000000000000000001" }), "matched");
+});
+
+test("token audit reports mismatch when raw integer balances differ", () => {
+  assert.equal(classifyTokenAudit({ audit_pending: false, observed_token_balance: "10000000000000000001", ledger_balance_at_observation: "10000000000000000000" }), "mismatch");
+});
+
+test("token audit reports unknown when no valid comparison is available", () => {
+  assert.equal(classifyTokenAudit({ audit_pending: false, observed_token_balance: null, ledger_balance_at_observation: "10" }), "unknown");
+  assert.equal(classifyTokenAudit({ audit_pending: false, observed_token_balance: "not-an-integer", ledger_balance_at_observation: "10" }), "unknown");
 });
