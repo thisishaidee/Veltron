@@ -95,7 +95,7 @@ jobs:
       - name: Verify access-key-file CLI support without credentials
         run: |
           npx --yes near-cli-rs@0.31.1 --version
-          near contract deploy veltron-treasury.testnet use-file without-init-call network-config testnet sign-with-access-key-file --help
+          npx --yes near-cli-rs@0.31.1 contract deploy veltron-treasury.testnet use-file without-init-call network-config testnet sign-with-access-key-file --help
 
       - name: Publish read-only result
         run: |
@@ -204,7 +204,7 @@ jobs:
           if not isinstance(key["private_key"], str) or not key["private_key"].startswith("ed25519:"):
               raise SystemExit("Access-key private-key field has an invalid format.")
           PY
-          npx --yes near-cli-rs@0.31.1 contract deploy veltron-treasury.testnet use-file "$GITHUB_WORKSPACE/preflight-tools/candidate-contract/target/wasm32-unknown-unknown/release/veltron_treasury.wasm" without-init-call network-config testnet sign-with-access-key-file "$ACCESS_KEY_FILE" send
+          near contract deploy veltron-treasury.testnet use-file "$GITHUB_WORKSPACE/preflight-tools/candidate-contract/target/wasm32-unknown-unknown/release/veltron_treasury.wasm" without-init-call network-config testnet sign-with-access-key-file "$ACCESS_KEY_FILE" send
 
       - name: Verify deployed code hash and unchanged initialized state on two RPCs
         run: python3 scripts/treasury_upgrade_state_guard.py --mode verify --snapshot "$RUNNER_TEMP/veltron-state-before.json"
