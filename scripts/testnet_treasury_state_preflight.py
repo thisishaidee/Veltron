@@ -13,9 +13,9 @@ import urllib.request
 RPC = "https://rpc.testnet.near.org"
 ACCOUNT = "veltron-treasury.testnet"
 WASM = pathlib.Path("target/wasm32-unknown-unknown/release/veltron_treasury.wasm")
-EXPECTED_NEW_SHA256 = "66d3d95d8b4f7142cb47062051a93158994236a3791d83e994946af3dd5525af"
-EXPECTED_NEW_BYTES = 338_235
-EXPECTED_EXISTING_SHA256 = "3ed0cf173950f319fce18fd6f286c899ea264c76d2e1f4fd1411b54ce3455d36"
+EXPECTED_NEW_SHA256 = "a70d8aea3538fd177859fdb7e31b8c1c1e7a982de24d76dbdcf4d88b006d2aca"
+EXPECTED_NEW_BYTES = 339_256
+EXPECTED_EXISTING_SHA256 = "66d3d95d8b4f7142cb47062051a93158994236a3791d83e994946af3dd5525af"
 
 
 def rpc(method, params, request_id):
