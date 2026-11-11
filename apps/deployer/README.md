@@ -24,8 +24,8 @@ This directory contains a browser-only Testnet deployer with artifact verificati
 - Connector configuration and wallet capability filtering are not independent proof of the wallet's active network.
 
 ## How to use
-1. Open the latest successful Contract checks workflow run for the reviewed branch and note its exact commit SHA.
-2. Download the `veltron-wasm-<exact-commit-sha>` artifact produced by that run.
+1. Open the latest successful Contract checks workflow run on PR #18.
+2. Download the artifact named `veltron-wasm-candidate-c03db083db5d7628419154474b4b456a14d60cfe`. CI builds the contract source from this exact pinned candidate commit, independently of the deployer branch merge commit.
 3. Extract it and select `veltron_treasury.wasm` and `veltron_test_token.wasm` on the page.
 4. Continue only if both hashes match. A file match does not prove the deployed treasury matches; check the finalized on-chain code hash separately.
 5. Confirm the VELTRON RPC endpoint reports Testnet. This is not wallet-network verification.
@@ -33,7 +33,7 @@ This directory contains a browser-only Testnet deployer with artifact verificati
 7. If using the deployment control, confirm Testnet in Meteor itself, inspect the exact wallet prompt, and reject any unexpected signer, receiver, network, or action.
 
 ## Updating the reference
-After any contract-source or build-configuration change, update expected hashes only from a fresh successful CI run on the exact reviewed commit. Never copy hashes from a local build or an older artifact.
+After any contract-source or build-configuration change, update the pinned candidate source commit and expected hashes only from a fresh successful CI run that verifies the exact candidate commit. Never copy hashes from a local build or an older artifact.
 
 Wallet connection does not certify the active network or contract safety. The deployment control performs fresh read-only checks and then requests a single user-approved Testnet transaction; it is not authorization for mainnet or real-fund use.
 
