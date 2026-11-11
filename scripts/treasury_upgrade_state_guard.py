@@ -86,6 +86,14 @@ def all_commitments(endpoint):
             commitment_id = entry.get("id")
             if not isinstance(commitment_id, str) or not commitment_id:
                 raise RuntimeError("get_commitments returned a commitment without a valid ID")
+            try:
+                amount = int(entry["amount"])
+            except (KeyError, TypeError, ValueError):
+                raise RuntimeError(f"get_commitments returned an invalid amount for {commitment_id}")
+            if amount <= 0:
+                raise RuntimeError(f"get_commitments returned a non-positive amount for {commitment_id}")
+            if not isinstance(entry.get("settlement_pending"), bool):
+                raise RuntimeError(f"get_commitments returned an invalid settlement flag for {commitment_id}")
             if commitment_id in seen_ids:
                 raise RuntimeError(f"get_commitments returned duplicate commitment ID: {commitment_id}")
             if previous_id is not None and commitment_id <= previous_id:
@@ -107,6 +115,20 @@ def all_commitments(endpoint):
         cursor = next_cursor
 
     raise RuntimeError("Commitment pagination exceeded the expected six-page bound")
+
+
+def assert_commitments_match_position(state, provider):
+    """Cross-check the paginated commitment set against the contract's aggregate reserve."""
+    try:
+        expected_total = int(state["financial_position"]["active_commitments"])
+        actual_total = sum(int(item["amount"]) for item in state["commitments"])
+    except (KeyError, TypeError, ValueError):
+        raise RuntimeError(f"{provider}: cannot reconcile commitment pages with financial position")
+    if actual_total != expected_total:
+        raise RuntimeError(
+            f"{provider}: paginated commitment total {actual_total} does not match "
+            f"financial-position active_commitments {expected_total}"
+        )
 
 
 def assert_upgrade_safe_state(state, provider):
@@ -163,6 +185,7 @@ def snapshot(provider, endpoint, expected_treasury_hash):
         raise RuntimeError(f"{provider}: pending transfers response has unexpected shape")
     if not isinstance(state["token_audit"], dict) or not isinstance(state["token_audit"].get("audit_pending"), bool):
         raise RuntimeError(f"{provider}: token-balance audit response has unexpected shape")
+    assert_commitments_match_position(state, provider)
     if expected_treasury_hash == OLD_TREASURY_SHA256:
         assert_upgrade_safe_state(state, provider)
     return {"treasury_hash": treasury_hash, "token_hash": token_hash, "state": state}
