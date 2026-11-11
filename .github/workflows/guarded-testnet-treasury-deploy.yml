@@ -38,6 +38,9 @@ jobs:
           path: preflight-tools
           persist-credentials: false
 
+      - name: Test fail-closed upgrade state verifier pagination
+        run: python3 -m unittest discover -s scripts -p 'test_*.py'
+
       - name: Check out exact reviewed candidate contract source
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
@@ -146,6 +149,9 @@ jobs:
           rustup default 1.99.1
           rustc --version
           cargo --version
+
+      - name: Retest fail-closed upgrade state verifier pagination
+        run: python3 -m unittest discover -s scripts -p 'test_*.py'
 
       - name: Rebuild and verify exact reviewed treasury WASM
         working-directory: preflight-tools/candidate-contract
