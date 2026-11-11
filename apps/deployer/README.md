@@ -37,7 +37,11 @@ After any contract-source or build-configuration change, update the pinned candi
 
 Wallet connection does not certify the active network or contract safety. The deployment control performs fresh read-only checks and then requests a single user-approved Testnet transaction; it is not authorization for mainnet or real-fund use.
 
-## Deployment review and approval\n\nThe page offers one user-initiated test-token deployment after fresh checks. It does not expose initialization or treasury deployment. See the detailed gate sequence below.\n\n\n## Meteor wallet executor source check
+## Deployment review and approval
+
+The root page is the separate test-token deployment flow. The dedicated `treasury.html` page is the treasury upgrade review flow; they have different target accounts, artifacts, and gates. Neither flow signs or submits automatically. A user must explicitly initiate and approve any wallet transaction.
+
+## Meteor wallet executor source check
 
 The NEAR Connect manifest inspected on 2026-11-07 lists Meteor Wallet executor version `1.1.1` at a mutable URL under the `data-storage` branch of `Meteor-Wallet/meteor_wallet_sdk`. That branch pointed to commit `ef1be35fc3712f2de60a7563aed543d78e73f763` when inspected.
 
