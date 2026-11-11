@@ -1,0 +1,97 @@
+name: Read-only Testnet configuration verification
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/verify-testnet-config-views.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: veltron-testnet-readonly-config-verification
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify deployed treasury views (read-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Query both independent Testnet RPCs
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import base64
+          import json
+          import urllib.request
+
+          ACCOUNT = "veltron-treasury.testnet"
+          EXPECTED_OWNER = "haideedotxyz.testnet"
+          EXPECTED_AGENT = "veltron-agent.testnet"
+          RPCS = (
+              "https://rpc.testnet.near.org",
+              "https://free.rpc.fastnear.com",
+          )
+
+          def view(rpc, method):
+              payload = {
+                  "jsonrpc": "2.0",
+                  "id": "veltron-readonly-verification",
+                  "method": "query",
+                  "params": {
+                      "request_type": "call_function",
+                      "finality": "final",
+                      "account_id": ACCOUNT,
+                      "method_name": method,
+                      "args_base64": "",
+                  },
+              }
+              request = urllib.request.Request(
+                  rpc,
+                  data=json.dumps(payload).encode(),
+                  headers={"Content-Type": "application/json"},
+                  method="POST",
+              )
+              with urllib.request.urlopen(request, timeout=20) as response:
+                  body = json.loads(response.read())
+              if "error" in body:
+                  raise RuntimeError(f"{rpc} {method}: {body['error']}")
+              result = body.get("result", {}).get("result")
+              if not isinstance(result, list):
+                  raise RuntimeError(f"{rpc} {method}: missing result bytes")
+              raw = bytes(result).decode("utf-8")
+              return json.loads(raw)
+
+          snapshots = {}
+          for rpc in RPCS:
+              snapshots[rpc] = {
+                  "owner": view(rpc, "get_owner"),
+                  "agent_config": view(rpc, "get_agent_config"),
+                  "paused": view(rpc, "get_pause_status"),
+              }
+              print(f"PASS: read-only views returned from {rpc}")
+
+          first, second = (snapshots[rpc] for rpc in RPCS)
+          if first != second:
+              raise SystemExit("FAIL: independent RPCs disagree on contract views")
+          if first["owner"] != EXPECTED_OWNER:
+              raise SystemExit(
+                  f"FAIL: unexpected owner: {first['owner']!r}; expected {EXPECTED_OWNER!r}"
+              )
+          if first["agent_config"].get("agent_id") != EXPECTED_AGENT:
+              raise SystemExit(
+                  "FAIL: unexpected agent: "
+                  f"{first['agent_config'].get('agent_id')!r}; expected {EXPECTED_AGENT!r}"
+              )
+          if first["paused"] is not True:
+              raise SystemExit("FAIL: treasury is not paused; no state changes were made")
+
+          print("PASS: both RPCs agree on owner, agent configuration, and paused status")
+          print("Owner:", first["owner"])
+          print("Agent:", first["agent_config"]["agent_id"])
+          print("Maximum per transaction:", first["agent_config"]["max_per_transaction"])
+          print("Paused:", first["paused"])
+          print("PASS: no wallet, signing key, transaction, or state-changing method was used")
+          PY
