@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-const endpoints = ["https://rpc.testnet.near.org", "https://rpc.testnet.fastnear.com"];
+const endpoints = ["https://rpc.testnet.near.org", "https://rpc.testnet.fastnear.com", "https://near-testnet.drpc.org"];
 
 async function mockRpc(page, overrides = {}) {
   for (const endpoint of endpoints) {
