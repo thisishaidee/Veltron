@@ -1,0 +1,103 @@
+name: Treasury deployment tooling preflight
+
+on:
+  push:
+    branches:
+      - feat/testnet-actions-deploy-preflight
+    paths:
+      - ".github/workflows/treasury-deploy-preflight.yml"
+      - "scripts/testnet_*.py"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "contracts/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: veltron-treasury-deploy-preflight
+  cancel-in-progress: false
+
+jobs:
+  read-only-preflight:
+    name: Read-only Testnet and CLI compatibility checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out deployment-preflight branch
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Check out exact reviewed candidate contract source
+        uses: actions/checkout@v5
+        with:
+          repository: thisishaidee/Veltron
+          ref: c03db083db5d7628419154474b4b456a14d60cfe
+          path: candidate-contract
+          persist-credentials: false
+
+      - name: Install pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@1.99.1
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Verify candidate source commit
+        run: test "$(git -C candidate-contract rev-parse HEAD)" = "c03db083db5d7628419154474b4b456a14d60cfe"
+
+      - name: Build exact reviewed treasury WASM
+        working-directory: candidate-contract
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/candidate-contract/target
+        run: cargo build --locked --release -p veltron-treasury --target wasm32-unknown-unknown
+
+      - name: Verify exact reviewed WASM bytes and SHA-256
+        working-directory: candidate-contract
+        run: |
+          test "$(wc -c < target/wasm32-unknown-unknown/release/veltron_treasury.wasm | tr -d ' ')" = "339256"
+          echo "a70d8aea3538fd177859fdb7e31b8c1c1e7a982de24d76dbdcf4d88b006d2aca  target/wasm32-unknown-unknown/release/veltron_treasury.wasm" | sha256sum --check -
+
+      - name: Run full workspace and NEAR Sandbox tests
+        working-directory: candidate-contract
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/candidate-contract/target
+        run: cargo test --locked --workspace -- --nocapture
+
+      - name: Verify live treasury is still the recorded pre-upgrade code
+        env:
+          VELTRON_BASE_TREASURY_WASM: ${{ github.workspace }}/candidate-contract/target/wasm32-unknown-unknown/release/veltron_treasury.wasm
+        run: python3 scripts/testnet_treasury_state_preflight.py
+
+      - name: Cross-check finalized Testnet state through independent RPC providers
+        run: python3 scripts/testnet_dual_rpc_preflight.py
+
+      - name: Inspect initialized treasury and token state
+        run: python3 scripts/testnet_treasury_initialized_preflight.py
+
+      - name: Recalculate current Testnet deployment and storage budget
+        run: python3 scripts/testnet_treasury_fee_preflight.py
+
+      - name: Set up Node.js for pinned NEAR CLI
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Verify pinned near-cli-rs package version
+        run: test "$(npm view near-cli-rs@0.31.1 version)" = "0.31.1"
+
+      - name: Inspect non-interactive DeployContract and plaintext-key CLI syntax (no credentials)
+        shell: bash
+        run: |
+          set -euo pipefail
+          CLI=(npx --yes near-cli-rs@0.31.1)
+          "${CLI[@]}" --version
+          "${CLI[@]}" contract deploy veltron-treasury.testnet --help
+          "${CLI[@]}" contract deploy veltron-treasury.testnet use-file --help
+          "${CLI[@]}" contract deploy veltron-treasury.testnet use-file without-init-call --help
+          "${CLI[@]}" contract deploy veltron-treasury.testnet use-file without-init-call network-config --help
+          "${CLI[@]}" contract deploy veltron-treasury.testnet use-file without-init-call network-config testnet --help
+          "${CLI[@]}" contract deploy veltron-treasury.testnet use-file without-init-call network-config testnet sign-with-plaintext-private-key --help
+
+      - name: Confirm this workflow did not sign or submit a transaction
+        run: echo "READ-ONLY PREFLIGHT COMPLETE — no key was loaded; no transaction was constructed, signed, or submitted."
