@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101820">
+<title>VELTRON — Read-only VTT Balance Check</title>
+<style>
+:root{color-scheme:dark;font:16px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#101820;color:#edf2f4}
+*{box-sizing:border-box}body{width:min(100% - 32px,720px);margin:auto;padding:24px 0 max(40px,env(safe-area-inset-bottom))}
+h1{font-size:1.65rem;line-height:1.2}h2{font-size:1.12rem}p{color:#c5d0d6}
+.panel{border:1px solid #40515c;border-radius:12px;padding:16px;margin:16px 0;overflow-wrap:anywhere}
+button{width:100%;padding:14px 16px;margin:8px 0;border:0;border-radius:9px;background:#b8e1dd;color:#101820;font:inherit;font-weight:750}
+button:disabled{opacity:.45}.status{padding:12px;background:#263640;border-radius:8px;white-space:pre-wrap;overflow-wrap:anywhere}
+.warn{border-left:4px solid #e2a84b;padding-left:12px}.muted{font-size:.9rem;color:#9eafb8}
+code{color:#b8e1dd;overflow-wrap:anywhere}.balance{font-size:1.35rem;font-weight:750;color:#b8e1dd}
+</style>
+</head>
+<body>
+<h1>VELTRON Testnet VTT Balance Check</h1>
+<p>This page reads token balances directly from NEAR Testnet. It does not connect to a wallet and cannot send transactions.</p>
+<section class="panel warn"><strong>READ-ONLY · TESTNET</strong><p>No wallet connection, signing request, transfer action, private key, or recovery phrase is used by this page.</p></section>
+<section class="panel">
+<h2>Token contract</h2>
+<p><code>veltron-token.testnet</code> · VELTRON Test Token (VTT) · 6 decimals</p>
+<p id="network" class="status">Network not checked yet.</p>
+<button id="check" type="button">Check both VTT balances</button>
+<p id="status" class="status" role="status" aria-live="polite">Ready. This check is read-only and will not move funds.</p>
+</section>
+<section class="panel">
+<h2>Owner balance</h2>
+<p><code>haideedotxyz.testnet</code></p>
+<p id="owner" class="balance">Not checked</p>
+</section>
+<section class="panel">
+<h2>Agent balance</h2>
+<p><code>veltron-agent.testnet</code></p>
+<p id="agent" class="balance">Not checked</p>
+</section>
+<p class="muted">Expected after the two verified test transfers: owner 999,980 VTT; agent 20 VTT. The live RPC results below are authoritative for the current balances. If the check fails, do not infer a balance.</p>
+<script type="module">
+const CONTRACT = "veltron-token.testnet";
+const OWNER = "haideedotxyz.testnet";
+const AGENT = "veltron-agent.testnet";
+const RPC = "https://rpc.testnet.near.org";
+const $ = id => document.getElementById(id);
+
+async function rpc(method, params) {
+  const response = await fetch(RPC, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: "veltron-read-only-balance", method, params })
+  });
+  if (!response.ok) throw new Error("NEAR Testnet RPC returned HTTP " + response.status + ".");
+  const payload = await response.json();
+  if (payload.error) throw new Error(payload.error.message || "NEAR RPC request failed.");
+  return payload.result;
+}
+
+async function view(method, args) {
+  const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(args))));
+  const result = await rpc("query", {
+    request_type: "call_function",
+    finality: "final",
+    account_id: CONTRACT,
+    method_name: method,
+    args_base64: encoded
+  });
+  return JSON.parse(new TextDecoder().decode(new Uint8Array(result.result)));
+}
+
+function formatVtt(raw) {
+  if (typeof raw !== "string" || !/^\d+$/.test(raw)) throw new Error("Token contract returned an invalid balance.");
+  const value = BigInt(raw);
+  const whole = value / 1000000n;
+  const fraction = (value % 1000000n).toString().padStart(6, "0").replace(/0+$/, "");
+  return whole.toLocaleString("en-US") + (fraction ? "." + fraction : "") + " VTT";
+}
+
+$("check").addEventListener("click", async () => {
+  const button = $("check");
+  button.disabled = true;
+  $("status").textContent = "Reading finalised Testnet state… No transaction will be submitted.";
+  $("network").textContent = "Checking NEAR Testnet…";
+  $("owner").textContent = "Checking…";
+  $("agent").textContent = "Checking…";
+  try {
+    const network = await rpc("status", []);
+    if (network.chain_id !== "testnet") throw new Error("RPC did not identify NEAR Testnet. Results rejected.");
+    $("network").textContent = "Confirmed by RPC: NEAR Testnet";
+    const [metadata, ownerBalance, agentBalance] = await Promise.all([
+      view("ft_metadata", {}),
+      view("ft_balance_of", { account_id: OWNER }),
+      view("ft_balance_of", { account_id: AGENT })
+    ]);
+    if (metadata.name !== "VELTRON Test Token" || metadata.symbol !== "VTT" || metadata.decimals !== 6) {
+      throw new Error("Token metadata did not match the expected VTT contract. Results rejected.");
+    }
+    $("owner").textContent = formatVtt(ownerBalance);
+    $("agent").textContent = formatVtt(agentBalance);
+    $("status").textContent = "BALANCE CHECK PASSED — finalised NEAR Testnet state read successfully for both accounts. Read-only: no wallet was connected and no transaction was requested.";
+  } catch (error) {
+    $("network").textContent = "Network or token verification failed.";
+    $("owner").textContent = "Unavailable";
+    $("agent").textContent = "Unavailable";
+    $("status").textContent = "CHECK FAILED — " + String(error.message || error) + " No transaction was submitted.";
+  } finally {
+    button.disabled = false;
+  }
+});
+</script>
+</body>
+</html>

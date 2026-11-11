@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#101820">
+  <title>VELTRON — Testnet Transfer Review</title>
+  <style>
+    :root{color-scheme:dark;font:16px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#101820;color:#edf2f4}
+    *{box-sizing:border-box}
+    body{width:min(100% - 32px,760px);margin:0 auto;padding:clamp(18px,4vw,32px) 0 max(40px,env(safe-area-inset-bottom))}
+    h1{font-size:clamp(1.55rem,5vw,1.9rem);line-height:1.2;margin:0 0 .5rem}
+    h2{font-size:1.1rem;margin:0 0 .75rem}
+    p,li{color:#c5d0d6}
+    .panel{border:1px solid #40515c;border-radius:12px;padding:clamp(12px,3.5vw,18px);margin:16px 0;min-width:0}
+    .status{padding:12px;border-radius:8px;background:#263640;margin-top:12px;overflow-wrap:anywhere;white-space:pre-wrap}
+    button{width:100%;padding:13px 16px;margin:10px 0;border:0;border-radius:8px;background:#b8e1dd;color:#101820;font:inherit;font-weight:750}
+    button:disabled{opacity:.5}
+    code{overflow-wrap:anywhere;color:#b8e1dd}
+    .warn{border-left:4px solid #e2a84b;padding-left:12px}
+    .muted{font-size:.9rem;color:#9eafb8}
+    .value{font-size:1.2rem;font-weight:750;overflow-wrap:anywhere}
+    @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+  </style>
+</head>
+<body>
+  <h1>VELTRON Testnet Transfer Review</h1>
+  <p>Read-only preflight for the proposed VTT test transfer. This page cannot connect a wallet, request signatures, or submit transactions.</p>
+
+  <section class="panel warn">
+    <strong>TESTNET ONLY · READ-ONLY STAGE</strong>
+    <p>No tokens can move from this page. The transfer below is a preview, not an active transaction.</p>
+  </section>
+
+  <section class="panel">
+    <h2>Live Testnet checks</h2>
+    <p>Token contract: <code>veltron-token.testnet</code></p>
+    <p>Owner: <code>haideedotxyz.testnet</code></p>
+    <p>Receiving agent: <code>veltron-agent.testnet</code></p>
+    <button id="check" type="button">Run read-only checks</button>
+    <div id="status" class="status" role="status" aria-live="polite">Not checked. Run the checks to read finalized Testnet state.</div>
+    <div class="panel">
+      <p class="muted">Token metadata</p>
+      <div id="metadata" class="value">Not checked</div>
+    </div>
+    <div class="panel">
+      <p class="muted">Owner VTT balance</p>
+      <div id="owner-balance" class="value">Not checked</div>
+    </div>
+    <div class="panel">
+      <p class="muted">Agent VTT balance</p>
+      <div id="agent-balance" class="value">Not checked</div>
+    </div>
+    <div class="panel">
+      <p class="muted">Agent token storage registration</p>
+      <div id="storage" class="value">Not checked</div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Proposed transfer — preview only</h2>
+    <ul>
+      <li>Network: <strong>NEAR Testnet</strong></li>
+      <li>Signer: <code>haideedotxyz.testnet</code></li>
+      <li>Token contract / receiver of call: <code>veltron-token.testnet</code></li>
+      <li>Method: <code>ft_transfer</code></li>
+      <li>Token recipient: <code>veltron-agent.testnet</code></li>
+      <li>Amount: <strong>10 VTT</strong> (10,000,000 base units; 6 decimals)</li>
+      <li>Attached deposit: <strong>1 yoctoNEAR</strong></li>
+      <li>Memo: <code>VELTRON test transfer</code></li>
+    </ul>
+    <pre class="status"><code>{
+  "receiver_id": "veltron-agent.testnet",
+  "amount": "10000000",
+  "memo": "VELTRON test transfer"
+}</code></pre>
+    <p class="muted">This JSON is displayed for review only. No wallet call is made.</p>
+    <p class="warn"><strong>Next security gate:</strong> live checks must pass, then the exact action must be reviewed in Meteor. Meteor's currently advertised integration combines signing and broadcasting in one approval flow. A separate transaction-signing stage is not assumed.</p>
+  </section>
+
+  <p class="muted">A successful read confirms only the returned finalized state. It does not authorize a transfer or prove the wallet is connected to Testnet.</p>
+
+<script>
+const CONTRACT="veltron-token.testnet";
+const OWNER="haideedotxyz.testnet";
+const AGENT="veltron-agent.testnet";
+const RPC="https://rpc.testnet.near.org";
+const $=id=>document.getElementById(id);
+
+async function rpc(method,params){
+  const response=await fetch(RPC,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({jsonrpc:"2.0",id:"veltron-transfer-preflight",method,params})});
+  const payload=await response.json();
+  if(!response.ok||payload.error)throw new Error(payload.error?.cause?.name||payload.error?.message||("RPC HTTP "+response.status));
+  return payload.result;
+}
+async function view(method,args){
+  const encoded=btoa(unescape(encodeURIComponent(JSON.stringify(args))));
+  const result=await rpc("query",{request_type:"call_function",finality:"final",account_id:CONTRACT,method_name:method,args_base64:encoded});
+  return JSON.parse(new TextDecoder().decode(new Uint8Array(result.result)));
+}
+function formatUnits(raw,decimals){
+  const n=BigInt(raw),scale=10n**BigInt(decimals),whole=n/scale,fraction=(n%scale).toString().padStart(decimals,"0").replace(/0+$/,"");
+  return whole.toString()+(fraction?"."+fraction:"");
+}
+async function runChecks(){
+  $("check").disabled=true;
+  $("status").textContent="Reading finalized NEAR Testnet state…";
+  for(const id of ["metadata","owner-balance","agent-balance","storage"])$(id).textContent="Checking…";
+  try{
+    const [metadata,ownerBalance,agentBalance,storage]=await Promise.all([
+      view("ft_metadata",{}),
+      view("ft_balance_of",{account_id:OWNER}),
+      view("ft_balance_of",{account_id:AGENT}),
+      view("storage_balance_of",{account_id:AGENT})
+    ]);
+    if(metadata.symbol!=="VTT"||metadata.name!=="VELTRON Test Token"||metadata.decimals!==6)throw new Error("Token metadata did not match the expected VELTRON VTT configuration. Stop and investigate.");
+    const owner=BigInt(ownerBalance),agent=BigInt(agentBalance),amount=10000000n;
+    $("metadata").textContent=metadata.name+" ("+metadata.symbol+"), "+metadata.decimals+" decimals";
+    $("owner-balance").textContent=formatUnits(ownerBalance,metadata.decimals)+" VTT";
+    $("agent-balance").textContent=formatUnits(agentBalance,metadata.decimals)+" VTT";
+    $("storage").textContent=storage?"Registered · total "+storage.total+" yoctoNEAR · available "+storage.available+" yoctoNEAR":"NOT REGISTERED";
+    const gates=[];
+    if(owner<amount)gates.push("Owner balance is below 10 VTT.");
+    if(!storage)gates.push("Agent is not registered to receive this token.");
+    $("status").textContent=gates.length?"CHECKS COMPLETED — DO NOT PROCEED\n"+gates.join("\n"):"READ-ONLY CHECKS PASSED — owner balance covers 10 VTT and the agent is registered. No transaction was signed or sent.";
+  }catch(error){
+    $("status").textContent="CHECKS INCOMPLETE — DO NOT PROCEED\n"+String(error.message||error).slice(0,500);
+    for(const id of ["metadata","owner-balance","agent-balance","storage"])$(id).textContent="Unavailable";
+  }finally{$("check").disabled=false;}
+}
+$("check").addEventListener("click",runChecks);
+</script>
+</body>
+</html>
