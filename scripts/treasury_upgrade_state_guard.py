@@ -56,6 +56,8 @@ def all_commitments(endpoint):
         next_cursor = page.get("next_cursor")
         if len(entries) > 50:
             raise RuntimeError("get_commitments returned more than the requested page limit")
+        if cursor is not None and not entries:
+            raise RuntimeError("get_commitments returned an empty page after a continuation cursor")
         if next_cursor is not None and (not isinstance(next_cursor, str) or not next_cursor):
             raise RuntimeError("get_commitments returned an invalid next_cursor")
         if next_cursor is not None and len(entries) != 50:
