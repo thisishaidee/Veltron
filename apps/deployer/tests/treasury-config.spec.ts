@@ -50,6 +50,7 @@ test("withholds values when independent RPCs disagree", async ({ page }) => {
 
 test("fails closed if the treasury is not paused", async ({ page }) => {
   await mockRpc(page, {
+    "https://rpc.testnet.near.org": { get_pause_status: false },
     "https://rpc.testnet.fastnear.com": { get_pause_status: false }
   });
   await page.goto("/");
