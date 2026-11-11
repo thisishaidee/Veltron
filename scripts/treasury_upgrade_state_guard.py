@@ -149,8 +149,14 @@ def snapshot(provider, endpoint, expected_treasury_hash):
         state["agent_config"] = view(endpoint, TREASURY, "get_agent_config")
         if state["owner"] != OWNER:
             raise RuntimeError(f"{provider}: configured treasury owner changed: {state['owner']}")
-        if state["agent_config"].get("agent_id") != AGENT:
-            raise RuntimeError(f"{provider}: configured agent changed: {state['agent_config']}")
+        if not isinstance(state["agent_config"], dict) or state["agent_config"].get("agent_id") != AGENT:
+            raise RuntimeError(f"{provider}: configured agent changed or has an unexpected shape: {state['agent_config']}")
+        try:
+            max_per_transaction = int(state["agent_config"]["max_per_transaction"])
+        except (KeyError, TypeError, ValueError):
+            raise RuntimeError(f"{provider}: agent transaction limit is missing or invalid: {state['agent_config']}")
+        if max_per_transaction <= 0:
+            raise RuntimeError(f"{provider}: agent transaction limit must remain positive: {state['agent_config']}")
     if not isinstance(state["financial_position"], dict) or not isinstance(state["paused"], bool):
         raise RuntimeError(f"{provider}: treasury state response has unexpected shape")
     if not isinstance(state["pending_transfers"], list):
