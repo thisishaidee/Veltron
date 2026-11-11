@@ -1,11 +1,15 @@
 import unittest
 from unittest.mock import patch
 
-from treasury_upgrade_state_guard import all_commitments, deployment_access_key, assert_upgrade_safe_state, TREASURY_PUBLIC_KEY
+from treasury_upgrade_state_guard import all_commitments, deployment_access_key, assert_commitments_match_position, assert_upgrade_safe_state, TREASURY_PUBLIC_KEY
 
 
 def commitment(identifier):
-    return {"id": identifier}
+    return {
+        "id": identifier,
+        "amount": "1",
+        "settlement_pending": False,
+    }
 
 
 class DeploymentAccessKeyTests(unittest.TestCase):
@@ -35,6 +39,23 @@ class DeploymentAccessKeyTests(unittest.TestCase):
             with patch("treasury_upgrade_state_guard.query", return_value=response):
                 with self.assertRaisesRegex(RuntimeError, "missing or is not FullAccess"):
                     deployment_access_key("test-rpc", "near")
+
+
+class CommitmentAccountingTests(unittest.TestCase):
+    def test_commitment_page_sum_matches_aggregate_reserved_total(self):
+        state = {
+            "financial_position": {"active_commitments": "3"},
+            "commitments": [commitment("a"), commitment("b"), commitment("c")],
+        }
+        assert_commitments_match_position(state, "near")
+
+    def test_rejects_incomplete_or_inconsistent_commitment_pages(self):
+        state = {
+            "financial_position": {"active_commitments": "3"},
+            "commitments": [commitment("a"), commitment("b")],
+        }
+        with self.assertRaisesRegex(RuntimeError, "does not match"):
+            assert_commitments_match_position(state, "near")
 
 
 class UpgradeQuiescenceTests(unittest.TestCase):
