@@ -129,3 +129,8 @@ export async function readTreasurySnapshot(fetchImpl = fetch) {
     ...snapshot
   };
 }
+
+// Prevent asynchronous UI work from an older refresh from mutating a newer snapshot.
+export function isCurrentSnapshotRequest(requestGeneration, currentGeneration, requestSnapshot, currentSnapshot) {
+  return requestGeneration === currentGeneration && requestSnapshot === currentSnapshot;
+}

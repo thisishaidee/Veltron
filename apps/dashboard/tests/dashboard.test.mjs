@@ -6,7 +6,8 @@ import {
   VIEW_METHODS,
   buildViewRequest,
   decodeViewResult,
-  readTreasurySnapshot
+  readTreasurySnapshot,
+  isCurrentSnapshotRequest
 } from "../src/dashboard.mjs";
 
 const BLOCK_HASH = "finalized-block-hash";
@@ -107,4 +108,13 @@ test("a provider failure during snapshot reads fails closed instead of mixing pr
   await assert.rejects(readTreasurySnapshot(fetchImpl), /503/);
   assert.ok(calls.every(call => call.url === RPC_URLS[0]));
   assert.equal(calls.some(call => call.url === RPC_URLS[1]), false);
+});
+
+
+test("stale pagination requests cannot update a refreshed snapshot", () => {
+  const oldSnapshot = { block_hash: "old-finalized-block" };
+  const newSnapshot = { block_hash: "new-finalized-block" };
+  assert.equal(isCurrentSnapshotRequest(1, 2, oldSnapshot, newSnapshot), false);
+  assert.equal(isCurrentSnapshotRequest(2, 2, newSnapshot, newSnapshot), true);
+  assert.equal(isCurrentSnapshotRequest(2, 2, oldSnapshot, newSnapshot), false);
 });
