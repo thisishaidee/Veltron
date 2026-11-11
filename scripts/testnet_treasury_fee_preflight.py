@@ -18,6 +18,7 @@ EXPECTED_TREASURY_SHA256 = "a70d8aea3538fd177859fdb7e31b8c1c1e7a982de24d76dbdcf4
 EXPECTED_EXISTING_TREASURY_SHA256 = "66d3d95d8b4f7142cb47062051a93158994236a3791d83e994946af3dd5525af"
 EXPECTED_EXISTING_TREASURY_BYTES = 338_235
 YOCTO = 10**24
+MIN_REMAINING_BALANCE = YOCTO // 10  # Keep at least 0.1 NEAR beyond projected reserves and the deploy fee.
 
 
 def rpc(method, params, request_id):
@@ -108,6 +109,11 @@ if existing_hash != EXPECTED_EXISTING_TREASURY_SHA256:
 
 remaining_after_reserves = balance - projected_storage_reserve - vtt_minimum
 remaining_after_deploy_fee = remaining_after_reserves - transaction_fee_yocto
+if remaining_after_deploy_fee < MIN_REMAINING_BALANCE:
+    raise SystemExit(
+        "FAIL: treasury balance does not cover projected storage, VTT registration, "
+        "the one-action deployment fee, and the required 0.1 NEAR safety margin."
+    )
 
 print("VELTRON TREASURY DEPLOYMENT COST PREFLIGHT — READ ONLY")
 print(f"Finalized Testnet block: {height} ({block['header']['hash']})")
@@ -129,5 +135,6 @@ print(f"Projected code + current storage reserve: {projected_storage_reserve / Y
 print(f"VTT storage registration minimum (separate future transaction): {vtt_minimum / YOCTO:.9f} NEAR")
 print(f"Balance after projected storage and VTT registration reserves: {remaining_after_reserves / YOCTO:.12f} NEAR")
 print(f"Balance after additionally subtracting one-action deploy fee estimate: {remaining_after_deploy_fee / YOCTO:.12f} NEAR")
+print(f"Required remaining safety margin: {MIN_REMAINING_BALANCE / YOCTO:.1f} NEAR")
 print("This is an estimate, not a deployment authorization or guarantee of sufficiency.")
 print("No transaction was constructed, signed, or submitted.")
