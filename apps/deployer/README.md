@@ -75,7 +75,7 @@ Before the wallet can be opened, the browser requires:
 - Meteor to be connected as `veltron-treasury.testnet`;
 - the user to confirm that Meteor itself displays NEAR Testnet;
 - both NEAR RPC and FastNEAR to identify as Testnet and agree on finalized treasury code/account state;
-- the currently deployed treasury code to match the recorded pre-upgrade hash `a70d8aea3538fd177859fdb7e31b8c1c1e7a982de24d76dbdcf4d88b006d2aca`;
+- the currently deployed treasury code to match the recorded pre-upgrade hash `66d3d95d8b4f7142cb47062051a93158994236a3791d83e994946af3dd5525af`;
 - both RPC providers to report at least one full-access key on the treasury account;
 - existing initialized treasury view state (financial position, pause status, commitments, pending transfers, token-balance audit) to be readable and structurally valid;
 - a live fee/storage estimate to leave the modeled deployment fee, projected storage reserve, and 0.05 NEAR margin covered by the account balance.
