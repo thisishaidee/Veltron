@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#101820">
+  <title>VELTRON Testnet Deployer — Preflight</title>
+  <style>
+    :root{color-scheme:dark;font:16px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#101820;color:#edf2f4}
+    *{box-sizing:border-box}
+    body{width:min(100% - 32px,760px);margin:0 auto;padding:clamp(18px,4vw,32px) 0 max(40px,env(safe-area-inset-bottom))}
+    h1{font-size:clamp(1.55rem,5vw,1.9rem);line-height:1.2;margin:0 0 .5rem}
+    h2{font-size:1.1rem;margin:0 0 .75rem}
+    p,li{color:#c5d0d6}
+    .panel{min-width:0;border:1px solid #40515c;border-radius:12px;padding:clamp(12px,3.5vw,18px);margin:16px 0}
+    label{display:block;font-weight:650;margin:14px 0 6px}
+    input[type=file]{display:block;width:100%;max-width:100%;min-width:0;padding:10px;background:#1b2932;border:1px solid #52636d;border-radius:8px;color:#edf2f4}
+    code{overflow-wrap:anywhere;word-break:break-word;color:#b8e1dd}
+    .status{min-width:0;padding:12px;border-radius:8px;background:#263640;margin-top:12px;overflow-wrap:anywhere;white-space:pre-wrap}
+    button{width:100%;padding:13px 16px;margin:10px 0;border:0;border-radius:8px;background:#b8e1dd;color:#101820;font:inherit;font-weight:750}
+    button:disabled{opacity:.45}
+    input[type=checkbox]{width:20px;height:20px;vertical-align:middle;margin-right:8px}
+    .warn{border-left:4px solid #e2a84b;padding-left:12px}
+    .muted{font-size:.9rem;color:#9eafb8}
+    @media(min-width:900px){body{padding-top:40px}.panel{padding:20px}}
+    @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+  </style>
+</head>
+<body>
+  <h1>VELTRON Testnet Deployer</h1>
+  <p>Verify the official CI-built contract files, connect a NEAR Testnet wallet, and review a separately approved test-token deployment. No transaction is sent unless you click the deployment control and approve it in your wallet.</p>
+  <div class="panel warn">
+    <strong>Testnet only. No real funds.</strong>
+    <p>Do not upload keys, seed phrases, or wallet backups. Only select the two <code>.wasm</code> files extracted from the matching GitHub Actions artifact.</p>
+  </div>
+  <div class="panel">
+    <h2>Verified build reference</h2>
+    <p>Source commit: <code>a33fa5d460c30aed5f07d22d5cbc401e23d1c354</code></p>
+    <p>Treasury SHA-256:<br><code>a70d8aea3538fd177859fdb7e31b8c1c1e7a982de24d76dbdcf4d88b006d2aca</code></p>
+    <p>Test-token SHA-256:<br><code>5d5041336cc8fc92cc9ca11fff1f0b1f7ead33c4826c6d12013f957ba1e7c95b</code></p>
+    <p class="muted">These hashes identify the CI artifact built from this source commit. The treasury currently deployed on Testnet is still an older build; matching this file does not mean the updated treasury has been deployed. Do not initialize or rely on the updated treasury until its finalized on-chain hash is independently verified.</p>
+  </div>
+  <div class="panel">
+    <label for="treasury">Treasury contract WASM</label>
+    <input id="treasury" type="file">
+    <div id="treasury-result" class="status" aria-live="polite">Not checked</div>
+    <label for="token">Test-token contract WASM</label>
+    <input id="token" type="file">
+    <div id="token-result" class="status" aria-live="polite">Not checked</div>
+    <p id="overall" class="status" aria-live="polite">Select both files to begin verification.</p>
+  </div>
+  <div class="panel" id="wallet-panel">
+    <h2>Connect NEAR Testnet wallet</h2>
+    <p>Connect using a supported wallet such as Meteor. The wallet connection does not authorize VELTRON to move funds.</p>
+    <button id="connect-wallet" type="button" disabled>Loading wallet connector…</button>
+    <p id="wallet-status" class="status" role="status" aria-live="polite">Preparing secure wallet connection…</p>
+    <p>Account: <strong id="wallet-account">Not connected</strong></p>
+    <p>Wallet network: <strong id="wallet-network">Not independently verified</strong></p>
+    <p>VELTRON RPC network: <strong id="rpc-network">Checking configured NEAR RPC…</strong></p>
+    <p class="muted">RPC status verifies only VELTRON’s configured endpoint, not the wallet’s active network.</p>
+    <p class="status" id="deployment-capability">Deployment action support: Meteor's executor source passed a DeployContract compatibility check in CI, but this does not prove the live wallet session loaded that exact source or that a real approval will succeed. The deployment control below is the only place a transaction can be requested.</p>
+    <button id="verify-wallet-key" type="button">Verify wallet ownership (sign message only)</button>
+    <p id="wallet-key-status" class="status" role="status" aria-live="polite">Not verified. This asks Meteor to sign a harmless message; it does not submit a transaction or spend NEAR.</p>
+    <button id="verify-token-contract" type="button">Check token contract (read-only)</button>
+    <p id="token-contract-status" class="status" role="status" aria-live="polite">Not checked. This check only reads public Testnet contract information; it cannot sign or submit transactions.</p>
+    <button id="inspect-access-keys" type="button">Inspect registered account keys (read-only)</button>
+    <pre id="access-keys-status" class="status" role="status" aria-live="polite">Not checked. This reads public access-key permissions for veltron-token.testnet; it cannot sign, change permissions, or submit transactions.</pre>
+    <p class="muted">The only transaction action in this stage is the separate test-token DeployContract request described below. No initialization, transfer, or treasury deployment action is available.</p>
+  </div>
+  <div class="panel" id="deployment-review">
+    <h2>Deployment review and wallet approval</h2>
+    <p class="warn"><strong>TESTNET DEPLOYMENT ONLY.</strong> The button below can request one DeployContract action after fresh read-only checks. Your wallet must show the exact action and you must approve it there. No transaction is submitted automatically.</p>
+    <h3>Step 1 — Deploy the test-token contract</h3>
+    <ul>
+      <li>Network: <code>NEAR Testnet</code> (wallet network must still be independently confirmed)</li>
+      <li>Signer and receiver account: <code>veltron-token.testnet</code> (NEAR requires the DeployContract signer/predecessor to be the receiver account)</li>
+      <li>Action: <code>DeployContract</code></li>
+      <li>WASM file: <code>veltron_test_token.wasm</code></li>
+      <li>Expected SHA-256: <code>5d5041336cc8fc92cc9ca11fff1f0b1f7ead33c4826c6d12013f957ba1e7c95b</code></li>
+      <li>Modeled one-action fee: approximately <strong>0.002379364888 NEAR</strong> at the sampled finalized block; excludes signature-verification gas and is not a live wallet quote</li>
+      <li>Storage projection: approximately <strong>3.25288 NEAR</strong> storage-backed balance after deployment; must be rechecked from actual post-deploy account state</li>
+      <li>Attached deposit: none for DeployContract; do not invent one</li>
+      <li>Signing key: the key for <code>veltron-token.testnet</code>; stop if the wallet cannot sign as that account</li>
+    </ul>
+    <h3>Step 2 — Initialize the token (only after deployed code hash passes)</h3>
+    <p>Signer and receiver: <code>veltron-token.testnet</code>. Method: <code>new</code>. Attached deposit: <strong>0 NEAR</strong> (the current initializer is not payable). Prepaid gas: <strong>3 Tgas is provisional only</strong>, based on a 2.04325 Tgas Sandbox measurement; verify current Testnet limits and the exact wallet preview before any approval. The following JSON is displayed, not sent:</p>
+    <pre><code>{
+  "owner_id": "haideedotxyz.testnet",
+  "total_supply": "1000000000000",
+  "metadata": {
+    "spec": "ft-1.0.0",
+    "name": "VELTRON Test Token",
+    "symbol": "VTT",
+    "decimals": 6
+  }
+}</code></pre>
+    <p>Expected initial supply: <strong>1,000,000 VTT</strong>, minted to the owner account. The initializer is one-time; wrong arguments require stopping and assessing a fresh contract account, not attempting an improvised recovery.</p>
+    <p><strong>Required gates:</strong> confirm the wallet's active network and that it is signing as <code>veltron-token.testnet</code>; verify the target account and current code state again; verify the uploaded WASM hash; refresh fee and storage estimates; inspect the exact DeployContract action in Meteor; deploy; independently compare the on-chain code hash; re-read actual balance and storage usage; only then prepare a separate initialization review with exact arguments, 3 Tgas only if current limits and Meteor preview support it, and 0 NEAR deposit. Do not combine the two actions.</p>
+    <button id="confirm-testnet-network" type="button" aria-pressed="false" style="background:#263640;color:#edf2f4;border:2px solid #b8e1dd;text-align:left">Confirm: Meteor Wallet displays NEAR Testnet</button>
+    <p id="network-confirmation-status" class="muted" role="status" aria-live="polite">Not confirmed on this page. Tap the confirmation button only after checking Meteor Wallet.</p>
+    <p class="warn">Before approving in Meteor, verify: network Testnet; signer and receiver <code>veltron-token.testnet</code>; exactly one <code>DeployContract</code> action; no attached deposit; and the expected contract file. Reject the request if anything differs. Never approve an initialization or transfer here.</p>
+    <button id="deploy-token-contract" type="button" disabled>Review test-token deployment in Meteor</button>
+    <p id="deployment-execution-status" class="status" role="status" aria-live="polite">Not ready. Connect veltron-token.testnet, select the matching token WASM, and confirm the wallet network before a fresh preflight can run.</p>
+    <button id="verify-deployed-code" type="button">Verify current on-chain code hash (read-only)</button>
+    <p class="muted">After approval, VELTRON independently reads the finalized on-chain code and compares its SHA-256 with the CI artifact. Initialization remains a separate, unavailable step until this comparison passes.</p>
+  </div>
+  <div class="panel">
+    <h2>Testnet configuration to review</h2>
+    <ul>
+      <li>Owner: <code>haideedotxyz.testnet</code></li>
+      <li>Treasury: <code>veltron-treasury.testnet</code></li>
+      <li>Agent: <code>veltron-agent.testnet</code></li>
+      <li>Token: <code>veltron-token.testnet</code></li>
+      <li>Expected token symbol: VTT (verify live metadata before initialization)</li>
+      <li>Agent transaction cap: 50 VTT (approved for initial testnet configuration)</li>
+      <li>Safety reserve: 200 VTT (approved for initial testnet configuration; verify token decimals before initialization)</li>
+    </ul>
+    <p class="muted">Configuration is displayed for review only. No contract initialization arguments are submitted.</p>
+  </div>
+  <p class="muted">A matching hash proves file identity against this recorded build, not contract safety or deployment success. The wallet approval screen is the final authority for what you are signing.</p>
+  <script>
+    const expected={treasury:"a70d8aea3538fd177859fdb7e31b8c1c1e7a982de24d76dbdcf4d88b006d2aca",token:"5d5041336cc8fc92cc9ca11fff1f0b1f7ead33c4826c6d12013f957ba1e7c95b"};
+    const labels={treasury:"Treasury",token:"Test-token"};
+    async function verify(kind){
+      const file=document.getElementById(kind).files[0],result=document.getElementById(kind+"-result");
+      result.dataset.ok="false";
+      if(!file){result.textContent="Not checked";updateOverall();return}
+      if(!file.name.endsWith(".wasm")){result.textContent="Rejected: choose a .wasm file.";updateOverall();return}
+      if(!globalThis.crypto?.subtle){result.textContent="Unavailable: open this page in a secure HTTPS browser.";updateOverall();return}
+      try{
+        const digest=await crypto.subtle.digest("SHA-256",await file.arrayBuffer());
+        const actual=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,"0")).join("");
+        const ok=actual===expected[kind];
+        result.dataset.ok=String(ok);
+        result.textContent=(ok?"MATCH — ":"MISMATCH — ")+labels[kind]+" SHA-256: "+actual;
+      }catch(e){result.textContent="Could not verify this file in the current browser."}
+      updateOverall();
+    }
+    function updateOverall(){
+      const a=document.getElementById("treasury-result").dataset.ok==="true",b=document.getElementById("token-result").dataset.ok==="true";
+      document.getElementById("overall").textContent=a&&b?"Both files match the recorded CI build. Preflight only; no wallet is connected and no transaction can be sent here.":"Both files must match before preflight can pass.";
+    }
+    document.getElementById("treasury").addEventListener("change",()=>verify("treasury"));
+    document.getElementById("token").addEventListener("change",()=>verify("token"));
+  </script>
+  <script type="module" src="./dist/wallet.js"></script>
+</body>
+</html>
