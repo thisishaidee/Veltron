@@ -24,7 +24,7 @@ permissions:
 
 jobs:
   browser:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: apps/deployer
@@ -35,12 +35,24 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.99.1
         with:
           targets: wasm32-unknown-unknown
-      - name: Build treasury contract for positive-path verification
+      - name: Checkout exact reviewed candidate contract source
+        uses: actions/checkout@v5
+        with:
+          ref: c03db083db5d7628419154474b4b456a14d60cfe
+          path: candidate-contract
+          persist-credentials: false
+      - name: Verify pinned candidate source commit
+        run: test "$(git -C "$GITHUB_WORKSPACE/candidate-contract" rev-parse HEAD)" = "c03db083db5d7628419154474b4b456a14d60cfe"
+      - name: Build reviewed candidate treasury contract for positive-path verification
         run: cargo build --locked --release -p veltron-treasury --target wasm32-unknown-unknown
-        working-directory: .
-      - name: Build test-token contract for positive-path verification
+        working-directory: candidate-contract
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/target
+      - name: Build reviewed candidate test-token contract for positive-path verification
         run: cargo build --locked --release -p veltron-test-token --target wasm32-unknown-unknown
-        working-directory: .
+        working-directory: candidate-contract
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/target
       - uses: actions/setup-node@v5
         with:
           node-version: 22

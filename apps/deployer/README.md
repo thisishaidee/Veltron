@@ -11,11 +11,11 @@ This directory contains a browser-only Testnet deployer with artifact verificati
 - Checks the configured VELTRON RPC endpoint with a read-only NEAR status request and reports Testnet only when the response says `chain_id: "testnet"`.
 - Keeps the wallet's active network separately labelled as not independently verified.
 - Uses NEAR Connect's `wallet.signAndSendTransaction` API with one `DeployContract` action only after fresh checks and an explicit user click. Meteor must display the exact request for the user to inspect and approve.
+- The separate treasury-upgrade page requests a harmless NEP-413 signed-message proof to verify that the exact connected public key is a FullAccess key on both Testnet RPC providers. This is not a blockchain transaction and does not authorize deployment.
 
 ## What it deliberately does not do
-- It does not request a signed message.
 - It never signs or submits automatically; only an explicit user action can open the wallet's approval flow.
-- It does not deploy the treasury contract or initialize either contract.
+- It does not deploy the treasury contract or initialize either contract automatically; the dedicated treasury page can only request one user-approved code-deployment action and exposes no initializer.
 - It does not treat a successful connection or CI source check as proof that the live wallet session will approve the action.
 - CI checks both a pinned Meteor executor snapshot and the live manifest/executor source at test time. This is compatibility evidence, not proof of a live wallet signature.
 - It does not accept private keys or seed phrases.
@@ -24,8 +24,8 @@ This directory contains a browser-only Testnet deployer with artifact verificati
 - Connector configuration and wallet capability filtering are not independent proof of the wallet's active network.
 
 ## How to use
-1. Open the latest successful Contract checks workflow run for the reviewed branch and note its exact commit SHA.
-2. Download the `veltron-wasm-<exact-commit-sha>` artifact produced by that run.
+1. Open the latest successful Contract checks workflow run on PR #18.
+2. Download the artifact named `veltron-wasm-candidate-c03db083db5d7628419154474b4b456a14d60cfe`. CI builds the contract source from this exact pinned candidate commit, independently of the deployer branch merge commit.
 3. Extract it and select `veltron_treasury.wasm` and `veltron_test_token.wasm` on the page.
 4. Continue only if both hashes match. A file match does not prove the deployed treasury matches; check the finalized on-chain code hash separately.
 5. Confirm the VELTRON RPC endpoint reports Testnet. This is not wallet-network verification.
@@ -33,11 +33,15 @@ This directory contains a browser-only Testnet deployer with artifact verificati
 7. If using the deployment control, confirm Testnet in Meteor itself, inspect the exact wallet prompt, and reject any unexpected signer, receiver, network, or action.
 
 ## Updating the reference
-After any contract-source or build-configuration change, update expected hashes only from a fresh successful CI run on the exact reviewed commit. Never copy hashes from a local build or an older artifact.
+After any contract-source or build-configuration change, update the pinned candidate source commit and expected hashes only from a fresh successful CI run that verifies the exact candidate commit. Never copy hashes from a local build or an older artifact.
 
 Wallet connection does not certify the active network or contract safety. The deployment control performs fresh read-only checks and then requests a single user-approved Testnet transaction; it is not authorization for mainnet or real-fund use.
 
-## Deployment review and approval\n\nThe page offers one user-initiated test-token deployment after fresh checks. It does not expose initialization or treasury deployment. See the detailed gate sequence below.\n\n\n## Meteor wallet executor source check
+## Deployment review and approval
+
+The root page is the separate test-token deployment flow. The dedicated `treasury.html` page is the treasury upgrade review flow; they have different target accounts, artifacts, and gates. Neither flow signs or submits automatically. A user must explicitly initiate and approve any wallet transaction.
+
+## Meteor wallet executor source check
 
 The NEAR Connect manifest inspected on 2026-11-07 lists Meteor Wallet executor version `1.1.1` at a mutable URL under the `data-storage` branch of `Meteor-Wallet/meteor_wallet_sdk`. That branch pointed to commit `ef1be35fc3712f2de60a7563aed543d78e73f763` when inspected.
 
@@ -64,3 +68,24 @@ The app then calls NEAR Connect's `wallet.signAndSendTransaction({ receiverId, a
 After the wallet request returns, the app reads finalized on-chain code and independently computes SHA-256 over the returned WASM bytes. It reports success only if the on-chain code matches the exact recorded artifact. If the code is not yet visible or differs, stop and do not initialize.
 
 **Initialization is intentionally not available in this change.** It must be a separate transaction review after the deployed code hash is verified, with its own current gas/deposit checks and wallet approval. Never combine deployment and initialization.
+
+
+## Dedicated treasury upgrade review page
+
+Open `treasury.html` for the separate `veltron-treasury.testnet` upgrade flow. This page is deliberately separate from the existing test-token deployment page.
+
+Before the wallet can be opened, the browser requires:
+- the selected treasury WASM to be exactly 339,256 bytes and match SHA-256 `a70d8aea3538fd177859fdb7e31b8c1c1e7a982de24d76dbdcf4d88b006d2aca`;
+- Meteor to be connected as `veltron-treasury.testnet`;
+- the user to confirm that Meteor itself displays NEAR Testnet;
+- both NEAR RPC and FastNEAR to identify as Testnet and agree on finalized treasury code/account state;
+- the currently deployed treasury code to match the recorded pre-upgrade hash `66d3d95d8b4f7142cb47062051a93158994236a3791d83e994946af3dd5525af`;
+- both RPC providers to report at least one full-access key on the treasury account;
+- existing initialized treasury view state (financial position, pause status, commitments, pending transfers, token-balance audit) to be readable and structurally valid;
+- a live fee/storage estimate to leave the modeled deployment fee, projected storage reserve, and 0.05 NEAR margin covered by the account balance.
+
+After these checks, the page requests exactly one `DeployContract` action with signer and receiver both `veltron-treasury.testnet`. It does not expose `new`, any other initializer, token transfer, function call, or attached deposit. The user must inspect and approve the Meteor wallet prompt.
+
+After the wallet returns, the page verifies the finalized new code hash through both independent RPC providers. A returned wallet response without matching finalized code is not treated as success; do not retry or initialize until the read-only check resolves the state.
+
+**Important:** the page now verifies the exact connected Ed25519 public key by validating the NEP-413 signature and querying that exact key's permission through both RPC providers. It separately checks that at least one FullAccess key exists on the account. These checks do not prove that Meteor will authorize the subsequent DeployContract action. The exact Meteor transaction preview and user approval remain mandatory. This browser page has not yet been proven against a live Meteor signing session. CI browser tests are not a live wallet test, and no treasury upgrade is performed by CI.

@@ -21,6 +21,7 @@ on:
       - "rust-toolchain.toml"
       - "contracts/**"
       - "scripts/testnet_fee_preflight.py"
+      - "scripts/testnet_treasury_fee_preflight.py"
       - "scripts/testnet_token_state_preflight.py"
       - "scripts/testnet_treasury_state_preflight.py"
       - "scripts/testnet_dual_rpc_preflight.py"
@@ -39,25 +40,64 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.99.1
         with:
           targets: wasm32-unknown-unknown
-      - name: Build treasury WebAssembly contract
+      - name: Checkout exact deployed treasury base source
+        uses: actions/checkout@v5
+        with:
+          ref: f9357046d73358a0e6d4fd4a978d7ed3ddacc5aa
+          path: base-contract
+          persist-credentials: false
+      - name: Checkout exact reviewed candidate contract source
+        uses: actions/checkout@v5
+        with:
+          ref: c03db083db5d7628419154474b4b456a14d60cfe
+          path: candidate-contract
+          persist-credentials: false
+      - name: Verify pinned candidate source commit
+        run: test "$(git -C candidate-contract rev-parse HEAD)" = "c03db083db5d7628419154474b4b456a14d60cfe"
+      - name: Build exact deployed treasury base WebAssembly
+        working-directory: base-contract
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/base-contract/target
         run: cargo build --locked --release -p veltron-treasury --target wasm32-unknown-unknown
-      - name: Build test-token WebAssembly contract
+      - name: Build reviewed candidate treasury WebAssembly contract
+        working-directory: candidate-contract
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/candidate-contract/target
+        run: cargo build --locked --release -p veltron-treasury --target wasm32-unknown-unknown
+      - name: Build reviewed candidate test-token WebAssembly contract
+        working-directory: candidate-contract
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/candidate-contract/target
         run: cargo build --locked --release -p veltron-test-token --target wasm32-unknown-unknown
       - name: Calculate WebAssembly SHA-256 hashes
-        run: sha256sum target/wasm32-unknown-unknown/release/veltron_treasury.wasm target/wasm32-unknown-unknown/release/veltron_test_token.wasm | tee wasm-sha256.txt
+        run: sha256sum candidate-contract/target/wasm32-unknown-unknown/release/veltron_treasury.wasm candidate-contract/target/wasm32-unknown-unknown/release/veltron_test_token.wasm | tee wasm-sha256.txt
       - name: Upload release WebAssembly artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: veltron-wasm-${{ github.sha }}
+          name: veltron-wasm-candidate-c03db083db5d7628419154474b4b456a14d60cfe
           path: |
-            target/wasm32-unknown-unknown/release/veltron_treasury.wasm
-            target/wasm32-unknown-unknown/release/veltron_test_token.wasm
+            candidate-contract/target/wasm32-unknown-unknown/release/veltron_treasury.wasm
+            candidate-contract/target/wasm32-unknown-unknown/release/veltron_test_token.wasm
             wasm-sha256.txt
           if-no-files-found: error
           retention-days: 14
-      - name: Run workspace and NEAR Sandbox integration tests
+      - name: Run candidate workspace and NEAR Sandbox integration tests
+        working-directory: candidate-contract
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/candidate-contract/target
         run: cargo test --locked --workspace -- --nocapture
+      - name: Verify treasury state survives upgrade from deployed base build (Sandbox only)
+        working-directory: candidate-contract
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/candidate-contract/target
+          VELTRON_BASE_TREASURY_WASM: ${{ github.workspace }}/base-contract/target/wasm32-unknown-unknown/release/veltron_treasury.wasm
+        run: |
+          test -s "$VELTRON_BASE_TREASURY_WASM"
+          cargo test --locked -p veltron-treasury --test sandbox sandbox_upgrade_preserves_initialized_treasury_state -- --ignored --nocapture
       - name: Explicitly verify NEP-141 token initialization in NEAR Sandbox
+        working-directory: candidate-contract
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/candidate-contract/target
         run: cargo test --locked -p veltron-test-token --test sandbox -- --nocapture
       - name: Read current NEAR Testnet deployment fee parameters
         run: python3 scripts/testnet_fee_preflight.py
@@ -65,7 +105,9 @@ jobs:
         run: python3 scripts/testnet_treasury_fee_preflight.py
       - name: Verify deployed VTT code and initialization state (read-only)
         run: python3 scripts/testnet_token_state_preflight.py
-      - name: Verify treasury deployment code against this build (read-only)
+      - name: Verify deployed treasury matches pinned base and proposed upgrade is distinct (read-only)
+        env:
+          VELTRON_BASE_TREASURY_WASM: ${{ github.workspace }}/base-contract/target/wasm32-unknown-unknown/release/veltron_treasury.wasm
         run: python3 scripts/testnet_treasury_state_preflight.py
       - name: Cross-check finalized VTT and treasury state with two independent RPC providers (read-only)
         run: python3 scripts/testnet_dual_rpc_preflight.py
