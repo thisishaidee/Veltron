@@ -37,7 +37,6 @@ class CommitmentPaginationTests(unittest.TestCase):
                 all_commitments("test-rpc")
 
     def test_rejects_duplicate_or_non_increasing_ids(self):
-        first = {"commitments": [commitment("a"), commitment("b")], "next_cursor": None}
         duplicate = {"commitments": [commitment("a"), commitment("a")], "next_cursor": None}
         with patch("treasury_upgrade_state_guard.view", return_value=duplicate):
             with self.assertRaisesRegex(RuntimeError, "duplicate"):
@@ -46,6 +45,16 @@ class CommitmentPaginationTests(unittest.TestCase):
         descending = {"commitments": [commitment("b"), commitment("a")], "next_cursor": None}
         with patch("treasury_upgrade_state_guard.view", return_value=descending):
             with self.assertRaisesRegex(RuntimeError, "strictly increasing"):
+                all_commitments("test-rpc")
+
+    def test_rejects_empty_page_after_continuation_cursor(self):
+        first_entries = [commitment(f"item-{i:03d}") for i in range(50)]
+        pages = [
+            {"commitments": first_entries, "next_cursor": first_entries[-1]["id"]},
+            {"commitments": [], "next_cursor": None},
+        ]
+        with patch("treasury_upgrade_state_guard.view", side_effect=pages):
+            with self.assertRaisesRegex(RuntimeError, "empty page after a continuation"):
                 all_commitments("test-rpc")
 
     def test_rejects_cursor_on_short_page(self):
