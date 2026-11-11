@@ -137,6 +137,12 @@ def assert_upgrade_safe_state(state, provider):
         raise RuntimeError(f"{provider}: treasury must already be paused before a code upgrade")
     if state.get("pending_transfers") != []:
         raise RuntimeError(f"{provider}: pending treasury transfers must be empty before a code upgrade")
+    try:
+        pending_discretionary = int(state["financial_position"]["pending_discretionary"])
+    except (KeyError, TypeError, ValueError):
+        raise RuntimeError(f"{provider}: pending discretionary balance is missing or invalid")
+    if pending_discretionary != 0:
+        raise RuntimeError(f"{provider}: pending discretionary balance must be zero before a code upgrade")
     audit = state.get("token_audit")
     if not isinstance(audit, dict) or audit.get("audit_pending") is not False:
         raise RuntimeError(f"{provider}: token-balance audit must not be pending before a code upgrade")
