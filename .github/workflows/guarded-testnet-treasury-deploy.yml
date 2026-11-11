@@ -10,6 +10,7 @@ on:
         default: preflight-only
         options:
           - preflight-only
+          - validate-credential-only
           - deploy-one-contract
 
 permissions:
@@ -117,6 +118,56 @@ jobs:
               echo "- Read-only mode selected; no deployment job will run."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+
+  validate-credential:
+    name: Validate deployment credential without signing
+    needs: preflight
+    if: github.ref == 'refs/heads/main' && inputs.deployment_intent == 'validate-credential-only'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment:
+      name: testnet-deploy
+    steps:
+      - name: Validate secret structure and pinned key match (no signing)
+        shell: bash
+        env:
+          VELTRON_TREASURY_ACCESS_KEY_JSON: ${{ secrets.VELTRON_TREASURY_ACCESS_KEY_JSON }}
+        run: |
+          set -euo pipefail
+          umask 077
+          ACCESS_KEY_FILE="$RUNNER_TEMP/veltron-treasury-access-key.json"
+          trap 'rm -f "$ACCESS_KEY_FILE"' EXIT
+          test -n "${VELTRON_TREASURY_ACCESS_KEY_JSON:-}"
+          printf '%s' "$VELTRON_TREASURY_ACCESS_KEY_JSON" > "$ACCESS_KEY_FILE"
+          unset VELTRON_TREASURY_ACCESS_KEY_JSON
+          python3 - "$ACCESS_KEY_FILE" <<'PY'
+          import base64, json, sys
+          expected = "ed25519:9igPiXMDj4UrbmZwotWuJtuRAP9BiTefweYwgndKBQNS"
+          alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+          def b58decode(value):
+              number = 0
+              for char in value:
+                  number = number * 58 + alphabet.index(char)
+              raw = number.to_bytes((number.bit_length() + 7) // 8, "big") if number else b""
+              return b"\\x00" * (len(value) - len(value.lstrip("1"))) + raw
+          with open(sys.argv[1], encoding="utf-8") as f:
+              key = json.load(f)
+          if not isinstance(key, dict) or set(key) != {"public_key", "private_key"}:
+              raise SystemExit("FAIL: secret must contain exactly public_key and private_key.")
+          if key["public_key"] != expected:
+              raise SystemExit("FAIL: public key does not match the verified treasury key.")
+          private = key["private_key"]
+          if not isinstance(private, str) or not private.startswith("ed25519:"):
+              raise SystemExit("FAIL: private-key field has an invalid format.")
+          secret_bytes = b58decode(private.split(":", 1)[1])
+          public_bytes = b58decode(expected.split(":", 1)[1])
+          if len(secret_bytes) != 64 or len(public_bytes) != 32:
+              raise SystemExit("FAIL: key material has an invalid decoded length.")
+          if secret_bytes[32:] != public_bytes:
+              raise SystemExit("FAIL: private key does not contain the pinned public key.")
+          print("PASS: credential structure and public/private key pairing verified. No signing or transaction submitted.")
+          PY
 
   deploy:
     name: Deploy exactly one reviewed treasury contract
