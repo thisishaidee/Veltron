@@ -78,6 +78,7 @@
 
   <section class="panel">
     <div class="section-head"><h2>Safety and token audit</h2><span id="pause-state" class="muted">—</span></div>
+    <p><strong id="audit-status" class="muted">Audit status: —</strong></p>
     <p id="audit-state" class="muted">Waiting for contract data.</p>
   </section>
 
@@ -91,7 +92,7 @@
 </main>
 
 <script type="module">
-  import { readTreasurySnapshot, callView, isCurrentSnapshotRequest } from "./src/dashboard.mjs";
+  import { readTreasurySnapshot, callView, isCurrentSnapshotRequest, classifyTokenAudit } from "./src/dashboard.mjs";
   let nextCommitmentCursor = null;
   let commitmentRows = [];
   let activeSnapshot = null;
@@ -187,10 +188,20 @@
       );
       byId("pause-state").innerHTML = data.paused ? '<span class="bad">Outgoing transfers paused</span>' : '<span class="good">Outgoing transfers enabled</span>';
       const audit = data.audit;
-      byId("audit-state").textContent = audit.audit_pending
+      const auditStatus = classifyTokenAudit(audit);
+      const auditLabels = {
+        matched: ["Matched", "good"],
+        mismatch: ["Mismatch · investigate before relying on this balance", "bad"],
+        pending: ["Pending · audit in progress", "warn"],
+        unknown: ["Unknown · no valid balance comparison", "warn"]
+      };
+      const [auditLabel, auditClass] = auditLabels[auditStatus];
+      byId("audit-status").textContent = "Audit status: " + auditLabel;
+      byId("audit-status").className = auditClass;
+      byId("audit-state").textContent = auditStatus === "pending"
         ? "Token balance audit is currently pending."
-        : audit.observed_token_balance == null
-          ? "No successful token-balance audit has been recorded."
+        : auditStatus === "unknown"
+          ? "No valid successful token-balance comparison is available."
           : "Last observed token balance: " + amount(audit.observed_token_balance) + " · Ledger at observation: " + amount(audit.ledger_balance_at_observation) + " · Observed at (ns): " + raw(audit.observed_at_ns);
       byId("connection-status").textContent = "Connected to NEAR Testnet · read-only";
       byId("message").textContent = "Finalized treasury state loaded at block " + data.block_hash + ". No wallet is connected and no transaction has been requested.";
