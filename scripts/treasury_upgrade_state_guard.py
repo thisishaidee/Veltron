@@ -14,6 +14,7 @@ TREASURY = "veltron-treasury.testnet"
 TOKEN = "veltron-token.testnet"
 OWNER = "haideedotxyz.testnet"
 AGENT = "veltron-agent.testnet"
+TREASURY_PUBLIC_KEY = "ed25519:B5XwYhdSJH3C828uNtFDkaTmN7XUfQvka9Doj2YQwWRG"
 OLD_TREASURY_SHA256 = "66d3d95d8b4f7142cb47062051a93158994236a3791d83e994946af3dd5525af"
 NEW_TREASURY_SHA256 = "a70d8aea3538fd177859fdb7e31b8c1c1e7a982de24d76dbdcf4d88b006d2aca"
 TOKEN_SHA256 = "5d5041336cc8fc92cc9ca11fff1f0b1f7ead33c4826c6d12013f957ba1e7c95b"
@@ -37,6 +38,21 @@ def view(endpoint, account_id, method, args=None):
     encoded = base64.b64encode(json.dumps(args or {}, separators=(",", ":")).encode()).decode()
     result = query(endpoint, "call_function", account_id, method_name=method, args_base64=encoded)
     return json.loads(bytes(result["result"]).decode())
+
+
+def deployment_access_key(endpoint, provider):
+    """Require the exact reviewed deployment key to remain a FullAccess key."""
+    key = query(
+        endpoint,
+        "view_access_key",
+        TREASURY,
+        public_key=TREASURY_PUBLIC_KEY,
+    )
+    if not isinstance(key, dict) or key.get("permission") != "FullAccess":
+        raise RuntimeError(
+            f"{provider}: reviewed treasury deployment key is missing or is not FullAccess"
+        )
+    return {"public_key": TREASURY_PUBLIC_KEY, "permission": "FullAccess"}
 
 
 def all_commitments(endpoint):
@@ -106,6 +122,7 @@ def snapshot(provider, endpoint, expected_treasury_hash):
     state = {
         "financial_position": view(endpoint, TREASURY, "get_financial_position"),
         "paused": view(endpoint, TREASURY, "get_pause_status"),
+        "deployment_access_key": deployment_access_key(endpoint, provider),
         "commitments": all_commitments(endpoint),
         "pending_transfers": view(endpoint, TREASURY, "get_pending_transfers"),
         "token_audit": view(endpoint, TREASURY, "get_token_balance_audit"),
@@ -152,6 +169,7 @@ def main():
         print("PASS: new treasury WASM hash verified through both RPCs.")
         print("PASS: pre-existing financial position, pause state, commitments, pending transfers, token audit, VTT metadata, treasury token balance, and storage registration are unchanged.")
         print("PASS: newly exposed owner and agent configuration match the expected initialized accounts.")
+    print("PASS: the exact reviewed treasury deployment key remains a FullAccess key on both RPCs.")
     print("No additional transaction was constructed, signed, or submitted by this verifier.")
 
 
