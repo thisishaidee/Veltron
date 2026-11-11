@@ -39,6 +39,20 @@ def view(endpoint, account_id, method, args=None):
     return json.loads(bytes(result["result"]).decode())
 
 
+def all_commitments(endpoint):
+    commitments = []
+    cursor = None
+    for _ in range(6):  # 256 active commitments at 50 per page, with one safety page.
+        page = view(endpoint, TREASURY, "get_commitments", {"from_id": cursor, "limit": 50})
+        if not isinstance(page, dict) or not isinstance(page.get("commitments"), list):
+            raise RuntimeError("get_commitments returned an unexpected page shape")
+        commitments.extend(page["commitments"])
+        cursor = page.get("next_cursor")
+        if cursor is None:
+            return commitments
+    raise RuntimeError("Commitment pagination exceeded the expected bounded page count")
+
+
 def snapshot(provider, endpoint, expected_treasury_hash):
     status = rpc(endpoint, "status", [], "status")
     if status.get("chain_id") != "testnet":
@@ -55,7 +69,7 @@ def snapshot(provider, endpoint, expected_treasury_hash):
     state = {
         "financial_position": view(endpoint, TREASURY, "get_financial_position"),
         "paused": view(endpoint, TREASURY, "get_pause_status"),
-        "commitments": view(endpoint, TREASURY, "get_commitments", {"from_id": None, "limit": 50}),
+        "commitments": all_commitments(endpoint),
         "pending_transfers": view(endpoint, TREASURY, "get_pending_transfers"),
         "token_audit": view(endpoint, TREASURY, "get_token_balance_audit"),
         "token_metadata": view(endpoint, TOKEN, "ft_metadata"),
