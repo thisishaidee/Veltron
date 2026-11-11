@@ -1796,13 +1796,7 @@ mod tests {
 
     #[test]
     fn owner_and_agent_configuration_views_return_initialized_values() {
-        let contract = Veltron::new(
-            account("owner.near"),
-            account("token.near"),
-            account("agent.near"),
-            U128(500),
-            U128(100),
-        );
+        let contract = setup("owner.near");
 
         assert_eq!(contract.get_owner(), account("owner.near"));
         let agent_config = contract.get_agent_config();
