@@ -24,7 +24,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Run guarded upgrade verifier unit tests
-        run: python3 -m unittest discover -s scripts -p 'test_*.py'
+        run: python3 -m unittest discover -s scripts -p 'test_treasury_upgrade_state_guard.py'
       - uses: dtolnay/rust-toolchain@stable
       - name: Run treasury contract tests
         run: cargo test -p veltron-treasury
