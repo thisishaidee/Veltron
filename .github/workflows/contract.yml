@@ -82,7 +82,9 @@ jobs:
         run: python3 scripts/testnet_treasury_fee_preflight.py
       - name: Verify deployed VTT code and initialization state (read-only)
         run: python3 scripts/testnet_token_state_preflight.py
-      - name: Verify treasury deployment code against this build (read-only)
+      - name: Verify deployed treasury matches pinned base and proposed upgrade is distinct (read-only)
+        env:
+          VELTRON_BASE_TREASURY_WASM: ${{ github.workspace }}/base-contract/target/wasm32-unknown-unknown/release/veltron_treasury.wasm
         run: python3 scripts/testnet_treasury_state_preflight.py
       - name: Cross-check finalized VTT and treasury state with two independent RPC providers (read-only)
         run: python3 scripts/testnet_dual_rpc_preflight.py
