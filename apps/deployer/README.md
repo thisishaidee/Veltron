@@ -13,7 +13,7 @@ This directory contains a browser-only Testnet deployer with artifact verificati
 - Uses NEAR Connect's `wallet.signAndSendTransaction` API with one `DeployContract` action only after fresh checks and an explicit user click. Meteor must display the exact request for the user to inspect and approve.
 
 ## What it deliberately does not do
-- It does not request a signed message.
+- The separate treasury-upgrade page requests a harmless NEP-413 signed-message proof to verify that the exact connected public key is a FullAccess key on both Testnet RPC providers. This is not a blockchain transaction and does not authorize deployment.
 - It never signs or submits automatically; only an explicit user action can open the wallet's approval flow.
 - It does not deploy the treasury contract or initialize either contract.
 - It does not treat a successful connection or CI source check as proof that the live wallet session will approve the action.
@@ -84,4 +84,4 @@ After these checks, the page requests exactly one `DeployContract` action with s
 
 After the wallet returns, the page verifies the finalized new code hash through both independent RPC providers. A returned wallet response without matching finalized code is not treated as success; do not retry or initialize until the read-only check resolves the state.
 
-**Important:** a full-access key existing on the account is not proof that the currently connected wallet key is that key. Meteor's exact signer/account preview and wallet authorization remain mandatory. This browser page has not yet been proven against a live Meteor signing session. CI browser tests are not a live wallet test, and no treasury upgrade is performed by CI.
+**Important:** the page now verifies the exact connected Ed25519 public key by validating the NEP-413 signature and querying that exact key's permission through both RPC providers. It separately checks that at least one FullAccess key exists on the account. These checks do not prove that Meteor will authorize the subsequent DeployContract action. The exact Meteor transaction preview and user approval remain mandatory. This browser page has not yet been proven against a live Meteor signing session. CI browser tests are not a live wallet test, and no treasury upgrade is performed by CI.
