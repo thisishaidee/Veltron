@@ -34,7 +34,7 @@ jobs:
       - name: Check out reviewed read-only preflight tools
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
-          ref: 24439dde8fd64a9be00df4108ac41330c3610e31
+          ref: c9240911187fe1cf7d9fcdc5ef4b69df1400f9ea
           path: preflight-tools
           persist-credentials: false
 
@@ -135,7 +135,7 @@ jobs:
       - name: Check out reviewed read-only preflight tools
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
-          ref: 24439dde8fd64a9be00df4108ac41330c3610e31
+          ref: c9240911187fe1cf7d9fcdc5ef4b69df1400f9ea
           path: preflight-tools
           persist-credentials: false
 
