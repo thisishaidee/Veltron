@@ -71,11 +71,11 @@ After the wallet request returns, the app reads finalized on-chain code and inde
 Open `treasury.html` for the separate `veltron-treasury.testnet` upgrade flow. This page is deliberately separate from the existing test-token deployment page.
 
 Before the wallet can be opened, the browser requires:
-- the selected treasury WASM to be exactly 338,235 bytes and match SHA-256 `66d3d95d8b4f7142cb47062051a93158994236a3791d83e994946af3dd5525af`;
+- the selected treasury WASM to be exactly 339,256 bytes and match SHA-256 `a70d8aea3538fd177859fdb7e31b8c1c1e7a982de24d76dbdcf4d88b006d2aca`;
 - Meteor to be connected as `veltron-treasury.testnet`;
 - the user to confirm that Meteor itself displays NEAR Testnet;
 - both NEAR RPC and FastNEAR to identify as Testnet and agree on finalized treasury code/account state;
-- the currently deployed treasury code to match the recorded pre-upgrade hash `3ed0cf173950f319fce18fd6f286c899ea264c76d2e1f4fd1411b54ce3455d36`;
+- the currently deployed treasury code to match the recorded pre-upgrade hash `a70d8aea3538fd177859fdb7e31b8c1c1e7a982de24d76dbdcf4d88b006d2aca`;
 - both RPC providers to report at least one full-access key on the treasury account;
 - existing initialized treasury view state (financial position, pause status, commitments, pending transfers, token-balance audit) to be readable and structurally valid;
 - a live fee/storage estimate to leave the modeled deployment fee, projected storage reserve, and 0.05 NEAR margin covered by the account balance.
