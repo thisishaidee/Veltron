@@ -92,7 +92,7 @@ jobs:
       - name: Verify pinned near-cli-rs package version
         run: test "$(npm view near-cli-rs@0.31.1 version)" = "0.31.1"
 
-      - name: Inspect non-interactive DeployContract and plaintext-key CLI syntax (no credentials)
+      - name: Inspect non-interactive DeployContract signing modes (no credentials)
         shell: bash
         run: |
           set -euo pipefail
@@ -104,6 +104,7 @@ jobs:
           "${CLI[@]}" contract deploy veltron-treasury.testnet use-file without-init-call network-config --help
           "${CLI[@]}" contract deploy veltron-treasury.testnet use-file without-init-call network-config testnet --help
           "${CLI[@]}" contract deploy veltron-treasury.testnet use-file without-init-call network-config testnet sign-with-plaintext-private-key --help
+          "${CLI[@]}" contract deploy veltron-treasury.testnet use-file without-init-call network-config testnet sign-with-access-key-file --help
 
       - name: Confirm this workflow did not sign or submit a transaction
         run: echo "READ-ONLY PREFLIGHT COMPLETE — no key was loaded; no transaction was constructed, signed, or submitted."
