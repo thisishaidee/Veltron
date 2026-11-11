@@ -63,7 +63,7 @@ def all_commitments(endpoint):
 
     # The contract caps active commitments at 256 and returns at most 50 per page.
     # Six pages are sufficient (50 * 5 + 6), with no unbounded RPC loop.
-    for page_number in range(1, 7):
+    for _ in range(6):
         page = view(endpoint, TREASURY, "get_commitments", {"from_id": cursor, "limit": 50})
         if not isinstance(page, dict) or not isinstance(page.get("commitments"), list):
             raise RuntimeError("get_commitments returned an unexpected page shape")
@@ -84,11 +84,18 @@ def all_commitments(endpoint):
             if not isinstance(entry, dict):
                 raise RuntimeError("get_commitments returned a malformed commitment")
             commitment_id = entry.get("id")
-            if not isinstance(commitment_id, str) or not commitment_id:
-                raise RuntimeError("get_commitments returned a commitment without a valid ID")
+            if not isinstance(commitment_id, str) or not commitment_id or len(commitment_id) > 64:
+                raise RuntimeError("get_commitments returned a commitment with an invalid ID")
+            if not isinstance(entry.get("recipient_id"), str) or not entry["recipient_id"]:
+                raise RuntimeError(f"get_commitments returned an invalid recipient for {commitment_id}")
+            if not isinstance(entry.get("description"), str):
+                raise RuntimeError(f"get_commitments returned an invalid description for {commitment_id}")
+            raw_amount = entry.get("amount")
+            if isinstance(raw_amount, bool) or not isinstance(raw_amount, (str, int)):
+                raise RuntimeError(f"get_commitments returned an invalid amount for {commitment_id}")
             try:
-                amount = int(entry["amount"])
-            except (KeyError, TypeError, ValueError):
+                amount = int(raw_amount)
+            except ValueError:
                 raise RuntimeError(f"get_commitments returned an invalid amount for {commitment_id}")
             if amount <= 0:
                 raise RuntimeError(f"get_commitments returned a non-positive amount for {commitment_id}")
