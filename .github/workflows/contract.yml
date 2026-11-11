@@ -39,6 +39,17 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.99.1
         with:
           targets: wasm32-unknown-unknown
+      - name: Checkout exact deployed treasury base source
+        uses: actions/checkout@v5
+        with:
+          ref: f9357046d73358a0e6d4fd4a978d7ed3ddacc5aa
+          path: base-contract
+          persist-credentials: false
+      - name: Build exact deployed treasury base WebAssembly
+        working-directory: base-contract
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/base-contract/target
+        run: cargo build --locked --release -p veltron-treasury --target wasm32-unknown-unknown
       - name: Build treasury WebAssembly contract
         run: cargo build --locked --release -p veltron-treasury --target wasm32-unknown-unknown
       - name: Build test-token WebAssembly contract
@@ -57,6 +68,12 @@ jobs:
           retention-days: 14
       - name: Run workspace and NEAR Sandbox integration tests
         run: cargo test --locked --workspace -- --nocapture
+      - name: Verify treasury state survives upgrade from deployed base build (Sandbox only)
+        env:
+          VELTRON_BASE_TREASURY_WASM: ${{ github.workspace }}/base-contract/target/wasm32-unknown-unknown/release/veltron_treasury.wasm
+        run: |
+          test -s "$VELTRON_BASE_TREASURY_WASM"
+          cargo test --locked -p veltron-treasury --test sandbox sandbox_upgrade_preserves_initialized_treasury_state -- --ignored --nocapture
       - name: Explicitly verify NEP-141 token initialization in NEAR Sandbox
         run: cargo test --locked -p veltron-test-token --test sandbox -- --nocapture
       - name: Read current NEAR Testnet deployment fee parameters
@@ -65,7 +82,9 @@ jobs:
         run: python3 scripts/testnet_treasury_fee_preflight.py
       - name: Verify deployed VTT code and initialization state (read-only)
         run: python3 scripts/testnet_token_state_preflight.py
-      - name: Verify treasury deployment code against this build (read-only)
+      - name: Verify deployed treasury matches pinned base and proposed upgrade is distinct (read-only)
+        env:
+          VELTRON_BASE_TREASURY_WASM: ${{ github.workspace }}/base-contract/target/wasm32-unknown-unknown/release/veltron_treasury.wasm
         run: python3 scripts/testnet_treasury_state_preflight.py
       - name: Cross-check finalized VTT and treasury state with two independent RPC providers (read-only)
         run: python3 scripts/testnet_dual_rpc_preflight.py
