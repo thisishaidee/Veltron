@@ -5,6 +5,7 @@ const RPCS = [
 const TREASURY = "veltron-treasury.testnet";
 const EXPECTED_OWNER = "haideedotxyz.testnet";
 const EXPECTED_AGENT = "veltron-agent.testnet";
+const EXPECTED_MAX_PER_TRANSACTION = "50000000";
 const $ = (id) => document.getElementById(id);
 
 async function rpc(endpoint, method, params) {
@@ -77,7 +78,8 @@ async function refresh() {
       throw new Error("The two independent RPC providers disagree. Values are withheld.");
     }
     const state = snapshots[0];
-    if (state.owner !== EXPECTED_OWNER || state.agent_id !== EXPECTED_AGENT || state.paused !== true) {
+    if (state.owner !== EXPECTED_OWNER || state.agent_id !== EXPECTED_AGENT ||
+        state.max_per_transaction !== EXPECTED_MAX_PER_TRANSACTION || state.paused !== true) {
       throw new Error("The live configuration differs from the reviewed VELTRON safety configuration. Values are withheld.");
     }
     $("live-owner").textContent = state.owner;
