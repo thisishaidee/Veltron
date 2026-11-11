@@ -1,0 +1,229 @@
+name: Guarded VELTRON Testnet treasury upgrade
+
+on:
+  workflow_dispatch:
+    inputs:
+      deployment_intent:
+        description: "Choose read-only verification or explicitly request one Testnet contract upgrade"
+        required: true
+        type: choice
+        default: preflight-only
+        options:
+          - preflight-only
+          - deploy-one-contract
+
+permissions:
+  contents: read
+
+concurrency:
+  group: veltron-testnet-treasury-upgrade
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    name: Read-only pre-deployment checks
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Check out workflow source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+
+      - name: Check out reviewed read-only preflight tools
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: c9240911187fe1cf7d9fcdc5ef4b69df1400f9ea
+          path: preflight-tools
+          persist-credentials: false
+
+      - name: Test fail-closed upgrade state verifier pagination
+        run: python3 -m unittest discover -s scripts -p 'test_treasury_upgrade_state_guard.py'
+
+      - name: Check out exact reviewed candidate contract source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          repository: thisishaidee/Veltron
+          ref: c03db083db5d7628419154474b4b456a14d60cfe
+          path: preflight-tools/candidate-contract
+          persist-credentials: false
+
+      - name: Install pinned Rust toolchain
+        run: |
+          rustup toolchain install 1.99.1 --profile minimal --target wasm32-unknown-unknown
+          rustup default 1.99.1
+          rustc --version
+          cargo --version
+
+      - name: Verify exact reviewed source commit
+        run: test "$(git -C preflight-tools/candidate-contract rev-parse HEAD)" = "c03db083db5d7628419154474b4b456a14d60cfe"
+
+      - name: Build exact treasury and Testnet token WASM
+        working-directory: preflight-tools/candidate-contract
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/preflight-tools/candidate-contract/target
+        run: |
+          cargo build --locked --release -p veltron-treasury --target wasm32-unknown-unknown
+          cargo build --locked --release -p veltron-test-token --target wasm32-unknown-unknown
+
+      - name: Verify reviewed treasury WASM size and SHA-256
+        working-directory: preflight-tools/candidate-contract
+        run: |
+          test "$(wc -c < target/wasm32-unknown-unknown/release/veltron_treasury.wasm | tr -d ' ')" = "339256"
+          echo "a70d8aea3538fd177859fdb7e31b8c1c1e7a982de24d76dbdcf4d88b006d2aca  target/wasm32-unknown-unknown/release/veltron_treasury.wasm" | sha256sum --check -
+
+      - name: Run full workspace and NEAR Sandbox tests
+        working-directory: preflight-tools/candidate-contract
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/preflight-tools/candidate-contract/target
+        run: cargo test --locked --workspace -- --nocapture
+
+      - name: Verify recorded pre-upgrade treasury code
+        working-directory: preflight-tools
+        run: python3 scripts/testnet_treasury_state_preflight.py
+
+      - name: Verify finalized state through two independent RPCs
+        working-directory: preflight-tools
+        run: python3 scripts/testnet_dual_rpc_preflight.py
+
+      - name: Verify initialized treasury and VTT state
+        working-directory: preflight-tools
+        run: python3 scripts/testnet_treasury_initialized_preflight.py
+
+      - name: Recalculate live storage reserve and deployment fee
+        working-directory: preflight-tools
+        run: python3 scripts/testnet_treasury_fee_preflight.py
+
+      - name: Snapshot and verify current treasury state and reviewed FullAccess key
+        run: python3 scripts/treasury_upgrade_state_guard.py --mode snapshot --snapshot "$RUNNER_TEMP/veltron-read-only-preflight.json"
+
+      - name: Verify access-key-file CLI support without credentials
+        run: |
+          npx --yes near-cli-rs@0.31.1 --version
+          npx --yes near-cli-rs@0.31.1 contract deploy veltron-treasury.testnet use-file without-init-call network-config testnet sign-with-access-key-file --help
+
+      - name: Publish read-only result
+        run: |
+          {
+            echo "## VELTRON Testnet deployment preflight"
+            echo "- Reviewed treasury artifact SHA-256: `a70d8aea3538fd177859fdb7e31b8c1c1e7a982de24d76dbdcf4d88b006d2aca`"
+            echo "- Full workspace/Sandbox tests and live Testnet preflights passed."
+            echo "- Exact reviewed treasury FullAccess key and complete paginated commitments verified on two RPC providers."
+            echo "- No secret was loaded and no transaction was signed or submitted."
+            if [ "${{ inputs.deployment_intent }}" = "deploy-one-contract" ]; then
+              echo "- Deployment job is waiting for approval in the `testnet-deploy` environment."
+            else
+              echo "- Read-only mode selected; no deployment job will run."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    name: Deploy exactly one reviewed treasury contract
+    needs: preflight
+    if: github.ref == 'refs/heads/main' && inputs.deployment_intent == 'deploy-one-contract'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    environment:
+      name: testnet-deploy
+    steps:
+      - name: Check out workflow source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+
+      - name: Check out reviewed read-only preflight tools
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: c9240911187fe1cf7d9fcdc5ef4b69df1400f9ea
+          path: preflight-tools
+          persist-credentials: false
+
+      - name: Check out exact reviewed candidate contract source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          repository: thisishaidee/Veltron
+          ref: c03db083db5d7628419154474b4b456a14d60cfe
+          path: preflight-tools/candidate-contract
+          persist-credentials: false
+
+      - name: Install pinned Rust toolchain
+        run: |
+          rustup toolchain install 1.99.1 --profile minimal --target wasm32-unknown-unknown
+          rustup default 1.99.1
+          rustc --version
+          cargo --version
+
+      - name: Retest fail-closed upgrade state verifier pagination
+        run: python3 -m unittest discover -s scripts -p 'test_treasury_upgrade_state_guard.py'
+
+      - name: Rebuild and verify exact reviewed treasury WASM
+        working-directory: preflight-tools/candidate-contract
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/preflight-tools/candidate-contract/target
+        run: |
+          test "$(git rev-parse HEAD)" = "c03db083db5d7628419154474b4b456a14d60cfe"
+          cargo build --locked --release -p veltron-treasury --target wasm32-unknown-unknown
+          cargo build --locked --release -p veltron-test-token --target wasm32-unknown-unknown
+          test "$(wc -c < target/wasm32-unknown-unknown/release/veltron_treasury.wasm | tr -d ' ')" = "339256"
+          echo "a70d8aea3538fd177859fdb7e31b8c1c1e7a982de24d76dbdcf4d88b006d2aca  target/wasm32-unknown-unknown/release/veltron_treasury.wasm" | sha256sum --check -
+          cargo test --locked --workspace -- --nocapture
+
+      - name: Repeat fresh live Testnet state and fee checks
+        working-directory: preflight-tools
+        run: |
+          python3 scripts/testnet_treasury_state_preflight.py
+          python3 scripts/testnet_dual_rpc_preflight.py
+          python3 scripts/testnet_treasury_initialized_preflight.py
+          python3 scripts/testnet_treasury_fee_preflight.py
+
+      - name: Snapshot initialized treasury state before the code upgrade
+        run: python3 scripts/treasury_upgrade_state_guard.py --mode snapshot --snapshot "$RUNNER_TEMP/veltron-state-before.json"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+        with:
+          node-version: 22
+
+      - name: Install and verify pinned NEAR CLI before loading credentials
+        run: |
+          test "$(npm view near-cli-rs@0.31.1 version)" = "0.31.1"
+          npm install --global near-cli-rs@0.31.1
+          near --version
+
+      - name: Deploy the exact reviewed WASM (single DeployContract action; no initializer)
+        shell: bash
+        env:
+          VELTRON_TREASURY_ACCESS_KEY_JSON: ${{ secrets.VELTRON_TREASURY_ACCESS_KEY_JSON }}
+        run: |
+          set -euo pipefail
+          umask 077
+          ACCESS_KEY_FILE="$RUNNER_TEMP/veltron-treasury-access-key.json"
+          trap 'rm -f "$ACCESS_KEY_FILE"' EXIT
+          test -n "${VELTRON_TREASURY_ACCESS_KEY_JSON:-}"
+          printf '%s' "$VELTRON_TREASURY_ACCESS_KEY_JSON" > "$ACCESS_KEY_FILE"
+          unset VELTRON_TREASURY_ACCESS_KEY_JSON
+          python3 - "$ACCESS_KEY_FILE" <<'PY'
+          import json, sys
+          with open(sys.argv[1], encoding="utf-8") as f:
+              key = json.load(f)
+          if set(key) != {"public_key", "private_key"}:
+              raise SystemExit("Access-key secret must contain exactly public_key and private_key.")
+          if key["public_key"] != "ed25519:B5XwYhdSJH3C828uNtFDkaTmN7XUfQvka9Doj2YQwWRG":
+              raise SystemExit("Access-key public key does not match the verified treasury FullAccess key.")
+          if not isinstance(key["private_key"], str) or not key["private_key"].startswith("ed25519:"):
+              raise SystemExit("Access-key private-key field has an invalid format.")
+          PY
+          near contract deploy veltron-treasury.testnet use-file "$GITHUB_WORKSPACE/preflight-tools/candidate-contract/target/wasm32-unknown-unknown/release/veltron_treasury.wasm" without-init-call network-config testnet sign-with-access-key-file "$ACCESS_KEY_FILE" send
+
+      - name: Verify deployed code hash and unchanged initialized state on two RPCs
+        run: python3 scripts/treasury_upgrade_state_guard.py --mode verify --snapshot "$RUNNER_TEMP/veltron-state-before.json"
+
+      - name: Record deployment verification result
+        run: |
+          {
+            echo "## VELTRON Testnet treasury upgrade"
+            echo "- Verified exact treasury WASM SHA-256 on NEAR RPC and FastNear."
+            echo "- Verified owner, agent configuration, financial position, pause state, commitments, pending transfers, token audit, VTT metadata, treasury token balance, and storage registration are unchanged."
+            echo "- The access-key file was removed at the end of the deployment step."
+          } >> "$GITHUB_STEP_SUMMARY"
