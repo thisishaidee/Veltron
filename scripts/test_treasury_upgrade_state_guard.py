@@ -62,6 +62,7 @@ class UpgradeQuiescenceTests(unittest.TestCase):
     def test_accepts_paused_idle_treasury_with_no_audit_pending(self):
         state = {
             "paused": True,
+            "financial_position": {"pending_discretionary": "0"},
             "pending_transfers": [],
             "token_audit": {"audit_pending": False},
         }
@@ -70,15 +71,27 @@ class UpgradeQuiescenceTests(unittest.TestCase):
     def test_rejects_unpaused_treasury(self):
         state = {
             "paused": False,
+            "financial_position": {"pending_discretionary": "0"},
             "pending_transfers": [],
             "token_audit": {"audit_pending": False},
         }
         with self.assertRaisesRegex(RuntimeError, "must already be paused"):
             assert_upgrade_safe_state(state, "near")
 
+    def test_rejects_nonzero_pending_discretionary_balance(self):
+        state = {
+            "paused": True,
+            "financial_position": {"pending_discretionary": "1"},
+            "pending_transfers": [],
+            "token_audit": {"audit_pending": False},
+        }
+        with self.assertRaisesRegex(RuntimeError, "pending discretionary balance must be zero"):
+            assert_upgrade_safe_state(state, "near")
+
     def test_rejects_pending_transfer(self):
         state = {
             "paused": True,
+            "financial_position": {"pending_discretionary": "0"},
             "pending_transfers": [{"id": "7"}],
             "token_audit": {"audit_pending": False},
         }
@@ -89,6 +102,7 @@ class UpgradeQuiescenceTests(unittest.TestCase):
         for audit in ({"audit_pending": True}, {}, None):
             state = {
                 "paused": True,
+                "financial_position": {"pending_discretionary": "0"},
                 "pending_transfers": [],
                 "token_audit": audit,
             }
