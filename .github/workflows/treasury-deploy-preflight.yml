@@ -52,6 +52,12 @@ jobs:
           CARGO_TARGET_DIR: ${{ github.workspace }}/candidate-contract/target
         run: cargo build --locked --release -p veltron-treasury --target wasm32-unknown-unknown
 
+      - name: Build Testnet token WASM required by Sandbox tests
+        working-directory: candidate-contract
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/candidate-contract/target
+        run: cargo build --locked --release -p veltron-test-token --target wasm32-unknown-unknown
+
       - name: Verify exact reviewed WASM bytes and SHA-256
         working-directory: candidate-contract
         run: |
