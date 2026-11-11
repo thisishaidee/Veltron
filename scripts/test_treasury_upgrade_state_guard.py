@@ -1,13 +1,21 @@
 import unittest
 from unittest.mock import patch
 
-from treasury_upgrade_state_guard import all_commitments, deployment_access_key, assert_commitments_match_position, assert_upgrade_safe_state, TREASURY_PUBLIC_KEY
+from treasury_upgrade_state_guard import (
+    TREASURY_PUBLIC_KEY,
+    all_commitments,
+    assert_commitments_match_position,
+    assert_upgrade_safe_state,
+    deployment_access_key,
+)
 
 
 def commitment(identifier):
     return {
         "id": identifier,
+        "recipient_id": "vendor.testnet",
         "amount": "1",
+        "description": "Test commitment",
         "settlement_pending": False,
     }
 
