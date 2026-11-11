@@ -1,0 +1,141 @@
+name: Revoke temporary VELTRON treasury deployment key
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: veltron-temporary-key-revocation
+  cancel-in-progress: false
+
+jobs:
+  revoke:
+    name: Revoke only the temporary deployment key
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: testnet-deploy
+    steps:
+      - name: Check out workflow source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+        with:
+          node-version: 22
+
+      - name: Install and verify pinned NEAR CLI
+        run: |
+          test "$(npm view near-cli-rs@0.31.1 version)" = "0.31.1"
+          npm install --global near-cli-rs@0.31.1
+          near --version
+
+      - name: Verify exact temporary key exists before revocation (two RPCs)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, urllib.request
+          account = "veltron-treasury.testnet"
+          target = "ed25519:9igPiXMDj4UrbmZwotWuJtuRAP9BiTefweYwgndKBQNS"
+          endpoints = ["https://rpc.testnet.near.org", "https://free.rpc.fastnear.com"]
+          snapshots = []
+          for endpoint in endpoints:
+              body = json.dumps({
+                  "jsonrpc": "2.0", "id": "veltron-key-check", "method": "query",
+                  "params": {"request_type": "view_access_key_list", "finality": "final", "account_id": account}
+              }).encode()
+              req = urllib.request.Request(endpoint, data=body, headers={"Content-Type": "application/json"})
+              with urllib.request.urlopen(req, timeout=25) as response:
+                  result = json.load(response)
+              if "error" in result or "result" not in result:
+                  raise SystemExit(f"FAIL: access-key query failed at {endpoint}")
+              keys = result["result"]["keys"]
+              by_key = {item["public_key"]: item["access_key"]["permission"] for item in keys}
+              if target not in by_key or by_key[target] != "FullAccess":
+                  raise SystemExit(f"FAIL: exact temporary FullAccess key missing at {endpoint}; no change made")
+              snapshots.append(set(by_key))
+          if snapshots[0] != snapshots[1]:
+              raise SystemExit("FAIL: RPC providers disagree on access keys; no change made")
+          remaining = snapshots[0] - {target}
+          if not remaining:
+              raise SystemExit("FAIL: no other access key would remain; no change made")
+          with open("/tmp/veltron-keys-before.json", "w", encoding="utf-8") as f:
+              json.dump(sorted(snapshots[0]), f)
+          print(f"PASS: both RPCs agree; exact temporary key is FullAccess; {len(remaining)} other key(s) will remain.")
+          PY
+
+      - name: Delete only the dedicated temporary deployment key
+        shell: bash
+        env:
+          VELTRON_TREASURY_ACCESS_KEY_JSON: ${{ secrets.VELTRON_TREASURY_ACCESS_KEY_JSON }}
+        run: |
+          set -euo pipefail
+          umask 077
+          ACCESS_KEY_FILE="$RUNNER_TEMP/veltron-treasury-access-key.json"
+          trap 'rm -f "$ACCESS_KEY_FILE"' EXIT
+          test -n "${VELTRON_TREASURY_ACCESS_KEY_JSON:-}"
+          printf '%s' "$VELTRON_TREASURY_ACCESS_KEY_JSON" > "$ACCESS_KEY_FILE"
+          unset VELTRON_TREASURY_ACCESS_KEY_JSON
+          python3 - "$ACCESS_KEY_FILE" <<'PY'
+          import json, sys
+          expected = "ed25519:9igPiXMDj4UrbmZwotWuJtuRAP9BiTefweYwgndKBQNS"
+          with open(sys.argv[1], encoding="utf-8") as f:
+              key = json.load(f)
+          if not isinstance(key, dict) or set(key) != {"public_key", "private_key"}:
+              raise SystemExit("FAIL: unexpected access-key secret structure")
+          if key["public_key"] != expected or not isinstance(key["private_key"], str) or not key["private_key"].startswith("ed25519:"):
+              raise SystemExit("FAIL: secret does not identify the exact temporary deployment key")
+          PY
+          near account delete-keys veltron-treasury.testnet public-keys ed25519:9igPiXMDj4UrbmZwotWuJtuRAP9BiTefweYwgndKBQNS network-config testnet sign-with-access-key-file "$ACCESS_KEY_FILE" send
+
+      - name: Verify only the temporary key was removed (two RPCs)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, urllib.request
+          account = "veltron-treasury.testnet"
+          target = "ed25519:9igPiXMDj4UrbmZwotWuJtuRAP9BiTefweYwgndKBQNS"
+          with open("/tmp/veltron-keys-before.json", encoding="utf-8") as f:
+              before = set(json.load(f))
+          expected = before - {target}
+          endpoints = ["https://rpc.testnet.near.org", "https://free.rpc.fastnear.com"]
+          snapshots = []
+          for endpoint in endpoints:
+              body = json.dumps({
+                  "jsonrpc": "2.0", "id": "veltron-key-check-after", "method": "query",
+                  "params": {"request_type": "view_access_key_list", "finality": "final", "account_id": account}
+              }).encode()
+              req = urllib.request.Request(endpoint, data=body, headers={"Content-Type": "application/json"})
+              with urllib.request.urlopen(req, timeout=25) as response:
+                  result = json.load(response)
+              if "error" in result or "result" not in result:
+                  raise SystemExit(f"FAIL: post-revocation access-key query failed at {endpoint}")
+              snapshots.append({item["public_key"] for item in result["result"]["keys"]})
+          if snapshots[0] != snapshots[1]:
+              raise SystemExit("FAIL: RPC providers disagree after revocation")
+          if target in snapshots[0]:
+              raise SystemExit("FAIL: temporary key still appears on-chain")
+          if snapshots[0] != expected:
+              raise SystemExit("FAIL: access-key set changed by more than removal of the temporary key")
+          if not snapshots[0]:
+              raise SystemExit("FAIL: account has no remaining access keys")
+          print(f"PASS: temporary key absent; all {len(expected)} other access key(s) unchanged on both RPCs.")
+          PY
+
+      - name: Record revocation result
+        run: |
+          {
+            echo "## VELTRON temporary deployment key revocation"
+            echo "- The dedicated temporary FullAccess key was removed."
+            echo "- Both independent Testnet RPCs confirm it is absent."
+            echo "- All other access keys are unchanged."
+            echo "- Contract code and contract state were not modified."
+            echo "- Temporary credential file was removed from the runner."
+          } >> "$GITHUB_STEP_SUMMARY"
