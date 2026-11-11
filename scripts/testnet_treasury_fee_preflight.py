@@ -15,7 +15,7 @@ TREASURY = "veltron-treasury.testnet"
 TOKEN = "veltron-token.testnet"
 TREASURY_WASM_BYTES = 339_256
 EXPECTED_TREASURY_SHA256 = "a70d8aea3538fd177859fdb7e31b8c1c1e7a982de24d76dbdcf4d88b006d2aca"
-EXPECTED_EXISTING_TREASURY_SHA256 = "66d3d95d8b4f7142cb47062051a93158994236a3791d83e994946af3dd5525af"
+EXPECTED_EXISTING_TREASURY_SHA256 = "66d3d95d8b4f7142cb47062051a93158994236a3791d83e994946af3dd5525af"\nEXPECTED_EXISTING_TREASURY_BYTES = 338_235
 YOCTO = 10**24
 
 
@@ -78,7 +78,7 @@ account = rpc("query", {
 balance = int(account["amount"])
 storage_per_byte = int(runtime["storage_amount_per_byte"])
 current_storage = int(account.get("storage_usage", 0))
-if current_storage < len(base64.b64decode(code["code_base64"])):\n    raise SystemExit("FAIL: deployed code size exceeds account storage usage; refusing storage projection.")\nprojected_storage = current_storage - len(base64.b64decode(code["code_base64"])) + TREASURY_WASM_BYTES
+if current_storage < EXPECTED_EXISTING_TREASURY_BYTES:\n    raise SystemExit("FAIL: deployed code size exceeds account storage usage; refusing storage projection.")\nprojected_storage = current_storage - EXPECTED_EXISTING_TREASURY_BYTES + TREASURY_WASM_BYTES
 projected_storage_reserve = projected_storage * storage_per_byte
 vtt_bounds = view(TOKEN, "storage_balance_bounds")
 vtt_minimum = int(vtt_bounds["min"])
