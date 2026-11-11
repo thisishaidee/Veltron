@@ -95,7 +95,7 @@ jobs:
       - name: Verify access-key-file CLI support without credentials
         run: |
           npx --yes near-cli-rs@0.31.1 --version
-          npx --yes near-cli-rs@0.31.1 contract deploy veltron-treasury.testnet use-file without-init-call network-config testnet sign-with-access-key-file --help
+          near contract deploy veltron-treasury.testnet use-file without-init-call network-config testnet sign-with-access-key-file --help
 
       - name: Publish read-only result
         run: |
@@ -175,8 +175,11 @@ jobs:
         with:
           node-version: 22
 
-      - name: Verify pinned NEAR CLI release
-        run: test "$(npm view near-cli-rs@0.31.1 version)" = "0.31.1"
+      - name: Install and verify pinned NEAR CLI before loading credentials
+        run: |
+          test "$(npm view near-cli-rs@0.31.1 version)" = "0.31.1"
+          npm install --global near-cli-rs@0.31.1
+          near --version
 
       - name: Deploy the exact reviewed WASM (single DeployContract action; no initializer)
         shell: bash
