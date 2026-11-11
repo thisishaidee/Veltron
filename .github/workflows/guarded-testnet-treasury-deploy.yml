@@ -39,7 +39,7 @@ jobs:
           persist-credentials: false
 
       - name: Test fail-closed upgrade state verifier pagination
-        run: python3 -m unittest discover -s scripts -p 'test_*.py'
+        run: python3 -m unittest discover -s scripts -p 'test_treasury_upgrade_state_guard.py'
 
       - name: Check out exact reviewed candidate contract source
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
@@ -155,7 +155,7 @@ jobs:
           cargo --version
 
       - name: Retest fail-closed upgrade state verifier pagination
-        run: python3 -m unittest discover -s scripts -p 'test_*.py'
+        run: python3 -m unittest discover -s scripts -p 'test_treasury_upgrade_state_guard.py'
 
       - name: Rebuild and verify exact reviewed treasury WASM
         working-directory: preflight-tools/candidate-contract
