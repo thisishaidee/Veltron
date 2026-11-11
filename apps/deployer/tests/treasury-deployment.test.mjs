@@ -16,9 +16,9 @@ test("decodes Base58 leading zero bytes without adding an extra byte",()=>{
 
 test("pins the exact reviewed new and existing treasury artifact identities",()=>{
   assert.equal(TREASURY_ACCOUNT,"veltron-treasury.testnet");
-  assert.equal(NEW_TREASURY_WASM_BYTES,338235);
-  assert.equal(NEW_TREASURY_WASM_SHA256,"66d3d95d8b4f7142cb47062051a93158994236a3791d83e994946af3dd5525af");
-  assert.equal(OLD_TREASURY_WASM_SHA256,"3ed0cf173950f319fce18fd6f286c899ea264c76d2e1f4fd1411b54ce3455d36");
+  assert.equal(NEW_TREASURY_WASM_BYTES,339256);
+  assert.equal(NEW_TREASURY_WASM_SHA256,"a70d8aea3538fd177859fdb7e31b8c1c1e7a982de24d76dbdcf4d88b006d2aca");
+  assert.equal(OLD_TREASURY_WASM_SHA256,"66d3d95d8b4f7142cb47062051a93158994236a3791d83e994946af3dd5525af");
 });
 
 test("refuses a treasury artifact with the wrong size",()=>{
