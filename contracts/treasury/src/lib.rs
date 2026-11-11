@@ -50,11 +50,6 @@ pub struct PendingTransferView {
 }
 
 #[near(serializers = [json])]
-pub struct OwnerConfig {
-    pub owner_id: AccountId,
-}
-
-#[near(serializers = [json])]
 pub struct AgentConfig {
     pub agent_id: AccountId,
     pub max_per_transaction: U128,
