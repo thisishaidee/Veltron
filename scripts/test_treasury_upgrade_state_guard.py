@@ -94,6 +94,18 @@ class CommitmentPaginationTests(unittest.TestCase):
             "from_id": "commitment-049", "limit": 50
         })
 
+    def test_rejects_more_than_256_active_commitments(self):
+        ids = [f"item-{i:03d}" for i in range(257)]
+        pages = []
+        for start in range(0, len(ids), 50):
+            entries = [commitment(value) for value in ids[start:start + 50]]
+            next_cursor = entries[-1]["id"] if start + 50 < len(ids) else None
+            pages.append({"commitments": entries, "next_cursor": next_cursor})
+
+        with patch("treasury_upgrade_state_guard.view", side_effect=pages):
+            with self.assertRaisesRegex(RuntimeError, "256-active-commitment limit"):
+                all_commitments("test-rpc")
+
     def test_rejects_cursor_that_does_not_match_last_entry(self):
         page = {
             "commitments": [commitment(f"item-{i:03d}") for i in range(50)],
