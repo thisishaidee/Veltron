@@ -134,3 +134,17 @@ export async function readTreasurySnapshot(fetchImpl = fetch) {
 export function isCurrentSnapshotRequest(requestGeneration, currentGeneration, requestSnapshot, currentSnapshot) {
   return requestGeneration === currentGeneration && requestSnapshot === currentSnapshot;
 }
+
+
+// Classify the latest token-balance audit without converting raw integer units to Number.
+export function classifyTokenAudit(audit) {
+  if (!audit || audit.audit_pending) return "pending";
+  const observed = audit.observed_token_balance;
+  const ledger = audit.ledger_balance_at_observation;
+  if (observed == null || ledger == null) return "unknown";
+  try {
+    return BigInt(observed) === BigInt(ledger) ? "matched" : "mismatch";
+  } catch {
+    return "unknown";
+  }
+}
