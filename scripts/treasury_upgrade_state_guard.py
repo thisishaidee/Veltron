@@ -106,6 +106,17 @@ def all_commitments(endpoint):
     raise RuntimeError("Commitment pagination exceeded the expected six-page bound")
 
 
+def assert_upgrade_safe_state(state, provider):
+    """Enforce the on-chain quiescence conditions before replacing contract code."""
+    if state.get("paused") is not True:
+        raise RuntimeError(f"{provider}: treasury must already be paused before a code upgrade")
+    if state.get("pending_transfers") != []:
+        raise RuntimeError(f"{provider}: pending treasury transfers must be empty before a code upgrade")
+    audit = state.get("token_audit")
+    if not isinstance(audit, dict) or audit.get("audit_pending") is not False:
+        raise RuntimeError(f"{provider}: token-balance audit must not be pending before a code upgrade")
+
+
 def snapshot(provider, endpoint, expected_treasury_hash):
     status = rpc(endpoint, "status", [], "status")
     if status.get("chain_id") != "testnet":
@@ -139,6 +150,12 @@ def snapshot(provider, endpoint, expected_treasury_hash):
             raise RuntimeError(f"{provider}: configured agent changed: {state['agent_config']}")
     if not isinstance(state["financial_position"], dict) or not isinstance(state["paused"], bool):
         raise RuntimeError(f"{provider}: treasury state response has unexpected shape")
+    if not isinstance(state["pending_transfers"], list):
+        raise RuntimeError(f"{provider}: pending transfers response has unexpected shape")
+    if not isinstance(state["token_audit"], dict) or not isinstance(state["token_audit"].get("audit_pending"), bool):
+        raise RuntimeError(f"{provider}: token-balance audit response has unexpected shape")
+    if expected_treasury_hash == OLD_TREASURY_SHA256:
+        assert_upgrade_safe_state(state, provider)
     return {"treasury_hash": treasury_hash, "token_hash": token_hash, "state": state}
 
 
