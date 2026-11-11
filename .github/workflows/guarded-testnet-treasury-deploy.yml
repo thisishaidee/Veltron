@@ -142,7 +142,7 @@ jobs:
           printf '%s' "$VELTRON_TREASURY_ACCESS_KEY_JSON" > "$ACCESS_KEY_FILE"
           unset VELTRON_TREASURY_ACCESS_KEY_JSON
           python3 - "$ACCESS_KEY_FILE" <<'PY'
-          import base64, json, sys
+          import json, subprocess, sys
           expected = "ed25519:9igPiXMDj4UrbmZwotWuJtuRAP9BiTefweYwgndKBQNS"
           alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
           def b58decode(value):
@@ -150,7 +150,7 @@ jobs:
               for char in value:
                   number = number * 58 + alphabet.index(char)
               raw = number.to_bytes((number.bit_length() + 7) // 8, "big") if number else b""
-              return b"\x00" * (len(value) - len(value.lstrip("1"))) + raw
+              return b"\\x00" * (len(value) - len(value.lstrip("1"))) + raw
           with open(sys.argv[1], encoding="utf-8") as f:
               key = json.load(f)
           if not isinstance(key, dict) or set(key) != {"public_key", "private_key"}:
@@ -164,9 +164,16 @@ jobs:
           public_bytes = b58decode(expected.split(":", 1)[1])
           if len(secret_bytes) != 64 or len(public_bytes) != 32:
               raise SystemExit("FAIL: key material has an invalid decoded length.")
-          if secret_bytes[32:] != public_bytes:
-              raise SystemExit("FAIL: private key does not contain the pinned public key.")
-          print("PASS: credential structure and public/private key pairing verified. No signing or transaction submitted.")
+          # NEAR Ed25519 secret keys encode a 32-byte seed followed by the public key.
+          # Derive the public key from the seed with OpenSSL; this does not sign anything.
+          pkcs8_prefix = bytes.fromhex("302e020100300506032b657004220420")
+          derived = subprocess.run(
+              ["openssl", "pkey", "-inform", "DER", "-in", "/dev/stdin", "-pubout", "-outform", "DER"],
+              input=pkcs8_prefix + secret_bytes[:32], capture_output=True, check=True
+          ).stdout
+          if len(derived) < 32 or derived[-32:] != public_bytes or secret_bytes[32:] != public_bytes:
+              raise SystemExit("FAIL: private key does not cryptographically match the pinned public key.")
+          print("PASS: credential structure and Ed25519 keypair verified cryptographically. No signing or transaction submitted.")
           PY
 
   deploy:
