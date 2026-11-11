@@ -40,17 +40,52 @@ def view(endpoint, account_id, method, args=None):
 
 
 def all_commitments(endpoint):
+    """Read the complete bounded active set and fail closed on any pagination anomaly."""
     commitments = []
+    seen_ids = set()
     cursor = None
-    for _ in range(6):  # 256 active commitments at 50 per page, with one safety page.
+
+    # The contract caps active commitments at 256 and returns at most 50 per page.
+    # Six pages are sufficient (50 * 5 + 6), with no unbounded RPC loop.
+    for page_number in range(1, 7):
         page = view(endpoint, TREASURY, "get_commitments", {"from_id": cursor, "limit": 50})
         if not isinstance(page, dict) or not isinstance(page.get("commitments"), list):
             raise RuntimeError("get_commitments returned an unexpected page shape")
-        commitments.extend(page["commitments"])
-        cursor = page.get("next_cursor")
-        if cursor is None:
-            return commitments
-    raise RuntimeError("Commitment pagination exceeded the expected bounded page count")
+
+        entries = page["commitments"]
+        next_cursor = page.get("next_cursor")
+        if len(entries) > 50:
+            raise RuntimeError("get_commitments returned more than the requested page limit")
+        if next_cursor is not None and (not isinstance(next_cursor, str) or not next_cursor):
+            raise RuntimeError("get_commitments returned an invalid next_cursor")
+        if next_cursor is not None and len(entries) != 50:
+            raise RuntimeError("get_commitments returned a cursor for a non-full page")
+
+        previous_id = cursor
+        for entry in entries:
+            if not isinstance(entry, dict):
+                raise RuntimeError("get_commitments returned a malformed commitment")
+            commitment_id = entry.get("id")
+            if not isinstance(commitment_id, str) or not commitment_id:
+                raise RuntimeError("get_commitments returned a commitment without a valid ID")
+            if commitment_id in seen_ids:
+                raise RuntimeError(f"get_commitments returned duplicate commitment ID: {commitment_id}")
+            if previous_id is not None and commitment_id <= previous_id:
+                raise RuntimeError("get_commitments IDs are not strictly increasing across pages")
+            seen_ids.add(commitment_id)
+            previous_id = commitment_id
+
+        if next_cursor is None:
+            return commitments + entries
+        if not entries or next_cursor != entries[-1]["id"]:
+            raise RuntimeError("get_commitments cursor does not match the final commitment ID")
+        if next_cursor == cursor:
+            raise RuntimeError("get_commitments pagination cursor did not advance")
+
+        commitments.extend(entries)
+        cursor = next_cursor
+
+    raise RuntimeError("Commitment pagination exceeded the expected six-page bound")
 
 
 def snapshot(provider, endpoint, expected_treasury_hash):
@@ -88,30 +123,35 @@ def snapshot(provider, endpoint, expected_treasury_hash):
     return {"treasury_hash": treasury_hash, "token_hash": token_hash, "state": state}
 
 
-parser = argparse.ArgumentParser()
-parser.add_argument("--mode", choices=["snapshot", "verify"], required=True)
-parser.add_argument("--snapshot", required=True)
-args = parser.parse_args()
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--mode", choices=["snapshot", "verify"], required=True)
+    parser.add_argument("--snapshot", required=True)
+    args = parser.parse_args()
 
-expected = OLD_TREASURY_SHA256 if args.mode == "snapshot" else NEW_TREASURY_SHA256
-results = {name: snapshot(name, url, expected) for name, url in RPCS.items()}
-if results["near"] != results["fastnear"]:
-    raise SystemExit("FAIL: independent RPC providers disagree on finalized code or treasury state")
+    expected = OLD_TREASURY_SHA256 if args.mode == "snapshot" else NEW_TREASURY_SHA256
+    results = {name: snapshot(name, url, expected) for name, url in RPCS.items()}
+    if results["near"] != results["fastnear"]:
+        raise SystemExit("FAIL: independent RPC providers disagree on finalized code or treasury state")
 
-if args.mode == "snapshot":
-    with open(args.snapshot, "w", encoding="utf-8") as f:
-        json.dump(results["near"], f, sort_keys=True)
-    print("PASS: pre-upgrade treasury state snapshot captured from two agreeing Testnet RPC providers.")
-else:
-    with open(args.snapshot, "r", encoding="utf-8") as f:
-        before = json.load(f)
-    after = results["near"]["state"]
-    for field, old_value in before["state"].items():
-        if after.get(field) != old_value:
-            raise SystemExit(f"FAIL: treasury/VTT state field changed during code upgrade: {field}")
-    if after.get("owner") != OWNER or after.get("agent_config", {}).get("agent_id") != AGENT:
-        raise SystemExit("FAIL: newly exposed owner or agent configuration does not match the expected initialized accounts.")
-    print("PASS: new treasury WASM hash verified through both RPCs.")
-    print("PASS: pre-existing financial position, pause state, commitments, pending transfers, token audit, VTT metadata, treasury token balance, and storage registration are unchanged.")
-    print("PASS: newly exposed owner and agent configuration match the expected initialized accounts.")
-print("No additional transaction was constructed, signed, or submitted by this verifier.")
+    if args.mode == "snapshot":
+        with open(args.snapshot, "w", encoding="utf-8") as f:
+            json.dump(results["near"], f, sort_keys=True)
+        print("PASS: pre-upgrade treasury state snapshot captured from two agreeing Testnet RPC providers.")
+    else:
+        with open(args.snapshot, "r", encoding="utf-8") as f:
+            before = json.load(f)
+        after = results["near"]["state"]
+        for field, old_value in before["state"].items():
+            if after.get(field) != old_value:
+                raise SystemExit(f"FAIL: treasury/VTT state field changed during code upgrade: {field}")
+        if after.get("owner") != OWNER or after.get("agent_config", {}).get("agent_id") != AGENT:
+            raise SystemExit("FAIL: newly exposed owner or agent configuration does not match the expected initialized accounts.")
+        print("PASS: new treasury WASM hash verified through both RPCs.")
+        print("PASS: pre-existing financial position, pause state, commitments, pending transfers, token audit, VTT metadata, treasury token balance, and storage registration are unchanged.")
+        print("PASS: newly exposed owner and agent configuration match the expected initialized accounts.")
+    print("No additional transaction was constructed, signed, or submitted by this verifier.")
+
+
+if __name__ == "__main__":
+    main()
