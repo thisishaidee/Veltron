@@ -2362,3 +2362,114 @@ async fn sandbox_external_account_cannot_invoke_private_transfer_callback() -> a
     Ok(())
 }
 
+/// Proves that the currently deployed base implementation can be upgraded to the
+/// PR build without losing initialized configuration or persistent treasury state.
+/// This test is intentionally ignored in the ordinary suite because it requires
+/// the exact base WASM built from the PR's base commit.
+#[tokio::test]
+#[ignore = "requires VELTRON_BASE_TREASURY_WASM from the exact PR base build"]
+async fn sandbox_upgrade_preserves_initialized_treasury_state() -> anyhow::Result<()> {
+    let base_wasm_path = std::env::var("VELTRON_BASE_TREASURY_WASM")?;
+    let base_wasm = std::fs::read(base_wasm_path)?;
+    let worker = near_workspaces::sandbox().await?;
+    let owner = worker.dev_create_account().await?;
+    let agent = worker.dev_create_account().await?;
+    let vendor = worker.dev_create_account().await?;
+
+    let token = worker.dev_deploy(TOKEN_WASM).await?;
+    token
+        .call("new")
+        .args_json(json!({
+            "owner_id": owner.id(),
+            "total_supply": "10000",
+            "metadata": {
+                "spec": "ft-1.0.0",
+                "name": "VELTRON Test Token",
+                "symbol": "VTT",
+                "decimals": 6
+            }
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    let treasury = worker.dev_deploy(&base_wasm).await?;
+    treasury
+        .call("new")
+        .args_json(json!({
+            "owner_id": owner.id(),
+            "token_id": token.id(),
+            "agent_id": agent.id(),
+            "max_per_transaction": "500",
+            "safety_reserve": "100"
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    register_token_account(&owner, &token, treasury.id().as_str()).await?;
+    owner
+        .call(token.id(), "ft_transfer_call")
+        .args_json(json!({
+            "receiver_id": treasury.id(),
+            "amount": "1000",
+            "memo": "Fund upgrade compatibility test",
+            "msg": ""
+        }))
+        .deposit(NearToken::from_yoctonear(1))
+        .max_gas()
+        .transact()
+        .await?
+        .into_result()?;
+
+    owner
+        .call(treasury.id(), "create_commitment")
+        .args_json(json!({
+            "id": "upgrade-preservation-check",
+            "recipient_id": vendor.id(),
+            "amount": "200",
+            "description": "Must survive contract upgrade"
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+    owner
+        .call(treasury.id(), "set_paused")
+        .args_json(json!({ "paused": true }))
+        .transact()
+        .await?
+        .into_result()?;
+
+    let position_before = view_json(&treasury, "get_financial_position", json!({})).await?;
+    let commitments_before =
+        view_json(&treasury, "get_commitments", json!({ "from_id": null, "limit": 50 })).await?;
+    let pause_before = view_json(&treasury, "get_pause_status", json!({})).await?;
+
+    // The contract account signs its own deploy action in this isolated Sandbox.
+    treasury
+        .as_account()
+        .deploy(TREASURY_WASM)
+        .await?
+        .into_result()?;
+
+    let owner_after = view_json(&treasury, "get_owner", json!({})).await?;
+    let agent_config_after = view_json(&treasury, "get_agent_config", json!({})).await?;
+    let position_after = view_json(&treasury, "get_financial_position", json!({})).await?;
+    let commitments_after =
+        view_json(&treasury, "get_commitments", json!({ "from_id": null, "limit": 50 })).await?;
+    let pause_after = view_json(&treasury, "get_pause_status", json!({})).await?;
+
+    assert_eq!(owner_after, json!(owner.id().as_str()));
+    assert_eq!(agent_config_after["agent_id"], json!(agent.id().as_str()));
+    assert_eq!(agent_config_after["max_per_transaction"], "500");
+    assert_eq!(position_after, position_before);
+    assert_eq!(commitments_after, commitments_before);
+    assert_eq!(pause_after, pause_before);
+    assert_eq!(position_after["treasury_balance"], "1000");
+    assert_eq!(position_after["active_commitments"], "200");
+    assert_eq!(position_after["safety_reserve"], "100");
+    assert_eq!(pause_after, true);
+
+    Ok(())
+}
+
