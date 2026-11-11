@@ -1,7 +1,6 @@
 use near_workspaces::types::NearToken;
 use near_workspaces::{Account, Contract};
 use serde_json::{json, Value};
-use std::task::Poll;
 
 const TREASURY_WASM: &[u8] =
     include_bytes!("../../../target/wasm32-unknown-unknown/release/veltron_treasury.wasm");
