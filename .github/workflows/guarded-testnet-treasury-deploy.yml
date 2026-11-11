@@ -107,12 +107,12 @@ jobs:
         run: |
           {
             echo "## VELTRON Testnet deployment preflight"
-            echo "- Reviewed treasury artifact SHA-256: `a70d8aea3538fd177859fdb7e31b8c1c1e7a982de24d76dbdcf4d88b006d2aca`"
+            echo "- Reviewed treasury artifact SHA-256: \`a70d8aea3538fd177859fdb7e31b8c1c1e7a982de24d76dbdcf4d88b006d2aca\`"
             echo "- Full workspace/Sandbox tests and live Testnet preflights passed."
             echo "- Exact reviewed treasury FullAccess key and complete paginated commitments verified on two RPC providers."
             echo "- No secret was loaded and no transaction was signed or submitted."
             if [ "${{ inputs.deployment_intent }}" = "deploy-one-contract" ]; then
-              echo "- Deployment job is waiting for approval in the `testnet-deploy` environment."
+              echo "- Deployment job is waiting for approval in the \`testnet-deploy\` environment."
             else
               echo "- Read-only mode selected; no deployment job will run."
             fi
