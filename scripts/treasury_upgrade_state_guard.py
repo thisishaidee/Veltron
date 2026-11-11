@@ -53,8 +53,6 @@ def snapshot(provider, endpoint, expected_treasury_hash):
         raise RuntimeError(f"{provider}: VTT contract code hash mismatch: {token_hash}")
 
     state = {
-        "owner": view(endpoint, TREASURY, "get_owner"),
-        "agent_config": view(endpoint, TREASURY, "get_agent_config"),
         "financial_position": view(endpoint, TREASURY, "get_financial_position"),
         "paused": view(endpoint, TREASURY, "get_pause_status"),
         "commitments": view(endpoint, TREASURY, "get_commitments"),
@@ -64,10 +62,13 @@ def snapshot(provider, endpoint, expected_treasury_hash):
         "treasury_token_balance": view(endpoint, TOKEN, "ft_balance_of", {"account_id": TREASURY}),
         "treasury_token_storage": view(endpoint, TOKEN, "storage_balance_of", {"account_id": TREASURY}),
     }
-    if state["owner"] != OWNER:
-        raise RuntimeError(f"{provider}: configured treasury owner changed: {state['owner']}")
-    if state["agent_config"].get("agent_id") != AGENT:
-        raise RuntimeError(f"{provider}: configured agent changed: {state['agent_config']}")
+    if expected_treasury_hash == NEW_TREASURY_SHA256:
+        state["owner"] = view(endpoint, TREASURY, "get_owner")
+        state["agent_config"] = view(endpoint, TREASURY, "get_agent_config")
+        if state["owner"] != OWNER:
+            raise RuntimeError(f"{provider}: configured treasury owner changed: {state['owner']}")
+        if state["agent_config"].get("agent_id") != AGENT:
+            raise RuntimeError(f"{provider}: configured agent changed: {state['agent_config']}")
     if not isinstance(state["financial_position"], dict) or not isinstance(state["paused"], bool):
         raise RuntimeError(f"{provider}: treasury state response has unexpected shape")
     return {"treasury_hash": treasury_hash, "token_hash": token_hash, "state": state}
@@ -90,8 +91,13 @@ if args.mode == "snapshot":
 else:
     with open(args.snapshot, "r", encoding="utf-8") as f:
         before = json.load(f)
-    if results["near"]["state"] != before["state"]:
-        raise SystemExit("FAIL: treasury or VTT state changed during code upgrade; stop and investigate.")
+    after = results["near"]["state"]
+    for field, old_value in before["state"].items():
+        if after.get(field) != old_value:
+            raise SystemExit(f"FAIL: treasury/VTT state field changed during code upgrade: {field}")
+    if after.get("owner") != OWNER or after.get("agent_config", {}).get("agent_id") != AGENT:
+        raise SystemExit("FAIL: newly exposed owner or agent configuration does not match the expected initialized accounts.")
     print("PASS: new treasury WASM hash verified through both RPCs.")
-    print("PASS: owner, agent config, financial position, pause state, commitments, pending transfers, token audit, VTT metadata, treasury token balance, and storage registration are unchanged.")
+    print("PASS: pre-existing financial position, pause state, commitments, pending transfers, token audit, VTT metadata, treasury token balance, and storage registration are unchanged.")
+    print("PASS: newly exposed owner and agent configuration match the expected initialized accounts.")
 print("No additional transaction was constructed, signed, or submitted by this verifier.")
