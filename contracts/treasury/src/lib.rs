@@ -67,6 +67,12 @@ pub struct TokenBalanceAudit {
 }
 
 #[near(serializers = [json])]
+pub struct AgentConfig {
+    pub agent_id: AccountId,
+    pub max_per_transaction: U128,
+}
+
+#[near(serializers = [json])]
 pub struct CommitmentPage {
     pub commitments: Vec<CommitmentView>,
     pub next_cursor: Option<String>,
@@ -267,6 +273,19 @@ impl Veltron {
 
     pub fn get_pause_status(&self) -> bool {
         self.paused
+    }
+
+    /// Read-only owner identity for wallet authorization checks in external clients.
+    pub fn get_owner(&self) -> AccountId {
+        self.owner_id.clone()
+    }
+
+    /// Read-only agent configuration for monitoring and owner-control interfaces.
+    pub fn get_agent_config(&self) -> AgentConfig {
+        AgentConfig {
+            agent_id: self.agent_id.clone(),
+            max_per_transaction: U128(self.max_per_transaction),
+        }
     }
 
     pub fn set_safety_reserve(&mut self, amount: U128) {
@@ -1653,6 +1672,25 @@ mod tests {
         );
         contract.paused = true;
         contract.settle_commitment("paused-invoice".to_string());
+    }
+
+    #[test]
+    fn read_only_configuration_views_return_initialized_owner_and_agent_settings() {
+        let contract = setup("owner.near");
+        assert_eq!(contract.get_owner(), account("owner.near"));
+        let config = contract.get_agent_config();
+        assert_eq!(config.agent_id, account("agent.near"));
+        assert_eq!(config.max_per_transaction, U128(500));
+    }
+
+    #[test]
+    fn read_only_configuration_views_reflect_owner_agent_update() {
+        let mut contract = setup("owner.near");
+        contract.set_agent(account("replacement-agent.near"), U128(750));
+        let config = contract.get_agent_config();
+        assert_eq!(contract.get_owner(), account("owner.near"));
+        assert_eq!(config.agent_id, account("replacement-agent.near"));
+        assert_eq!(config.max_per_transaction, U128(750));
     }
 
     #[test]
