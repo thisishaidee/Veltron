@@ -55,7 +55,7 @@ def snapshot(provider, endpoint, expected_treasury_hash):
     state = {
         "financial_position": view(endpoint, TREASURY, "get_financial_position"),
         "paused": view(endpoint, TREASURY, "get_pause_status"),
-        "commitments": view(endpoint, TREASURY, "get_commitments"),
+        "commitments": view(endpoint, TREASURY, "get_commitments", {"from_id": None, "limit": 50}),
         "pending_transfers": view(endpoint, TREASURY, "get_pending_transfers"),
         "token_audit": view(endpoint, TREASURY, "get_token_balance_audit"),
         "token_metadata": view(endpoint, TOKEN, "ft_metadata"),
