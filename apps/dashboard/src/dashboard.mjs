@@ -23,21 +23,23 @@ function toBase64Utf8(value) {
   return btoa(binary);
 }
 
-export function buildViewRequest(methodName, args = {}) {
+export function buildViewRequest(methodName, args = {}, blockHash = null) {
   if (!VIEW_METHOD_SET.has(methodName)) {
     throw new Error("Dashboard only permits approved read-only contract methods.");
   }
+  const params = {
+    request_type: "call_function",
+    account_id: TREASURY_ACCOUNT,
+    method_name: methodName,
+    args_base64: toBase64Utf8(args)
+  };
+  if (blockHash) params.block_id = blockHash;
+  else params.finality = "final";
   return {
     jsonrpc: "2.0",
     id: "veltron-dashboard",
     method: "query",
-    params: {
-      request_type: "call_function",
-      finality: "final",
-      account_id: TREASURY_ACCOUNT,
-      method_name: methodName,
-      args_base64: toBase64Utf8(args)
-    }
+    params
   };
 }
 
@@ -46,9 +48,10 @@ export function decodeViewResult(resultBytes) {
   return JSON.parse(new TextDecoder().decode(new Uint8Array(resultBytes)));
 }
 
-export async function rpcRequest(method, params, fetchImpl = fetch) {
+export async function rpcRequest(method, params, fetchImpl = fetch, rpcUrl = null) {
+  const urls = rpcUrl ? [rpcUrl] : RPC_URLS;
   let lastError;
-  for (const url of RPC_URLS) {
+  for (const url of urls) {
     try {
       const response = await fetchImpl(url, {
         method: "POST",
@@ -66,45 +69,63 @@ export async function rpcRequest(method, params, fetchImpl = fetch) {
   throw new Error(lastError?.message || "All NEAR Testnet RPC endpoints failed.");
 }
 
-export async function callView(methodName, args = {}, fetchImpl = fetch) {
-  const request = buildViewRequest(methodName, args);
-  const result = await rpcRequest(request.method, request.params, fetchImpl);
+async function selectFinalizedSnapshot(fetchImpl) {
+  let lastError;
+  for (const rpcUrl of RPC_URLS) {
+    try {
+      const status = await rpcRequest("status", [], fetchImpl, rpcUrl);
+      if (status.chain_id !== "testnet") {
+        throw new Error(`Wrong network: expected NEAR testnet, received ${status.chain_id || "unknown"}.`);
+      }
+      const block = await rpcRequest("block", { finality: "final" }, fetchImpl, rpcUrl);
+      const blockHash = block?.header?.hash;
+      if (!blockHash) throw new Error("RPC did not return a finalized block hash.");
+      return { rpc_url: rpcUrl, block_hash: blockHash };
+    } catch (error) {
+      if (/Wrong network:/.test(error.message)) throw error;
+      lastError = error;
+    }
+  }
+  throw new Error(lastError?.message || "Could not establish a finalized NEAR Testnet snapshot.");
+}
+
+export async function callView(methodName, args = {}, fetchImpl = fetch, snapshot = null) {
+  const request = buildViewRequest(methodName, args, snapshot?.block_hash || null);
+  const result = await rpcRequest(request.method, request.params, fetchImpl, snapshot?.rpc_url || null);
   return decodeViewResult(result.result);
 }
 
 export async function readTreasurySnapshot(fetchImpl = fetch) {
-  const status = await rpcRequest("status", [], fetchImpl);
-  if (status.chain_id !== "testnet") {
-    throw new Error(`Wrong network: expected NEAR testnet, received ${status.chain_id || "unknown"}.`);
-  }
-
+  const snapshot = await selectFinalizedSnapshot(fetchImpl);
   const account = await rpcRequest("query", {
     request_type: "view_account",
-    finality: "final",
+    block_id: snapshot.block_hash,
     account_id: TREASURY_ACCOUNT
-  }, fetchImpl);
+  }, fetchImpl, snapshot.rpc_url);
 
   const noCode = !account.code_hash || account.code_hash === "11111111111111111111111111111111";
   if (noCode) {
-    return { deployed: false, account, network: status.chain_id };
+    return { deployed: false, account, network: "testnet", ...snapshot };
   }
 
+  // Every read is pinned to the same provider and finalized block hash.
   const [position, paused, commitments, pending, audit] = await Promise.all([
-    callView("get_financial_position", {}, fetchImpl),
-    callView("get_pause_status", {}, fetchImpl),
-    callView("get_commitments", { from_id: null, limit: 50 }, fetchImpl),
-    callView("get_pending_transfers", {}, fetchImpl),
-    callView("get_token_balance_audit", {}, fetchImpl)
+    callView("get_financial_position", {}, fetchImpl, snapshot),
+    callView("get_pause_status", {}, fetchImpl, snapshot),
+    callView("get_commitments", { from_id: null, limit: 50 }, fetchImpl, snapshot),
+    callView("get_pending_transfers", {}, fetchImpl, snapshot),
+    callView("get_token_balance_audit", {}, fetchImpl, snapshot)
   ]);
 
   return {
     deployed: true,
-    network: status.chain_id,
+    network: "testnet",
     account,
     position,
     paused,
     commitments,
     pending,
-    audit
+    audit,
+    ...snapshot
   };
 }
