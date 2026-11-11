@@ -46,6 +46,8 @@ jobs:
           path: base-contract
           persist-credentials: false
       - name: Build exact deployed treasury base WebAssembly
+        env:
+          CARGO_TARGET_DIR: base-contract/target
         run: cargo build --locked --release -p veltron-treasury --target wasm32-unknown-unknown --manifest-path base-contract/Cargo.toml
       - name: Build treasury WebAssembly contract
         run: cargo build --locked --release -p veltron-treasury --target wasm32-unknown-unknown
