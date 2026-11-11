@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from treasury_upgrade_state_guard import all_commitments, deployment_access_key, TREASURY_PUBLIC_KEY
+from treasury_upgrade_state_guard import all_commitments, deployment_access_key, assert_upgrade_safe_state, TREASURY_PUBLIC_KEY
 
 
 def commitment(identifier):
@@ -35,6 +35,44 @@ class DeploymentAccessKeyTests(unittest.TestCase):
             with patch("treasury_upgrade_state_guard.query", return_value=response):
                 with self.assertRaisesRegex(RuntimeError, "missing or is not FullAccess"):
                     deployment_access_key("test-rpc", "near")
+
+
+class UpgradeQuiescenceTests(unittest.TestCase):
+    def test_accepts_paused_idle_treasury_with_no_audit_pending(self):
+        state = {
+            "paused": True,
+            "pending_transfers": [],
+            "token_audit": {"audit_pending": False},
+        }
+        assert_upgrade_safe_state(state, "near")
+
+    def test_rejects_unpaused_treasury(self):
+        state = {
+            "paused": False,
+            "pending_transfers": [],
+            "token_audit": {"audit_pending": False},
+        }
+        with self.assertRaisesRegex(RuntimeError, "must already be paused"):
+            assert_upgrade_safe_state(state, "near")
+
+    def test_rejects_pending_transfer(self):
+        state = {
+            "paused": True,
+            "pending_transfers": [{"id": "7"}],
+            "token_audit": {"audit_pending": False},
+        }
+        with self.assertRaisesRegex(RuntimeError, "pending treasury transfers"):
+            assert_upgrade_safe_state(state, "near")
+
+    def test_rejects_pending_or_malformed_balance_audit(self):
+        for audit in ({"audit_pending": True}, {}, None):
+            state = {
+                "paused": True,
+                "pending_transfers": [],
+                "token_audit": audit,
+            }
+            with self.assertRaisesRegex(RuntimeError, "audit must not be pending"):
+                assert_upgrade_safe_state(state, "near")
 
 
 class CommitmentPaginationTests(unittest.TestCase):
