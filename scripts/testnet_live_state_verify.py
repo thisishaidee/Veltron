@@ -46,12 +46,15 @@ def rpc(endpoint, method, params, timeout=25):
 
 
 def query(endpoint, request_type, account_id, block_hash, **extra):
-    return rpc(endpoint, "query", {
+    result = rpc(endpoint, "query", {
         "request_type": request_type,
         "block_id": block_hash,
         "account_id": account_id,
         **extra,
     })
+    if result.get("block_hash") != block_hash:
+        raise RuntimeError(f"{endpoint} {request_type} returned a different block hash")
+    return result
 
 
 def view(endpoint, account_id, method, block_hash, args=None):
@@ -85,18 +88,27 @@ def all_commitments(endpoint, block_hash):
         next_cursor = page.get("next_cursor")
         if len(entries) > 50:
             raise RuntimeError("get_commitments exceeded the requested page size")
+        if cursor is not None and not entries:
+            raise RuntimeError("get_commitments returned an empty continuation page")
+        previous_id = cursor
         for item in entries:
-            if not isinstance(item, dict) or not isinstance(item.get("id"), str):
+            if not isinstance(item, dict) or not isinstance(item.get("id"), str) or not item["id"]:
                 raise RuntimeError("get_commitments returned a malformed entry")
-            if item["id"] in seen:
+            commitment_id = item["id"]
+            if commitment_id in seen:
                 raise RuntimeError("get_commitments returned a duplicate ID")
-            seen.add(item["id"])
+            if previous_id is not None and commitment_id <= previous_id:
+                raise RuntimeError("get_commitments IDs are not strictly increasing")
+            seen.add(commitment_id)
+            previous_id = commitment_id
         commitments.extend(entries)
         if next_cursor is None:
             if len(commitments) > 256:
                 raise RuntimeError("active commitment count exceeds the contract limit")
             return commitments
-        if not entries or next_cursor != entries[-1]["id"] or next_cursor == cursor:
+        if not isinstance(next_cursor, str) or not next_cursor or not entries:
+            raise RuntimeError("get_commitments returned an invalid pagination cursor")
+        if next_cursor != entries[-1]["id"] or next_cursor == cursor:
             raise RuntimeError("get_commitments returned an invalid pagination cursor")
         cursor = next_cursor
     raise RuntimeError("get_commitments exceeded the six-page bound")
