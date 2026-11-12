@@ -30,6 +30,9 @@ pub struct Commitment {
 pub enum PendingKind {
     Discretionary { recipient_id: AccountId, memo: Option<String> },
     CommitmentSettlement { commitment_id: String },
+    /// Agent-submitted request awaiting explicit owner approval. This variant is
+    /// appended to preserve the Borsh discriminants of existing stored variants.
+    DiscretionaryRequest { recipient_id: AccountId, memo: Option<String> },
 }
 
 #[near(serializers = [borsh, json])]
@@ -304,13 +307,14 @@ impl Veltron {
         self.max_per_transaction = max_per_transaction.0;
     }
 
-    /// Agent-controlled discretionary payment. Pending amounts remain reserved until callback.
+    /// The agent can propose a discretionary payment, but cannot move funds.
+    /// The requested amount is reserved immediately until the owner approves or rejects it.
     pub fn request_payment(
         &mut self,
         recipient_id: AccountId,
         amount: U128,
         memo: Option<String>,
-    ) -> Promise {
+    ) -> U64 {
         require!(env::predecessor_account_id() == self.agent_id, "Only the authorized agent");
         require!(!self.paused, "Treasury is paused");
         require!(amount.0 > 0, "Payment amount must be positive");
@@ -320,7 +324,45 @@ impl Veltron {
         require!(memo.as_ref().map_or(true, |value| value.len() <= MAX_PAYMENT_MEMO_LENGTH), "Payment memo is too long");
         let position = self.calculate_position();
         require!(amount.0 <= position.spendable_balance.0, "Insufficient spendable balance");
-        self.start_transfer(amount.0, PendingKind::Discretionary { recipient_id, memo })
+        require!(self.pending.len() < MAX_PENDING_TRANSFERS as u64, "Maximum pending transfers reached");
+        self.invalidate_balance_audit();
+        let id = self.next_transfer_id;
+        self.next_transfer_id = self.next_transfer_id.checked_add(1)
+            .unwrap_or_else(|| env::panic_str("Payment request ID overflow"));
+        self.pending.insert(&id, &PendingTransfer {
+            id,
+            amount: amount.0,
+            kind: PendingKind::DiscretionaryRequest { recipient_id: recipient_id.clone(), memo },
+            created_at_ns: env::block_timestamp(),
+        });
+        env::log_str(&format!("VELTRON_PAYMENT_REQUESTED id={} amount={} recipient={}", id, amount.0, recipient_id));
+        U64(id)
+    }
+
+    /// Only the owner can turn an agent request into an actual NEP-141 transfer.
+    pub fn approve_payment(&mut self, request_id: U64) -> Promise {
+        self.assert_owner();
+        require!(!self.paused, "Treasury is paused");
+        let request = self.pending.get(&request_id.0)
+            .unwrap_or_else(|| env::panic_str("Payment request not found"));
+        let (recipient_id, memo) = match request.kind {
+            PendingKind::DiscretionaryRequest { recipient_id, memo } => (recipient_id, memo),
+            _ => env::panic_str("Pending item is not an approval request"),
+        };
+        self.pending.remove(&request_id.0);
+        env::log_str(&format!("VELTRON_PAYMENT_APPROVED id={}", request_id.0));
+        self.start_transfer(request.amount, PendingKind::Discretionary { recipient_id, memo })
+    }
+
+    /// Rejecting a request releases its reserved amount without sending tokens.
+    pub fn reject_payment(&mut self, request_id: U64) {
+        self.assert_owner();
+        let request = self.pending.get(&request_id.0)
+            .unwrap_or_else(|| env::panic_str("Payment request not found"));
+        require!(matches!(request.kind, PendingKind::DiscretionaryRequest { .. }),
+            "Pending item is not an approval request");
+        self.pending.remove(&request_id.0);
+        env::log_str(&format!("VELTRON_PAYMENT_REJECTED id={}", request_id.0));
     }
 
     /// Owner settles an existing obligation to its pre-committed recipient.
@@ -524,7 +566,7 @@ impl Veltron {
 
     fn pending_discretionary_total(&self) -> u128 {
         self.pending.iter().fold(0u128, |sum, (_, p)| {
-            if matches!(p.kind, PendingKind::Discretionary { .. }) {
+            if matches!(p.kind, PendingKind::Discretionary { .. } | PendingKind::DiscretionaryRequest { .. }) {
                 sum.checked_add(p.amount).unwrap_or_else(|| env::panic_str("Pending total overflow"))
             } else {
                 sum
@@ -569,7 +611,8 @@ impl Veltron {
         self.next_transfer_id = self.next_transfer_id.checked_add(1)
             .unwrap_or_else(|| env::panic_str("Transfer ID overflow"));
         let (recipient_id, memo) = match &kind {
-            PendingKind::Discretionary { recipient_id, memo } => (recipient_id.clone(), memo.clone()),
+            PendingKind::Discretionary { recipient_id, memo }
+            | PendingKind::DiscretionaryRequest { recipient_id, memo } => (recipient_id.clone(), memo.clone()),
             PendingKind::CommitmentSettlement { commitment_id } => {
                 let c = self.commitments.get(commitment_id)
                     .unwrap_or_else(|| env::panic_str("Commitment not found"));
@@ -578,6 +621,7 @@ impl Veltron {
         };
         let transfer_kind = match &kind {
             PendingKind::Discretionary { .. } => "discretionary",
+            PendingKind::DiscretionaryRequest { .. } => env::panic_str("Approval requests cannot be transferred directly"),
             PendingKind::CommitmentSettlement { .. } => "commitment_settlement",
         };
         self.pending.insert(&id, &PendingTransfer {
