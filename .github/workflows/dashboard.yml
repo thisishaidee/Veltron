@@ -59,4 +59,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Build dashboard modules and test all browser profiles
-        run: npm run test:e2e
+        env:
+          HOME: /root
+        run: |
+          npm run test:e2e
+          npm run test:commitments
