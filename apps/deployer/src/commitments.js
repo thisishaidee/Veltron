@@ -204,6 +204,7 @@ async function sendCall(methodName, args, statusId) {
   }
   busy = true;
   refreshGeneration += 1;
+  verifiedSnapshot = undefined;
   $("refresh").disabled = true;
   $("save").disabled = true;
   $("cancel").disabled = true;
@@ -226,6 +227,7 @@ async function sendCall(methodName, args, statusId) {
     $(statusId).textContent = "REQUEST RESULT UNCERTAIN — " + String(error.message || error) + ". Refresh finalized state before considering another attempt; do not blindly resubmit.";
   } finally {
     busy = false;
+    $("refresh").disabled = false;
     const ready = accountId === OWNER && $("network-confirm").checked && Boolean(verifiedSnapshot);
     $("save").disabled = !ready;
     $("cancel").disabled = !ready;
