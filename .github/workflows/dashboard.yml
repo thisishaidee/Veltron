@@ -23,6 +23,8 @@ jobs:
         working-directory: apps/deployer
     steps:
       - uses: actions/checkout@v4
+      - name: Install native build tools for Rust dependencies
+        run: apt-get update && apt-get install -y --no-install-recommends build-essential pkg-config
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
