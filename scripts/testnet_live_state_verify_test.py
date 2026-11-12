@@ -1,9 +1,9 @@
-import copy
 import unittest
+from unittest.mock import patch
 
 from testnet_live_state_verify import (
     AGENT, EXPECTED_AGENT_LIMIT, EXPECTED_LEDGER, EXPECTED_RESERVE,
-    OWNER, TOKEN_SHA256, TREASURY_SHA256, validate_snapshot,
+    OWNER, TOKEN_SHA256, TREASURY_SHA256, all_commitments, query, validate_snapshot,
 )
 
 
@@ -88,6 +88,33 @@ class LiveStateVerificationTests(unittest.TestCase):
         state["treasury_account"]["amount"] = "1"
         with self.assertRaisesRegex(ValueError, "storage backing"):
             validate_snapshot(state)
+
+    @patch("testnet_live_state_verify.view")
+    def test_reads_all_commitment_pages_in_order(self, mocked_view):
+        first = [{"id": f"invoice-{index:03}"} for index in range(50)]
+        second = [{"id": "invoice-050"}]
+        mocked_view.side_effect = [
+            {"commitments": first, "next_cursor": "invoice-049"},
+            {"commitments": second, "next_cursor": None},
+        ]
+        result = all_commitments("https://rpc.invalid", "block-hash")
+        self.assertEqual(len(result), 51)
+        self.assertEqual(mocked_view.call_count, 2)
+
+    @patch("testnet_live_state_verify.view")
+    def test_rejects_empty_continuation_page(self, mocked_view):
+        mocked_view.side_effect = [
+            {"commitments": [{"id": "invoice-001"}], "next_cursor": "invoice-001"},
+            {"commitments": [], "next_cursor": None},
+        ]
+        with self.assertRaisesRegex(RuntimeError, "empty continuation page"):
+            all_commitments("https://rpc.invalid", "block-hash")
+
+    @patch("testnet_live_state_verify.rpc")
+    def test_query_rejects_response_from_a_different_block(self, mocked_rpc):
+        mocked_rpc.return_value = {"block_hash": "different-block", "result": []}
+        with self.assertRaisesRegex(RuntimeError, "different block hash"):
+            query("https://rpc.invalid", "view_account", "treasury.testnet", "expected-block")
 
 
 if __name__ == "__main__":
