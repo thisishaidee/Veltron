@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b1430">
+<title>VELTRON — Commitment Management</title>
+<style>
+:root{color-scheme:dark;font:16px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#0b1430;color:#f3f5f7}
+*{box-sizing:border-box}body{width:min(100% - 32px,760px);margin:auto;padding:24px 0 max(40px,env(safe-area-inset-bottom))}
+h1{font-size:1.7rem;line-height:1.2}h2{font-size:1.1rem}p,li,label{color:#cbd3e3}
+.panel{border:1px solid #35415e;border-radius:12px;padding:16px;margin:16px 0;overflow-wrap:anywhere}
+button,input,textarea{font:inherit}button{width:100%;padding:13px;margin:8px 0;border:0;border-radius:8px;background:#17cbbb;color:#07152d;font-weight:750}
+button.secondary{background:#253653;color:#f3f5f7;border:1px solid #53627d}button:disabled{opacity:.4}
+input,textarea{width:100%;padding:12px;background:#111d3b;color:#fff;border:1px solid #52617d;border-radius:8px}
+label{display:block;font-weight:650;margin:12px 0 6px}.status{padding:12px;background:#1a294a;border-radius:8px;white-space:pre-wrap;overflow-wrap:anywhere}
+.muted{font-size:.9rem;color:#9eabc2}.warn{border-left:4px solid #e6b45e;padding-left:12px}
+.item{border-top:1px solid #35415e;padding:12px 0}.item:first-child{border-top:0}
+.actions{display:flex;gap:8px;flex-wrap:wrap}.actions button{flex:1;min-width:110px}
+a{color:#45e2d2}
+</style>
+</head>
+<body>
+<h1>VELTRON Commitment Management</h1>
+<p>Create and manage business obligations recorded by the deployed VELTRON treasury contract.</p>
+<section class="panel warn">
+<strong>NEAR TESTNET · OWNER OPERATIONS</strong>
+<p>Only the configured treasury owner can create, update, or cancel commitments. These operations change on-chain state and require an explicit wallet approval. This page never asks for keys or recovery phrases.</p>
+</section>
+<section class="panel">
+<h2>1. Connect owner wallet</h2>
+<button id="connect">Connect NEAR Testnet wallet</button>
+<p id="wallet-account" class="status">Not connected</p>
+<label><input id="network-confirm" type="checkbox" style="width:auto"> I checked Meteor itself and it displays NEAR Testnet.</label>
+<p class="muted">Wallet connection alone does not prove its active network. Confirm the network inside the wallet before proceeding.</p>
+</section>
+<section class="panel">
+<h2>2. Live treasury position</h2>
+<button id="refresh" class="secondary">Refresh commitments and financial position</button>
+<p id="read-status" class="status" role="status" aria-live="polite">Not checked. Reads use two independent finalized Testnet RPC providers.</p>
+<div id="position">
+<p>Treasury balance: <strong id="balance">—</strong></p>
+<p>Active commitments: <strong id="committed">—</strong></p>
+<p>Safety reserve: <strong id="reserve">—</strong></p>
+<p>Spendable balance: <strong id="spendable">—</strong></p>
+<p>Outgoing payments paused: <strong id="paused">—</strong></p>
+</div>
+<div id="commitments"><p class="muted">Commitments will appear here after verification.</p></div>
+</section>
+<section class="panel">
+<h2>3. Create or update a commitment</h2>
+<p class="muted">Amounts are entered in VTT. The contract stores six-decimal base units.</p>
+<label for="commitment-id">Commitment ID</label>
+<input id="commitment-id" maxlength="64" autocomplete="off" placeholder="e.g. supplier-invoice-001">
+<label for="recipient">Fixed recipient NEAR account</label>
+<input id="recipient" maxlength="64" autocomplete="off" placeholder="supplier.testnet">
+<label for="amount">Amount (VTT)</label>
+<input id="amount" inputmode="decimal" placeholder="e.g. 125.50">
+<label for="description">Description</label>
+<textarea id="description" maxlength="256" rows="3" placeholder="What business obligation does this reserve cover?"></textarea>
+<button id="save" disabled>Review commitment in wallet</button>
+<p id="save-status" class="status" role="status" aria-live="polite">Connect the owner, confirm Testnet, and refresh verified state first.</p>
+</section>
+<section class="panel">
+<h2>4. Cancel a commitment</h2>
+<p class="muted">Cancellation releases the reserved amount back into spendable balance. It does not transfer tokens.</p>
+<label for="cancel-id">Existing commitment ID</label>
+<input id="cancel-id" maxlength="64" autocomplete="off" placeholder="Select an ID from the list above">
+<button id="cancel" class="secondary" disabled>Review cancellation in wallet</button>
+<p id="cancel-status" class="status" role="status" aria-live="polite">No cancellation prepared.</p>
+</section>
+<p class="muted">This first operational module manages commitments only. It does not settle invoices or initiate agent payments. Those will be separate reviewed operations. If a wallet result is uncertain, refresh finalized state before considering another transaction.</p>
+<p><a href="./index.html">Back to VELTRON dashboard</a></p>
+<script type="module" src="./dist/commitments.js"></script>
+</body>
+</html>
