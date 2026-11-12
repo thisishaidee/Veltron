@@ -26,12 +26,13 @@ async function rpc(endpoint, method, params) {
   return payload.result;
 }
 
-async function view(endpoint, method, args = {}) {
-  const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(args))));
+async function view(endpoint, method, args, blockHash) {
+  const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(args ?? {}))));
   const result = await rpc(endpoint, "query", {
-    request_type: "call_function", finality: "final",
+    request_type: "call_function", block_id: blockHash,
     account_id: TREASURY, method_name: method, args_base64: encoded
   });
+  if (result.block_hash !== blockHash) throw new Error(endpoint.name + " returned a view from a different block.");
   return JSON.parse(new TextDecoder().decode(new Uint8Array(result.result)));
 }
 
@@ -43,11 +44,11 @@ function stable(value) {
   return JSON.stringify(value);
 }
 
-async function readAllCommitments(endpoint) {
+async function readAllCommitments(endpoint, blockHash) {
   const commitments = [];
   let cursor = null;
   for (let pageNumber = 0; pageNumber < 6; pageNumber += 1) {
-    const page = await view(endpoint, "get_commitments", { from_id: cursor, limit: 50 });
+    const page = await view(endpoint, "get_commitments", { from_id: cursor, limit: 50 }, blockHash);
     if (!page || !Array.isArray(page.commitments)) throw new Error(endpoint.name + " returned an invalid commitments page.");
     commitments.push(...page.commitments);
     if (commitments.length > 256) throw new Error(endpoint.name + " exceeded the contract commitment limit.");
@@ -83,7 +84,7 @@ async function readProvider(endpoint) {
     }
     position[key] = normalized;
   }
-  return { owner, position, paused, commitments };
+  return { blockHash, owner, position, paused, commitments };
 }
 function formatVtt(raw) {
   const value = BigInt(raw);
@@ -250,11 +251,11 @@ $("network-confirm").addEventListener("change", () => {
 $("save").addEventListener("click", async () => {
   try {
     const id = $("commitment-id").value.trim();
-    if (!id || id.length > 64) throw new Error("Commitment ID must contain 1–64 characters.");
+    if (!id || new TextEncoder().encode(id).length > 64) throw new Error("Commitment ID must contain 1–64 UTF-8 bytes.");
     const recipient_id = validateAccount($("recipient").value.trim());
     const amount = parseAmount($("amount").value);
     const description = $("description").value.trim();
-    if (description.length > 256) throw new Error("Description must be at most 256 characters.");
+    if (new TextEncoder().encode(description).length > 256) throw new Error("Description must be at most 256 UTF-8 bytes.");
     const existing = verifiedSnapshot?.commitments.find(item => item.id === id);
     const methodName = existing ? "update_commitment" : "create_commitment";
     const args = { id, recipient_id, amount, description };
