@@ -5,6 +5,15 @@ import test from "node:test";
 const html = await readFile(new URL("../commitment-management.html", import.meta.url), "utf8");
 const js = await readFile(new URL("../src/commitments.js", import.meta.url), "utf8");
 
+test("bounds every RPC request and clears its timeout after completion", () => {
+  assert.ok(js.includes("const RPC_TIMEOUT_MS = 12000"));
+  assert.ok(js.includes("new AbortController()"));
+  assert.ok(js.includes("signal: controller.signal"));
+  assert.ok(js.includes("controller.abort()"));
+  assert.ok(js.includes("timed out after"));
+  assert.ok(js.includes("clearTimeout(timeout)"));
+});
+
 test("commitment manager is Testnet-only and fixed to the configured owner and treasury", () => {
   for (const value of ["haideedotxyz.testnet", "veltron-treasury.testnet", "NEAR TESTNET"]) {
     assert.ok(html.includes(value) || js.includes(value));
