@@ -29,7 +29,10 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
       - name: Build contract WASM files required by dashboard artifact tests
-        run: cargo build --release --target wasm32-unknown-unknown -p veltron-treasury -p veltron-test-token
+        run: |
+          cargo build --locked --release --target wasm32-unknown-unknown -p veltron-treasury
+          cargo build --locked --release --target wasm32-unknown-unknown -p veltron-test-token
+          sha256sum target/wasm32-unknown-unknown/release/veltron_treasury.wasm target/wasm32-unknown-unknown/release/veltron_test_token.wasm
         working-directory: .
       - uses: actions/setup-node@v4
         with:
