@@ -110,6 +110,15 @@ class LiveStateVerificationTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "empty continuation page"):
             all_commitments("https://rpc.invalid", "block-hash")
 
+    @patch("testnet_live_state_verify.view")
+    def test_rejects_cursor_on_non_full_commitment_page(self, mocked_view):
+        mocked_view.return_value = {
+            "commitments": [{"id": "invoice-001"}],
+            "next_cursor": "invoice-001",
+        }
+        with self.assertRaisesRegex(RuntimeError, "non-full page"):
+            all_commitments("https://rpc.invalid", "block-hash")
+
     @patch("testnet_live_state_verify.rpc")
     def test_query_rejects_response_from_a_different_block(self, mocked_rpc):
         mocked_rpc.return_value = {"block_hash": "different-block", "result": []}
