@@ -108,6 +108,8 @@ def all_commitments(endpoint, block_hash):
             return commitments
         if not isinstance(next_cursor, str) or not next_cursor or not entries:
             raise RuntimeError("get_commitments returned an invalid pagination cursor")
+        if len(entries) != 50:
+            raise RuntimeError("get_commitments returned a cursor for a non-full page")
         if next_cursor != entries[-1]["id"] or next_cursor == cursor:
             raise RuntimeError("get_commitments returned an invalid pagination cursor")
         cursor = next_cursor
