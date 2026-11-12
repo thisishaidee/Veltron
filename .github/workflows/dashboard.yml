@@ -26,7 +26,7 @@ jobs:
       - name: Check out the exact source revision recorded by deployer preflight
         uses: actions/checkout@v4
         with:
-          ref: a33fa5d460c30aed5f07d22d5cbc401e23d1c354
+          ref: c03db083db5d7628419154474b4b456a14d60cfe
           path: reference-source
       - name: Install native build tools for Rust dependencies
         run: apt-get update && apt-get install -y --no-install-recommends build-essential pkg-config
