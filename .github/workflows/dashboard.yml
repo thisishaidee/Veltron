@@ -16,6 +16,8 @@ permissions:
 jobs:
   dashboard:
     runs-on: ubuntu-24.04
+    container:
+      image: mcr.microsoft.com/playwright:v1.56.1-noble
     defaults:
       run:
         working-directory: apps/deployer
@@ -36,7 +38,5 @@ jobs:
         run: npm ci
       - name: Run commitment management safety tests
         run: npm run test:commitments
-      - name: Install Chromium
-        run: npx playwright install chromium
       - name: Build dashboard modules and run mobile browser tests
         run: npm run test:e2e -- --project=iphone-chromium-emulation
