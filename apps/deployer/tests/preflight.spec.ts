@@ -73,9 +73,9 @@ test("rejects an unrecognized WASM file", async ({ page }) => {
   await expect(page.locator("#token-result")).toContainText("Not checked");
 });
 
-test("accepts both actual CI-built contract files", async ({ page }) => {
-  const treasuryWasm = resolve(process.cwd(), "../../target/wasm32-unknown-unknown/release/veltron_treasury.wasm");
-  const tokenWasm = resolve(process.cwd(), "../../target/wasm32-unknown-unknown/release/veltron_test_token.wasm");
+test("accepts the exact recorded reference-build contract files", async ({ page }) => {
+  const treasuryWasm = resolve(process.cwd(), "tests/fixtures/verified-build/veltron_treasury.wasm");
+  const tokenWasm = resolve(process.cwd(), "tests/fixtures/verified-build/veltron_test_token.wasm");
 
   await mockAllRpc(page, route => route.fulfill({
     status: 200,
@@ -84,12 +84,13 @@ test("accepts both actual CI-built contract files", async ({ page }) => {
   }));
   await page.goto("/");
   await page.getByLabel("Treasury contract WASM").setInputFiles(treasuryWasm);
-  await expect(page.locator("#treasury-result")).toContainText("MATCH");
-  await page.getByLabel("Test-token contract WASM").setInputFiles(tokenWasm);
-  await expect(page.locator("#token-result")).toContainText("MATCH");
-  await expect(page.locator("#overall")).toContainText("Both files match the recorded CI build");
+  await expect(page.locator("#treasury-result")).toHaveText(/^MATCH — Treasury SHA-256:/);
   await expect(page.locator("#treasury-result")).toHaveAttribute("data-ok", "true");
+  await page.getByLabel("Test-token contract WASM").setInputFiles(tokenWasm);
+  await expect(page.locator("#token-result")).toHaveText(/^MATCH — Test-token SHA-256:/);
   await expect(page.locator("#token-result")).toHaveAttribute("data-ok", "true");
+  await expect(page.locator("#overall")).toContainText("Both files match the recorded CI build");
+  await expect(page.locator("#overall")).toContainText("Both files match the recorded CI build");
 });
 
 test("deployment request remains gated until wallet connection and user Testnet confirmation", async ({ page }) => {
