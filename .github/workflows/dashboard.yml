@@ -14,7 +14,36 @@ permissions:
   contents: read
 
 jobs:
+  verified-contract-fixtures:
+    runs-on: ubuntu-24.04
+    container:
+      image: mcr.microsoft.com/playwright:v1.56.1-noble
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: c03db083db5d7628419154474b4b456a14d60cfe
+      - name: Install native build tools for Rust dependencies
+        run: apt-get update && apt-get install -y --no-install-recommends build-essential pkg-config
+      - uses: dtolnay/rust-toolchain@1.99.1
+        with:
+          targets: wasm32-unknown-unknown
+      - name: Build the exact recorded contract artifacts from the repository root
+        run: cargo build --locked --release --target wasm32-unknown-unknown -p veltron-treasury -p veltron-test-token
+      - name: Assert the recorded artifact hashes before publishing fixtures
+        run: |
+          echo "a70d8aea3538fd177859fdb7e31b8c1c1e7a982de24d76dbdcf4d88b006d2aca  target/wasm32-unknown-unknown/release/veltron_treasury.wasm" | sha256sum --check
+          echo "5d5041336cc8fc92cc9ca11fff1f0b1f7ead33c4826c6d12013f957ba1e7c95b  target/wasm32-unknown-unknown/release/veltron_test_token.wasm" | sha256sum --check
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verified-contract-fixtures
+          path: |
+            target/wasm32-unknown-unknown/release/veltron_treasury.wasm
+            target/wasm32-unknown-unknown/release/veltron_test_token.wasm
+          if-no-files-found: error
+          retention-days: 2
+
   dashboard:
+    needs: verified-contract-fixtures
     runs-on: ubuntu-24.04
     container:
       image: mcr.microsoft.com/playwright:v1.56.1-noble
@@ -23,11 +52,6 @@ jobs:
         working-directory: apps/deployer
     steps:
       - uses: actions/checkout@v4
-      - name: Check out the exact source revision recorded by deployer preflight
-        uses: actions/checkout@v4
-        with:
-          ref: c03db083db5d7628419154474b4b456a14d60cfe
-          path: reference-source
       - name: Install native build tools for Rust dependencies
         run: apt-get update && apt-get install -y --no-install-recommends build-essential pkg-config
       - uses: dtolnay/rust-toolchain@1.99.1
@@ -36,14 +60,11 @@ jobs:
       - name: Build contract WASM files required by dashboard artifact tests
         run: cargo build --locked --release --target wasm32-unknown-unknown -p veltron-treasury -p veltron-test-token
         working-directory: .
-      - name: Build exact recorded reference artifacts for preflight verification
-        run: |
-          cargo build --locked --manifest-path reference-source/Cargo.toml --release --target wasm32-unknown-unknown -p veltron-treasury -p veltron-test-token --target-dir target-reference
-          mkdir -p apps/deployer/tests/fixtures/verified-build
-          cp target-reference/wasm32-unknown-unknown/release/veltron_treasury.wasm apps/deployer/tests/fixtures/verified-build/
-          cp target-reference/wasm32-unknown-unknown/release/veltron_test_token.wasm apps/deployer/tests/fixtures/verified-build/
-          sha256sum apps/deployer/tests/fixtures/verified-build/*.wasm
-        working-directory: .
+      - name: Download the independently hash-verified contract fixtures
+        uses: actions/download-artifact@v4
+        with:
+          name: verified-contract-fixtures
+          path: apps/deployer/tests/fixtures/verified-build
       - uses: actions/setup-node@v4
         with:
           node-version: 26
