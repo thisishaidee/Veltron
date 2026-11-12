@@ -14,7 +14,30 @@ permissions:
   contents: read
 
 jobs:
+  build-contract-artifacts:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install native build tools for Rust dependencies
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends build-essential pkg-config
+      - uses: dtolnay/rust-toolchain@1.99.1
+        with:
+          targets: wasm32-unknown-unknown
+      - name: Build contract WASM files with the verified runner environment
+        run: |
+          cargo build --locked --release -p veltron-treasury --target wasm32-unknown-unknown
+          cargo build --locked --release -p veltron-test-token --target wasm32-unknown-unknown
+          sha256sum target/wasm32-unknown-unknown/release/veltron_treasury.wasm target/wasm32-unknown-unknown/release/veltron_test_token.wasm
+      - name: Upload contract WASM files for browser tests
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-contract-wasm
+          path: target/wasm32-unknown-unknown/release/*.wasm
+          if-no-files-found: error
+          retention-days: 1
+
   dashboard:
+    needs: build-contract-artifacts
     runs-on: ubuntu-24.04
     container:
       image: mcr.microsoft.com/playwright:v1.56.1-noble
@@ -23,17 +46,11 @@ jobs:
         working-directory: apps/deployer
     steps:
       - uses: actions/checkout@v4
-      - name: Install native build tools for Rust dependencies
-        run: apt-get update && apt-get install -y --no-install-recommends build-essential pkg-config
-      - uses: dtolnay/rust-toolchain@1.99.1
+      - name: Download contract WASM files built on the standard GitHub runner
+        uses: actions/download-artifact@v4
         with:
-          targets: wasm32-unknown-unknown
-      - name: Build contract WASM files required by dashboard artifact tests
-        run: |
-          cargo build --locked --release --target wasm32-unknown-unknown -p veltron-treasury
-          cargo build --locked --release --target wasm32-unknown-unknown -p veltron-test-token
-          sha256sum target/wasm32-unknown-unknown/release/veltron_treasury.wasm target/wasm32-unknown-unknown/release/veltron_test_token.wasm
-        working-directory: .
+          name: dashboard-contract-wasm
+          path: target/wasm32-unknown-unknown/release
       - uses: actions/setup-node@v4
         with:
           node-version: 26
