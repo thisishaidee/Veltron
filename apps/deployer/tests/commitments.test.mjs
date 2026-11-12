@@ -34,7 +34,7 @@ test("only the owner can request create, update, and cancel operations", () => {
 
 test("amounts are converted exactly to six-decimal base units without floating point", () => {
   assert.match(js, /BigInt\(match\[1\]\) \* 1000000n/);
-  assert.match(js, /d{1,6}/);
+  assert.match(js, /\\\\d{1,6}/);
 });
 
 test("pending settlements cannot be edited or cancelled and no settlement/payment action is exposed", () => {
