@@ -64,3 +64,10 @@ The app then calls NEAR Connect's `wallet.signAndSendTransaction({ receiverId, a
 After the wallet request returns, the app reads finalized on-chain code and independently computes SHA-256 over the returned WASM bytes. It reports success only if the on-chain code matches the exact recorded artifact. If the code is not yet visible or differs, stop and do not initialize.
 
 **Initialization is intentionally not available in this change.** It must be a separate transaction review after the deployed code hash is verified, with its own current gas/deposit checks and wallet approval. Never combine deployment and initialization.
+
+
+## Live treasury configuration panel
+
+The main deployer page also displays the deployed treasury's owner, agent account, per-transaction cap, and pause state using finalized read-only contract views. It queries both `https://rpc.testnet.near.org` and `https://rpc.testnet.fastnear.com`, verifies each reports Testnet, and displays values only when the two snapshots match the reviewed owner/agent configuration and the treasury remains paused. If either provider fails, disagrees, or returns an unexpected safety state, the panel clears the values and reports that configuration is not verified. This panel does not connect a wallet, request a signature, or submit a transaction.
+
+Build and run the mobile dashboard tests with `npm run test:e2e -- --project=iphone-chromium-emulation`.

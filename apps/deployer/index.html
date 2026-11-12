@@ -104,6 +104,20 @@
     <button id="verify-deployed-code" type="button">Verify current on-chain code hash (read-only)</button>
     <p class="muted">After approval, VELTRON independently reads the finalized on-chain code and compares its SHA-256 with the CI artifact. Initialization remains a separate, unavailable step until this comparison passes.</p>
   </div>
+  <section class="panel" id="live-treasury-config" aria-labelledby="live-treasury-heading">
+    <h2 id="live-treasury-heading">Live treasury configuration — read-only</h2>
+    <p>Finalized contract views are fetched independently from the NEAR Public RPC and FastNEAR Testnet RPC. Values appear only when both providers agree and the reviewed safety configuration is intact.</p>
+    <dl>
+      <dt>Owner</dt><dd id="live-owner">Loading — verification pending</dd>
+      <dt>Authorized agent</dt><dd id="live-agent">Loading — verification pending</dd>
+      <dt>Maximum per transaction</dt><dd id="live-cap">Loading — verification pending</dd>
+      <dt>Treasury pause status</dt><dd id="live-paused">Loading — verification pending</dd>
+      <dt>Last verified (UTC)</dt><dd id="live-updated">Not yet verified</dd>
+    </dl>
+    <p id="treasury-config-status" class="status" role="status" aria-live="polite">Reading finalized views from two independent NEAR Testnet RPC providers…</p>
+    <button id="refresh-treasury-config" type="button">Refresh live treasury configuration</button>
+    <p class="muted">Read-only only: this panel does not connect a wallet, request a signature, deploy a contract, or submit a transaction.</p>
+  </section>
   <div class="panel">
     <h2>Testnet configuration to review</h2>
     <ul>
@@ -143,6 +157,7 @@
     document.getElementById("treasury").addEventListener("change",()=>verify("treasury"));
     document.getElementById("token").addEventListener("change",()=>verify("token"));
   </script>
+  <script type="module" src="./dist/treasury-config.js"></script>
   <script type="module" src="./dist/wallet.js"></script>
 </body>
 </html>
