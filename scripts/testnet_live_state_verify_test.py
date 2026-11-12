@@ -64,6 +64,12 @@ class LiveStateVerificationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "must remain paused"):
             validate_snapshot(state)
 
+    def test_rejects_non_positive_token_supply(self):
+        state = valid_snapshot()
+        state["token_supply"] = "0"
+        with self.assertRaisesRegex(ValueError, "total supply must be positive"):
+            validate_snapshot(state)
+
     def test_rejects_commitment_or_pending_transfer(self):
         for field, value in (("commitments", [{"id": "invoice"}]), ("pending_transfers", [{"id": "1"}])):
             state = valid_snapshot()
