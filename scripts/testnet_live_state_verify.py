@@ -210,7 +210,7 @@ def validate_snapshot(state):
         usage = int(account["storage_usage"])
     except (KeyError, TypeError, ValueError):
         raise ValueError("treasury account balance or storage usage is invalid")
-    required = usage * STORAGE_PRICE_PER_BYTE + int(0.1 * YOCTO_PER_NEAR)
+    required = usage * STORAGE_PRICE_PER_BYTE + YOCTO_PER_NEAR // 10
     if balance < required:
         raise ValueError("treasury NEAR balance is below storage backing plus 0.1 NEAR margin")
 
