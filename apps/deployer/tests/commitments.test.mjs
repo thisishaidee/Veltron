@@ -8,10 +8,10 @@ const js = await readFile(new URL("../src/commitments.js", import.meta.url), "ut
 
 test("a stalled RPC request is aborted and rejects within the configured timeout", async () => {
   const start = js.indexOf("async function rpc(endpoint, method, params) {");
-  const end = js.indexOf("\\nasync function view(", start);
+  const end = js.indexOf("\nasync function view(", start);
   assert.ok(start >= 0 && end > start, "RPC function can be isolated for a behavioural test");
-  const rpcSource = "const RPC_TIMEOUT_MS = 25;\\n" + js.slice(start, end);
-  const rpc = vm.runInNewContext(rpcSource + "\\nrpc;", {
+  const rpcSource = "const RPC_TIMEOUT_MS = 25;\n" + js.slice(start, end);
+  const rpc = vm.runInNewContext(rpcSource + "\nrpc;", {
     AbortController,
     setTimeout,
     clearTimeout,
