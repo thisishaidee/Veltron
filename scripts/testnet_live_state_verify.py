@@ -210,10 +210,11 @@ def validate_snapshot(state):
     if metadata.get("symbol") != "VTT" or metadata.get("decimals") != 6:
         raise ValueError(f"unexpected VTT metadata: {metadata}")
     try:
-        if int(state["token_supply"]) <= 0:
-            raise ValueError("VTT total supply must be positive")
+        token_supply = int(state["token_supply"])
     except (TypeError, ValueError):
         raise ValueError(f"invalid VTT total supply: {state['token_supply']!r}")
+    if token_supply <= 0:
+        raise ValueError("VTT total supply must be positive")
     bounds = state["storage_bounds"]
     if str(bounds.get("min")) != EXPECTED_STORAGE_MIN or str(bounds.get("max")) != EXPECTED_STORAGE_MIN:
         raise ValueError(f"unexpected VTT storage bounds: {bounds}")
