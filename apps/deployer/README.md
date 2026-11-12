@@ -71,3 +71,10 @@ After the wallet request returns, the app reads finalized on-chain code and inde
 The main deployer page also displays the deployed treasury's owner, agent account, per-transaction cap, and pause state using finalized read-only contract views. It queries both `https://rpc.testnet.near.org` and `https://rpc.testnet.fastnear.com`, verifies each reports Testnet, and displays values only when the two snapshots match the reviewed owner/agent configuration and the treasury remains paused. If either provider fails, disagrees, or returns an unexpected safety state, the panel clears the values and reports that configuration is not verified. This panel does not connect a wallet, request a signature, or submit a transaction.
 
 Build and run the mobile dashboard tests with `npm run test:e2e -- --project=iphone-chromium-emulation`.
+
+
+## Commitment management
+
+The commitment-management page reads finalized treasury position and all active commitments from two independent NEAR Testnet RPC providers at the same finalized block. It withholds state if providers disagree. Create, update, and cancel operations are owner-only and require an explicit NEAR Connect wallet approval. Amounts use exact six-decimal VTT base-unit conversion. The page does not settle commitments or initiate agent payments.
+
+Build the dashboard with `npm run build` and run commitment safety tests with `npm run test:commitments`.
