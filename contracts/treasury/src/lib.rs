@@ -317,6 +317,7 @@ impl Veltron {
     ) -> U64 {
         require!(env::predecessor_account_id() == self.agent_id, "Only the authorized agent");
         require!(!self.paused, "Treasury is paused");
+        require!(!self.balance_audit_pending, "Token balance audit in progress");
         require!(amount.0 > 0, "Payment amount must be positive");
         require!(amount.0 <= self.max_per_transaction, "Per-transaction limit exceeded");
         require!(recipient_id != env::current_account_id(), "Cannot pay treasury to itself");
@@ -1964,8 +1965,12 @@ mod tests {
         assert_eq!(pending[0].created_at_ns, U64(123_456));
         assert_eq!(pending[0].amount, U128(100));
         assert!(get_logs().iter().any(|log| {
-            log == "VELTRON_TRANSFER_STARTED id=0 amount=100 recipient=vendor.near kind=discretionary"
+            log == "VELTRON_PAYMENT_REQUESTED id=0 amount=100 recipient=vendor.near"
         }));
+        assert!(matches!(
+            pending[0].kind,
+            PendingKind::DiscretionaryRequest { .. }
+        ));
     }
 
     #[test]
