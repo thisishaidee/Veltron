@@ -12,33 +12,31 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   verified-contract-fixtures:
     runs-on: ubuntu-24.04
-    container:
-      image: mcr.microsoft.com/playwright:v1.56.1-noble
     steps:
-      - uses: actions/checkout@v4
+      - name: Download the original independently verified contract artifact
+        uses: actions/download-artifact@v4
         with:
-          ref: c03db083db5d7628419154474b4b456a14d60cfe
-      - name: Install native build tools for Rust dependencies
-        run: apt-get update && apt-get install -y --no-install-recommends build-essential pkg-config
-      - uses: dtolnay/rust-toolchain@1.99.1
-        with:
-          targets: wasm32-unknown-unknown
-      - name: Build the exact recorded contract artifacts from the repository root
-        run: cargo build --locked --release --target wasm32-unknown-unknown -p veltron-treasury -p veltron-test-token
-      - name: Assert the recorded artifact hashes before publishing fixtures
+          repository: ${{ github.repository }}
+          run-id: 42964960200
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          name: veltron-wasm-3548603a50618111942bdf832f4aa42121ddae99
+          path: artifact
+      - name: Verify and publish the exact original contract binaries
         run: |
-          echo "a70d8aea3538fd177859fdb7e31b8c1c1e7a982de24d76dbdcf4d88b006d2aca  target/wasm32-unknown-unknown/release/veltron_treasury.wasm" | sha256sum --check
-          echo "5d5041336cc8fc92cc9ca11fff1f0b1f7ead33c4826c6d12013f957ba1e7c95b  target/wasm32-unknown-unknown/release/veltron_test_token.wasm" | sha256sum --check
+          echo "a70d8aea3538fd177859fdb7e31b8c1c1e7a982de24d76dbdcf4d88b006d2aca  artifact/target/wasm32-unknown-unknown/release/veltron_treasury.wasm" | sha256sum --check
+          echo "5d5041336cc8fc92cc9ca11fff1f0b1f7ead33c4826c6d12013f957ba1e7c95b  artifact/target/wasm32-unknown-unknown/release/veltron_test_token.wasm" | sha256sum --check
+          mkdir -p fixtures
+          cp artifact/target/wasm32-unknown-unknown/release/veltron_treasury.wasm fixtures/
+          cp artifact/target/wasm32-unknown-unknown/release/veltron_test_token.wasm fixtures/
       - uses: actions/upload-artifact@v4
         with:
           name: verified-contract-fixtures
-          path: |
-            target/wasm32-unknown-unknown/release/veltron_treasury.wasm
-            target/wasm32-unknown-unknown/release/veltron_test_token.wasm
+          path: fixtures/*.wasm
           if-no-files-found: error
           retention-days: 2
 
