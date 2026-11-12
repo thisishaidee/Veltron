@@ -267,7 +267,7 @@ $("network-confirm").addEventListener("change", () => {
 
 $("save").addEventListener("click", async () => {
   try {
-    const id = $("commitment-id").value.trim();
+    const id = $("commitment-id").value;
     if (!id || new TextEncoder().encode(id).length > 64) throw new Error("Commitment ID must contain 1–64 UTF-8 bytes.");
     const recipient_id = validateAccount($("recipient").value.trim());
     const amount = parseAmount($("amount").value);
@@ -285,7 +285,7 @@ $("save").addEventListener("click", async () => {
 
 $("cancel").addEventListener("click", async () => {
   try {
-    const id = $("cancel-id").value.trim();
+    const id = $("cancel-id").value;
     if (!id) throw new Error("Enter a commitment ID from the verified list.");
     const existing = verifiedSnapshot?.commitments.find(item => item.id === id);
     if (!existing) throw new Error("That commitment is not present in the latest verified snapshot.");
