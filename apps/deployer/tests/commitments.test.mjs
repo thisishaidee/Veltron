@@ -12,6 +12,14 @@ test("commitment manager is Testnet-only and fixed to the configured owner and t
   assert.match(js, /network: "testnet"/);
 });
 
+test("pins both independent RPC providers to the same finalized block", () => {
+  assert.ok(js.includes('"block", { finality: "final" }'));
+  assert.ok(js.includes("const blockHash = finalized?.header?.hash"));
+  assert.ok(js.includes("readProvider(endpoint, blockHash)"));
+  assert.ok(js.includes("block_id: blockHash"));
+  assert.ok(js.includes("result.block_hash !== blockHash"));
+});
+
 test("reads finalized financial position and all commitment pages from two independent RPCs", () => {
   assert.ok(js.includes("https://rpc.testnet.near.org"));
   assert.ok(js.includes("https://rpc.testnet.fastnear.com"));
