@@ -103,8 +103,9 @@ class LiveStateVerificationTests(unittest.TestCase):
 
     @patch("testnet_live_state_verify.view")
     def test_rejects_empty_continuation_page(self, mocked_view):
+        full_page = [{"id": f"invoice-{index:03}"} for index in range(50)]
         mocked_view.side_effect = [
-            {"commitments": [{"id": "invoice-001"}], "next_cursor": "invoice-001"},
+            {"commitments": full_page, "next_cursor": "invoice-049"},
             {"commitments": [], "next_cursor": None},
         ]
         with self.assertRaisesRegex(RuntimeError, "empty continuation page"):
