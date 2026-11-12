@@ -84,9 +84,9 @@ test("accepts both actual CI-built contract files", async ({ page }) => {
   }));
   await page.goto("/");
   await page.getByLabel("Treasury contract WASM").setInputFiles(treasuryWasm);
-  await expect(page.locator("#treasury-result")).toContainText("MATCH");
+  await expect(page.locator("#treasury-result")).toHaveText(/^MATCH — Treasury SHA-256:/);
   await page.getByLabel("Test-token contract WASM").setInputFiles(tokenWasm);
-  await expect(page.locator("#token-result")).toContainText("MATCH");
+  await expect(page.locator("#token-result")).toHaveText(/^MATCH — Test-token SHA-256:/);
   await expect(page.locator("#overall")).toContainText("Both files match the recorded CI build");
   await expect(page.locator("#treasury-result")).toHaveAttribute("data-ok", "true");
   await expect(page.locator("#token-result")).toHaveAttribute("data-ok", "true");
