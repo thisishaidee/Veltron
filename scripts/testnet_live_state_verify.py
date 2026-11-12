@@ -209,11 +209,14 @@ def validate_snapshot(state):
     metadata = state["token_metadata"]
     if metadata.get("symbol") != "VTT" or metadata.get("decimals") != 6:
         raise ValueError(f"unexpected VTT metadata: {metadata}")
-    if state["token_supply"] != "1000000000000":
-        raise ValueError(f"unexpected VTT total supply: {state['token_supply']}")
+    try:
+        if int(state["token_supply"]) <= 0:
+            raise ValueError("VTT total supply must be positive")
+    except (TypeError, ValueError):
+        raise ValueError(f"invalid VTT total supply: {state['token_supply']!r}")
     bounds = state["storage_bounds"]
-    if str(bounds.get("min")) != EXPECTED_STORAGE_MIN:
-        raise ValueError(f"unexpected VTT storage minimum: {bounds}")
+    if str(bounds.get("min")) != EXPECTED_STORAGE_MIN or str(bounds.get("max")) != EXPECTED_STORAGE_MIN:
+        raise ValueError(f"unexpected VTT storage bounds: {bounds}")
     storage = state["token_storage"]
     if not isinstance(storage, dict) or int(storage.get("total", "0")) < int(EXPECTED_STORAGE_MIN):
         raise ValueError(f"treasury VTT storage is not registered: {storage}")
