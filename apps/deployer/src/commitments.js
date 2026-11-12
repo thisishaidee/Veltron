@@ -14,16 +14,30 @@ let accountId = "";
 let verifiedSnapshot;
 let busy = false;
 
+const RPC_TIMEOUT_MS = 12000;
+
 async function rpc(endpoint, method, params) {
-  const response = await fetch(endpoint.url, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ jsonrpc: "2.0", id: "veltron-commitment-management", method, params })
-  });
-  if (!response.ok) throw new Error(endpoint.name + " HTTP " + response.status);
-  const payload = await response.json();
-  if (payload.error) throw new Error(endpoint.name + ": " + (payload.error.message || "RPC error"));
-  return payload.result;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), RPC_TIMEOUT_MS);
+  try {
+    const response = await fetch(endpoint.url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: "veltron-commitment-management", method, params }),
+      signal: controller.signal
+    });
+    if (!response.ok) throw new Error(endpoint.name + " HTTP " + response.status);
+    const payload = await response.json();
+    if (payload.error) throw new Error(endpoint.name + ": " + (payload.error.message || "RPC error"));
+    return payload.result;
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error(endpoint.name + " timed out after " + RPC_TIMEOUT_MS / 1000 + " seconds.");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 async function view(endpoint, method, args, blockHash) {
