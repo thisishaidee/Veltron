@@ -13,6 +13,7 @@ let connector;
 let accountId = "";
 let verifiedSnapshot;
 let busy = false;
+let refreshGeneration = 0;
 
 const RPC_TIMEOUT_MS = 12000;
 
@@ -150,7 +151,10 @@ function render(snapshot) {
   }
 }
 
-async function refresh() {
+async function refresh(options = {}) {
+  const allowDuringBusy = options.allowDuringBusy === true;
+  if (busy && !allowDuringBusy) return;
+  const requestGeneration = ++refreshGeneration;
   $("refresh").disabled = true;
   $("read-status").textContent = "Reading finalized state from both independent Testnet RPCs…";
   $("save").disabled = true;
@@ -163,6 +167,7 @@ async function refresh() {
     const blockHash = finalized?.header?.hash;
     if (typeof blockHash !== "string" || !blockHash) throw new Error("NEAR RPC did not return a finalized block hash.");
     const [first, second] = await Promise.all(RPCS.map(endpoint => readProvider(endpoint, blockHash)));
+    if (requestGeneration !== refreshGeneration) return;
     if (stable(first) !== stable(second)) throw new Error("RPC providers disagree. State is withheld.");
     verifiedSnapshot = first;
     render(first);
@@ -171,9 +176,11 @@ async function refresh() {
     $("save").disabled = !ready;
     $("cancel").disabled = !ready;
   } catch (error) {
-    $("read-status").textContent = "STATE NOT VERIFIED — " + String(error.message || error) + ". No transaction was sent.";
+    if (requestGeneration === refreshGeneration) {
+      $("read-status").textContent = "STATE NOT VERIFIED — " + String(error.message || error) + ". No transaction was sent.";
+    }
   } finally {
-    $("refresh").disabled = false;
+    if (requestGeneration === refreshGeneration) $("refresh").disabled = busy;
   }
 }
 
@@ -196,6 +203,8 @@ async function sendCall(methodName, args, statusId) {
     throw new Error("Connect the configured owner, confirm Testnet in Meteor, and refresh verified state first.");
   }
   busy = true;
+  refreshGeneration += 1;
+  $("refresh").disabled = true;
   $("save").disabled = true;
   $("cancel").disabled = true;
   $(statusId).textContent = "Opening wallet approval. Check signer, receiver, method and arguments carefully.";
@@ -211,7 +220,7 @@ async function sendCall(methodName, args, statusId) {
       }]
     });
     $(statusId).textContent = "Wallet returned a response. Refreshing finalized state to verify the result. Do not submit again if verification is inconclusive.";
-    await refresh();
+    await refresh({ allowDuringBusy: true });
     $(statusId).textContent += " Check the refreshed commitment list and financial position.";
   } catch (error) {
     $(statusId).textContent = "REQUEST RESULT UNCERTAIN — " + String(error.message || error) + ". Refresh finalized state before considering another attempt; do not blindly resubmit.";
@@ -255,11 +264,13 @@ $("connect").addEventListener("click", async () => {
   }
 });
 
-$("refresh").addEventListener("click", refresh);
+$("refresh").addEventListener("click", () => {
+  if (!busy) void refresh();
+});
 $("network-confirm").addEventListener("change", () => {
   $("save").disabled = true;
   $("cancel").disabled = true;
-  if ($("network-confirm").checked && accountId === OWNER && verifiedSnapshot) {
+  if (!busy && $("network-confirm").checked && accountId === OWNER && verifiedSnapshot) {
     $("save").disabled = false;
     $("cancel").disabled = false;
   }
