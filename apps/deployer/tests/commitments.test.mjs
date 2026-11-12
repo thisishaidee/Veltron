@@ -1,17 +1,41 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import vm from "node:vm";
 
 const html = await readFile(new URL("../commitment-management.html", import.meta.url), "utf8");
 const js = await readFile(new URL("../src/commitments.js", import.meta.url), "utf8");
 
-test("bounds every RPC request and clears its timeout after completion", () => {
-  assert.ok(js.includes("const RPC_TIMEOUT_MS = 12000"));
-  assert.ok(js.includes("new AbortController()"));
-  assert.ok(js.includes("signal: controller.signal"));
-  assert.ok(js.includes("controller.abort()"));
-  assert.ok(js.includes("timed out after"));
-  assert.ok(js.includes("clearTimeout(timeout)"));
+test("a stalled RPC request is aborted and rejects within the configured timeout", async () => {
+  const start = js.indexOf("async function rpc(endpoint, method, params) {");
+  const end = js.indexOf("\\nasync function view(", start);
+  assert.ok(start >= 0 && end > start, "RPC function can be isolated for a behavioural test");
+  const rpcSource = js.slice(start, end).replace("const RPC_TIMEOUT_MS = 12000;", "const RPC_TIMEOUT_MS = 25;");
+  const rpc = vm.runInNewContext(rpcSource + "\\nrpc;", {
+    AbortController,
+    setTimeout,
+    clearTimeout,
+    fetch: (_url, options) => new Promise((_resolve, reject) => {
+      options.signal.addEventListener("abort", () => {
+        const error = new Error("aborted");
+        error.name = "AbortError";
+        reject(error);
+      }, { once: true });
+    })
+  });
+  await assert.rejects(
+    rpc({ name: "stalled provider", url: "https://rpc.invalid" }, "status", []),
+    /stalled provider timed out after 0.025 seconds/
+  );
+});
+
+test("commitment IDs are preserved byte-for-byte for existing commitment lookups and wallet calls", () => {
+  assert.ok(js.includes('const id = $("commitment-id").value;'));
+  assert.ok(js.includes('const id = $("cancel-id").value;'));
+  assert.ok(js.includes("verifiedSnapshot?.commitments.find(item => item.id === id)"));
+  assert.ok(!js.includes('const id = $("commitment-id").value.trim();'));
+  assert.ok(!js.includes('const id = $("cancel-id").value.trim();'));
+  assert.ok(js.includes('if (!id || new TextEncoder().encode(id).length > 64)'));
 });
 
 test("commitment manager is Testnet-only and fixed to the configured owner and treasury", () => {
