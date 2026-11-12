@@ -79,7 +79,7 @@ async function readProvider(endpoint) {
     const normalized = typeof raw === "string" ? raw :
       typeof raw === "number" && Number.isSafeInteger(raw) ? String(raw) :
       raw && typeof raw === "object" && typeof raw["0"] === "string" ? raw["0"] : "";
-    if (!/^\\d+$/.test(normalized)) {
+    if (!/^[0-9]+$/.test(normalized)) {
       throw new Error(endpoint.name + " returned invalid " + key + " (response shape: " + JSON.stringify(position).slice(0, 350) + ").");
     }
     position[key] = normalized;
