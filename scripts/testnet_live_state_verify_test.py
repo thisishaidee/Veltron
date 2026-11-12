@@ -32,7 +32,7 @@ def valid_snapshot():
         "token_supply": "1000000000000",
         "treasury_token_balance": EXPECTED_LEDGER,
         "token_storage": {"total": "1250000000000000000000"},
-        "storage_bounds": {"min": "1250000000000000000000"},
+        "storage_bounds": {"min": "1250000000000000000000", "max": "1250000000000000000000"},
         "treasury_account": {
             "amount": str(6 * 10**24),
             "storage_usage": "339927",
