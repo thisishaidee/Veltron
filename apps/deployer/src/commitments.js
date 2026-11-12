@@ -43,26 +43,41 @@ function stable(value) {
   return JSON.stringify(value);
 }
 
+async function readAllCommitments(endpoint) {
+  const commitments = [];
+  let cursor = null;
+  for (let pageNumber = 0; pageNumber < 6; pageNumber += 1) {
+    const page = await view(endpoint, "get_commitments", { from_id: cursor, limit: 50 });
+    if (!page || !Array.isArray(page.commitments)) throw new Error(endpoint.name + " returned an invalid commitments page.");
+    commitments.push(...page.commitments);
+    if (commitments.length > 256) throw new Error(endpoint.name + " exceeded the contract commitment limit.");
+    if (page.next_cursor === null) return commitments;
+    if (typeof page.next_cursor !== "string" || page.next_cursor === cursor) {
+      throw new Error(endpoint.name + " returned an invalid commitment cursor.");
+    }
+    cursor = page.next_cursor;
+  }
+  throw new Error(endpoint.name + " did not finish commitment pagination.");
+}
+
 async function readProvider(endpoint) {
   const network = await rpc(endpoint, "status", []);
   if (network.chain_id !== "testnet") throw new Error(endpoint.name + " did not confirm Testnet.");
-  const [owner, position, paused, page] = await Promise.all([
+  const [owner, position, paused, commitments] = await Promise.all([
     view(endpoint, "get_owner"),
     view(endpoint, "get_financial_position"),
     view(endpoint, "get_pause_status"),
-    view(endpoint, "get_commitments", { from_id: null, limit: 50 })
+    readAllCommitments(endpoint)
   ]);
   if (owner !== OWNER) throw new Error(endpoint.name + " reports an unexpected treasury owner.");
-  if (!position || typeof position !== "object" || typeof paused !== "boolean" ||
-      !Array.isArray(page.commitments) || page.next_cursor !== null) {
+  if (!position || typeof position !== "object" || typeof paused !== "boolean") {
     throw new Error(endpoint.name + " returned incomplete treasury state.");
   }
   for (const key of ["treasury_balance", "active_commitments", "safety_reserve", "spendable_balance"]) {
-    if (!/^\d+$/.test(String(position[key]))) throw new Error(endpoint.name + " returned invalid " + key + ".");
+    if (!/^\\d+$/.test(String(position[key]))) throw new Error(endpoint.name + " returned invalid " + key + ".");
   }
-  return { owner, position, paused, commitments: page.commitments };
+  return { owner, position, paused, commitments };
 }
-
 function formatVtt(raw) {
   const value = BigInt(raw);
   const whole = value / 1000000n;
