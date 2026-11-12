@@ -66,21 +66,24 @@ Pending discretionary transfers are subtracted separately because NEAR cross-con
 - Commitment IDs are limited to 64 UTF-8 bytes. Commitment descriptions and optional discretionary-payment memos are each limited to 256 UTF-8 bytes. These limits constrain user-supplied strings passed through contract calls; an omitted memo is allowed.
 - Recipient and configuration account IDs use NEAR `AccountId` deserialization, so malformed account IDs are rejected before contract logic executes. The treasury rejects itself and the configured token contract as payment or commitment recipients; the token contract is infrastructure, not a vendor destination.
 
-## Payment lifecycle
+## Discretionary payment lifecycle
 
-1. The authorized agent requests a discretionary payment, or the owner starts settlement of an existing commitment.
-2. VELTRON records a pending transfer before scheduling the NEP-141 `ft_transfer`.
-3. The contract calls the configured token contract with the required 1 yoctoNEAR security deposit.
-4. A private callback receives the promise result.
-5. On success, the internal treasury ledger is reduced. A successfully settled commitment is removed.
-6. On failure, the pending reservation is removed and the commitment remains active.
+1. The configured agent submits a discretionary payment request with a recipient, amount, and optional memo.
+2. VELTRON validates the agent, pause state, per-transaction cap, recipient, memo length, and current spendable balance.
+3. The request is stored in the existing bounded pending collection as an approval request. Its full amount is immediately reserved, so another request cannot reuse those funds or cross active commitments and the safety reserve.
+4. The agent cannot approve or reject requests. Only the treasury owner can approve or reject them.
+5. Owner approval atomically replaces the approval request with an in-flight discretionary transfer and schedules the NEP-141 `ft_transfer`. The contract calls the configured token contract with the required 1 yoctoNEAR security deposit.
+6. A private callback receives the promise result. On success, the internal treasury ledger is reduced. On failure, the pending reservation is removed and the ledger remains unchanged.
+7. Owner rejection removes the approval request and releases its reservation without calling the token contract.
 
-This ordering prevents two requests from spending the same internally accounted balance while a transfer is in flight.
+Commitment settlement remains a separate owner-only action: the owner starts settlement to the recipient already fixed in the commitment. The transfer callback removes a commitment only after successful token settlement.
+
+This two-stage flow separates agent intent from financial execution. A queued request is not a transfer; funds move only after an explicit owner approval. Requests and in-flight transfers share the existing bounded pending collection and are both included in pending discretionary accounting.
 
 ## Authority model
 
-- Owner: creates, updates, cancels, and settles commitments; changes the safety reserve and agent.
-- Agent: requests discretionary payments only.
+- Owner: creates, updates, cancels, and settles commitments; changes the safety reserve and agent; approves or rejects agent payment requests.
+- Agent: submits discretionary payment requests only. It cannot approve, reject, or directly execute a payment.
 - Token contract: may credit deposits only through the configured NEP-141 receiver call.
 - Callback: private to the contract account.
 
