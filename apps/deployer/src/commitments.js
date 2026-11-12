@@ -74,7 +74,14 @@ async function readProvider(endpoint) {
     throw new Error(endpoint.name + " returned incomplete treasury state.");
   }
   for (const key of ["treasury_balance", "active_commitments", "safety_reserve", "spendable_balance"]) {
-    if (!/^\\d+$/.test(String(position[key]))) throw new Error(endpoint.name + " returned invalid " + key + ".");
+    const raw = position[key];
+    const normalized = typeof raw === "string" ? raw :
+      typeof raw === "number" && Number.isSafeInteger(raw) ? String(raw) :
+      raw && typeof raw === "object" && typeof raw["0"] === "string" ? raw["0"] : "";
+    if (!/^\\d+$/.test(normalized)) {
+      throw new Error(endpoint.name + " returned invalid " + key + " (response shape: " + JSON.stringify(position).slice(0, 350) + ").");
+    }
+    position[key] = normalized;
   }
   return { owner, position, paused, commitments };
 }
