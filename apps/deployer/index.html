@@ -104,6 +104,11 @@
     <button id="verify-deployed-code" type="button">Verify current on-chain code hash (read-only)</button>
     <p class="muted">After approval, VELTRON independently reads the finalized on-chain code and compares its SHA-256 with the CI artifact. Initialization remains a separate, unavailable step until this comparison passes.</p>
   </div>
+  <section class="panel" aria-labelledby="commitment-management-link">
+    <h2 id="commitment-management-link">Treasury operations</h2>
+    <p>Manage business obligations recorded by the treasury contract.</p>
+    <p><a href="./commitment-management.html">Open commitment management</a></p>
+  </section>
   <section class="panel" id="live-treasury-config" aria-labelledby="live-treasury-heading">
     <h2 id="live-treasury-heading">Live treasury configuration — read-only</h2>
     <p>Finalized contract views are fetched independently from the NEAR Public RPC and FastNEAR Testnet RPC. Values appear only when both providers agree and the reviewed safety configuration is intact.</p>
