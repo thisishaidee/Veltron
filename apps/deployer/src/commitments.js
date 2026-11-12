@@ -100,7 +100,10 @@ function render(snapshot) {
     select.addEventListener("click", () => {
       $("commitment-id").value = item.id;
       $("recipient").value = item.recipient_id;
-      $("amount").value = (Number(item.amount) / 1000000).toString();
+      const raw = String(item.amount).padStart(7, "0");
+      const whole = raw.slice(0, -6);
+      const fraction = raw.slice(-6).replace(/0+$/, "");
+      $("amount").value = whole + (fraction ? "." + fraction : "");
       $("description").value = item.description;
       $("cancel-id").value = item.id;
       $("save-status").textContent = "Loaded existing commitment. Saving will call update_commitment.";
@@ -116,6 +119,8 @@ async function refresh() {
   $("save").disabled = true;
   $("cancel").disabled = true;
   verifiedSnapshot = undefined;
+  for (const id of ["balance", "committed", "reserve", "spendable", "paused"]) $(id).textContent = "—";
+  $("commitments").replaceChildren();
   try {
     const [first, second] = await Promise.all(RPCS.map(readProvider));
     if (stable(first) !== stable(second)) throw new Error("RPC providers disagree. State is withheld.");
