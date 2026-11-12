@@ -90,7 +90,6 @@ test("accepts the exact recorded reference-build contract files", async ({ page 
   await expect(page.locator("#token-result")).toHaveText(/^MATCH — Test-token SHA-256:/);
   await expect(page.locator("#token-result")).toHaveAttribute("data-ok", "true");
   await expect(page.locator("#overall")).toContainText("Both files match the recorded CI build");
-  await expect(page.locator("#overall")).toContainText("Both files match the recorded CI build");
 });
 
 test("deployment request remains gated until wallet connection and user Testnet confirmation", async ({ page }) => {
