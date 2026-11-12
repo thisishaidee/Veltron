@@ -29,6 +29,39 @@ test("a stalled RPC request is aborted and rejects within the configured timeout
   );
 });
 
+test("a successful RPC clears its pending timeout", async () => {
+  const start = js.indexOf("async function rpc(endpoint, method, params) {");
+  const end = js.indexOf("\nasync function view(", start);
+  assert.ok(start >= 0 && end > start, "RPC function can be isolated for a cleanup test");
+  const rpcSource = "const RPC_TIMEOUT_MS = 25;\n" + js.slice(start, end);
+  const scheduled = [];
+  const cleared = [];
+  const rpc = vm.runInNewContext(rpcSource + "\nrpc;", {
+    AbortController,
+    setTimeout: (callback, delay) => {
+      const timer = { callback, delay };
+      scheduled.push(timer);
+      return timer;
+    },
+    clearTimeout: timer => cleared.push(timer),
+    fetch: async () => ({ ok: true, json: async () => ({ result: { block: "final" } }) })
+  });
+  assert.deepEqual(await rpc({ name: "fast provider", url: "https://rpc.invalid" }, "status", []), { block: "final" });
+  assert.equal(scheduled.length, 1, "one timeout is installed for the request");
+  assert.deepEqual(cleared, scheduled, "the timeout is cleared when the RPC finishes early");
+});
+
+test("refreshes cannot overwrite newer transaction state", () => {
+  assert.ok(js.includes("let refreshGeneration = 0;"));
+  assert.ok(js.includes("if (busy && !allowDuringBusy) return;"));
+  assert.ok(js.includes("const requestGeneration = ++refreshGeneration;"));
+  assert.ok(js.includes("if (requestGeneration !== refreshGeneration) return;"));
+  assert.ok(js.includes("refreshGeneration += 1;"));
+  assert.ok(js.includes('if (!busy) void refresh();'));
+  assert.ok(js.includes('await refresh({ allowDuringBusy: true });'));
+  assert.ok(js.includes('if (requestGeneration === refreshGeneration) $("refresh").disabled = busy;'));
+});
+
 test("commitment IDs are preserved byte-for-byte for existing commitment lookups and wallet calls", () => {
   assert.ok(js.includes('const id = $("commitment-id").value;'));
   assert.ok(js.includes('const id = $("cancel-id").value;'));
