@@ -61,14 +61,14 @@ async function readAllCommitments(endpoint, blockHash) {
   throw new Error(endpoint.name + " did not finish commitment pagination.");
 }
 
-async function readProvider(endpoint) {
+async function readProvider(endpoint, blockHash) {
   const network = await rpc(endpoint, "status", []);
   if (network.chain_id !== "testnet") throw new Error(endpoint.name + " did not confirm Testnet.");
   const [owner, position, paused, commitments] = await Promise.all([
-    view(endpoint, "get_owner"),
-    view(endpoint, "get_financial_position"),
-    view(endpoint, "get_pause_status"),
-    readAllCommitments(endpoint)
+    view(endpoint, "get_owner", {}, blockHash),
+    view(endpoint, "get_financial_position", {}, blockHash),
+    view(endpoint, "get_pause_status", {}, blockHash),
+    readAllCommitments(endpoint, blockHash)
   ]);
   if (owner !== OWNER) throw new Error(endpoint.name + " reports an unexpected treasury owner.");
   if (!position || typeof position !== "object" || typeof paused !== "boolean") {
@@ -145,7 +145,10 @@ async function refresh() {
   for (const id of ["balance", "committed", "reserve", "spendable", "paused"]) $(id).textContent = "—";
   $("commitments").replaceChildren();
   try {
-    const [first, second] = await Promise.all(RPCS.map(readProvider));
+    const finalized = await rpc(RPCS[0], "block", { finality: "final" });
+    const blockHash = finalized?.header?.hash;
+    if (typeof blockHash !== "string" || !blockHash) throw new Error("NEAR RPC did not return a finalized block hash.");
+    const [first, second] = await Promise.all(RPCS.map(endpoint => readProvider(endpoint, blockHash)));
     if (stable(first) !== stable(second)) throw new Error("RPC providers disagree. State is withheld.");
     verifiedSnapshot = first;
     render(first);
