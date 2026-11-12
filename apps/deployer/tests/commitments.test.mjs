@@ -62,6 +62,17 @@ test("refreshes cannot overwrite newer transaction state", () => {
   assert.ok(js.includes('if (requestGeneration === refreshGeneration) $("refresh").disabled = busy;'));
 });
 
+test("wallet approval invalidates old state and always restores manual refresh", () => {
+  const start = js.indexOf("async function sendCall(methodName, args, statusId) {");
+  const end = js.indexOf('\n$("connect").addEventListener', start);
+  assert.ok(start >= 0 && end > start, "wallet transaction handler can be isolated");
+  const sendCall = js.slice(start, end);
+  assert.ok(sendCall.includes("verifiedSnapshot = undefined;"));
+  assert.ok(sendCall.includes('$("refresh").disabled = true;'));
+  assert.ok(sendCall.includes('$("refresh").disabled = false;'));
+  assert.ok(sendCall.includes("Boolean(verifiedSnapshot)"));
+});
+
 test("commitment IDs are preserved byte-for-byte for existing commitment lookups and wallet calls", () => {
   assert.ok(js.includes('const id = $("commitment-id").value;'));
   assert.ok(js.includes('const id = $("cancel-id").value;'));
