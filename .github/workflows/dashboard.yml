@@ -37,6 +37,6 @@ jobs:
       - name: Run commitment management safety tests
         run: npm run test:commitments
       - name: Install Chromium
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
       - name: Build dashboard modules and run mobile browser tests
         run: npm run test:e2e -- --project=iphone-chromium-emulation
