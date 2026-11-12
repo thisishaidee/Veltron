@@ -137,6 +137,29 @@ async fn sandbox_deposit_and_agent_payment_use_real_nep141_calls() -> anyhow::Re
     assert_eq!(final_position["spendable_balance"], "700");
     assert_eq!(vendor_balance, "200");
 
+    // A rejected request releases its reservation and never invokes NEP-141.
+    agent.call(treasury.id(), "request_payment")
+        .args_json(json!({
+            "recipient_id": vendor.id(),
+            "amount": "100",
+            "memo": "This request will be rejected"
+        }))
+        .max_gas().transact().await?.into_result()?;
+    let reserved = view_json(&treasury, "get_financial_position", json!({})).await?;
+    assert_eq!(reserved["pending_discretionary"], "100");
+    let agent_reject = agent.call(treasury.id(), "reject_payment")
+        .args_json(json!({ "request_id": "2" }))
+        .max_gas().transact().await?;
+    assert!(agent_reject.into_result().is_err(), "agent cannot reject requests");
+    owner.call(treasury.id(), "reject_payment")
+        .args_json(json!({ "request_id": "2" }))
+        .max_gas().transact().await?.into_result()?;
+    let after_rejection = view_json(&treasury, "get_financial_position", json!({})).await?;
+    let vendor_after_rejection = view_json(&token, "ft_balance_of", json!({ "account_id": vendor.id() })).await?;
+    assert_eq!(after_rejection["treasury_balance"], "800");
+    assert_eq!(after_rejection["pending_discretionary"], "0");
+    assert_eq!(vendor_after_rejection, "200");
+
     Ok(())
 }
 
