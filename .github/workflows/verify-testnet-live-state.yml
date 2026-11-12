@@ -1,0 +1,38 @@
+name: Read-only live VELTRON Testnet treasury verification
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "scripts/testnet_live_state_verify.py"
+      - "scripts/testnet_live_state_verify_test.py"
+      - ".github/workflows/verify-testnet-live-state.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: veltron-live-testnet-state-verification
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify live treasury state without signing
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+
+      - name: Test fail-closed state validation
+        run: python3 -m unittest discover -s scripts -p 'testnet_live_state_verify_test.py' -v
+
+      - name: Verify finalized Testnet state on two RPCs
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+        run: python3 scripts/testnet_live_state_verify.py
+
+      - name: Explain pull-request mode
+        if: github.event_name == 'pull_request'
+        run: echo "Unit tests only. Live Testnet verification runs only by manual dispatch on main."
