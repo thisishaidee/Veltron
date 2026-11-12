@@ -30,15 +30,15 @@ jobs:
           path: reference-source
       - name: Install native build tools for Rust dependencies
         run: apt-get update && apt-get install -y --no-install-recommends build-essential pkg-config
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.99.1
         with:
           targets: wasm32-unknown-unknown
       - name: Build contract WASM files required by dashboard artifact tests
-        run: cargo build --release --target wasm32-unknown-unknown -p veltron-treasury -p veltron-test-token
+        run: cargo build --locked --release --target wasm32-unknown-unknown -p veltron-treasury -p veltron-test-token
         working-directory: .
       - name: Build exact recorded reference artifacts for preflight verification
         run: |
-          cargo build --manifest-path reference-source/Cargo.toml --release --target wasm32-unknown-unknown -p veltron-treasury -p veltron-test-token --target-dir target-reference
+          cargo build --locked --manifest-path reference-source/Cargo.toml --release --target wasm32-unknown-unknown -p veltron-treasury -p veltron-test-token --target-dir target-reference
           mkdir -p apps/deployer/tests/fixtures/verified-build
           cp target-reference/wasm32-unknown-unknown/release/veltron_treasury.wasm apps/deployer/tests/fixtures/verified-build/
           cp target-reference/wasm32-unknown-unknown/release/veltron_test_token.wasm apps/deployer/tests/fixtures/verified-build/
