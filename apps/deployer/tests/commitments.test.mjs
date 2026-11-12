@@ -5,45 +5,46 @@ import test from "node:test";
 const html = await readFile(new URL("../commitment-management.html", import.meta.url), "utf8");
 const js = await readFile(new URL("../src/commitments.js", import.meta.url), "utf8");
 
-test("commitment manager is explicitly Testnet-only and uses the configured owner and treasury", () => {
+test("commitment manager is Testnet-only and fixed to the configured owner and treasury", () => {
   for (const value of ["haideedotxyz.testnet", "veltron-treasury.testnet", "NEAR TESTNET"]) {
     assert.ok(html.includes(value) || js.includes(value));
   }
   assert.match(js, /network: "testnet"/);
 });
 
-test("reads finalized commitments and financial position from two independent RPCs", () => {
-  assert.match(js, /https:\/\/rpc\.testnet\.near\.org/);
-  assert.match(js, /https:\/\/rpc\.testnet\.fastnear\.com/);
-  for (const value of ['"get_owner"', '"get_financial_position"', '"get_pause_status"', '"get_commitments"']) {
-    assert.ok(js.includes(value));
+test("reads finalized financial position and all commitment pages from two independent RPCs", () => {
+  assert.ok(js.includes("https://rpc.testnet.near.org"));
+  assert.ok(js.includes("https://rpc.testnet.fastnear.com"));
+  for (const method of ["get_owner", "get_financial_position", "get_pause_status", "get_commitments"]) {
+    assert.ok(js.includes(method));
   }
-  assert.match(js, /finality: "final"/);
-  assert.match(js, /stable\(first\) !== stable\(second\)/);
+  assert.ok(js.includes('finality: "final"'));
+  assert.ok(js.includes("stable(first) !== stable(second)"));
+  assert.ok(js.includes("readAllCommitments"));
+  assert.ok(js.includes("pageNumber < 6"));
 });
 
 test("only the owner can request create, update, and cancel operations", () => {
-  assert.match(js, /accountId !== OWNER/);
-  for (const method of ['"create_commitment"', '"update_commitment"', '"cancel_commitment"']) {
-    assert.ok(js.includes(method));
-  }
-  assert.match(js, /signerId: OWNER/);
-  assert.match(js, /receiverId: TREASURY/);
-  assert.match(js, /deposit: "0"/);
+  assert.ok(js.includes("accountId !== OWNER"));
+  for (const method of ["create_commitment", "update_commitment", "cancel_commitment"]) assert.ok(js.includes(method));
+  assert.ok(js.includes("signerId: OWNER"));
+  assert.ok(js.includes("receiverId: TREASURY"));
+  assert.ok(js.includes('deposit: "0"'));
 });
 
-test("amounts are converted exactly to six-decimal base units without floating point", () => {
-  assert.match(js, /BigInt\(match\[1\]\) \* 1000000n/);
-  assert.match(js, /\\\\d{1,6}/);
+test("amount conversion uses integer arithmetic and six-decimal precision", () => {
+  assert.ok(js.includes("BigInt(match[1]) * 1000000n"));
+  assert.ok(js.includes("\\d{1,6}"));
+  assert.ok(!js.includes("Number(item.amount)"));
 });
 
-test("pending settlements cannot be edited or cancelled and no settlement/payment action is exposed", () => {
-  assert.match(js, /settlement_pending/);
-  assert.doesNotMatch(js, /methodName: "settle_commitment"/);
-  assert.doesNotMatch(js, /methodName: "request_payment"/);
+test("pending settlements cannot be edited or cancelled; payment and settlement are not exposed", () => {
+  assert.ok(js.includes("settlement_pending"));
+  assert.ok(!js.includes('methodName: "settle_commitment"'));
+  assert.ok(!js.includes('methodName: "request_payment"'));
 });
 
-test("wallet errors instruct read-only verification before any retry", () => {
-  assert.match(js, /REQUEST RESULT UNCERTAIN/);
-  assert.match(js, /do not blindly resubmit/);
+test("uncertain wallet outcomes require read-only verification before retry", () => {
+  assert.ok(js.includes("REQUEST RESULT UNCERTAIN"));
+  assert.ok(js.includes("do not blindly resubmit"));
 });
