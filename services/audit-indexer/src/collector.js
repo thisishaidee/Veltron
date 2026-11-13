@@ -269,7 +269,7 @@ export async function runFinalizedIndexer(env, fetchImpl = fetch) {
     : [];
   const eventsByBlock = extractTransactionEvents(transactionDetails, contractId, startHeight, headHeight);
 
-  while (startHeight <= headHeight && indexedBlocks < maxBlocks) {
+  while (startHeight + indexedBlocks <= headHeight && indexedBlocks < maxBlocks) {
     const rangeStart = startHeight + indexedBlocks;
     const rangeEnd = Math.min(headHeight + 1, rangeStart + Math.min(MAX_BLOCKS_PER_RANGE, maxBlocks - indexedBlocks));
     const blocks = await fetchBlockRange(network.history, rangeStart, rangeEnd, fetchImpl);
