@@ -2,7 +2,7 @@ import { NearConnector } from "@hot-labs/near-connect";
 import {
   OWNER, TREASURY, RPCS, GAS, stable, formatVtt, normalizePending,
   actionReadiness, paymentCall, uncertainOutcomeMessage
-} from "./payment-queue-core.js";
+} from "./payment-queue-core.mjs";
 
 const $ = id => document.getElementById(id);
 let connector;
@@ -216,8 +216,10 @@ async function act(methodName, requestId) {
 
   busy = true;
   generation += 1;
+  for (const queued of verifiedSnapshot?.queued || []) {
+    if (queued.controls) { queued.controls.approve.disabled = true; queued.controls.reject.disabled = true; }
+  }
   verifiedSnapshot = undefined;
-  updateControls();
   $("read-status").textContent = "Opening Meteor for explicit " + verb.toLowerCase() + " approval. Review signer, receiver, method, request ID, gas and zero deposit.";
   try {
     if (!connector || accountId !== OWNER || !$("network-confirm").checked) throw new Error("Owner wallet or Testnet confirmation changed.");
