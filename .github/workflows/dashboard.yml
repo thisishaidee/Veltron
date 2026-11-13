@@ -64,3 +64,4 @@ jobs:
         run: |
           npm run test:e2e
           npm run test:commitments
+          npm run test:payment-queue
