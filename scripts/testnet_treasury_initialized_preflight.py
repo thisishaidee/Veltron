@@ -12,7 +12,7 @@ import urllib.request
 RPC = "https://rpc.testnet.near.org"
 TREASURY = "veltron-treasury.testnet"
 TOKEN = "veltron-token.testnet"
-TREASURY_SHA256 = "66d3d95d8b4f7142cb47062051a93158994236a3791d83e994946af3dd5525af"
+TREASURY_SHA256 = "a70d8aea3538fd177859fdb7e31b8c1c1e7a982de24d76dbdcf4d88b006d2aca"
 TOKEN_SHA256 = "5d5041336cc8fc92cc9ca11fff1f0b1f7ead33c4826c6d12013f957ba1e7c95b"
 EXPECTED_RESERVE = "200000000"
 EXPECTED_STORAGE_MIN = "1250000000000000000000"
