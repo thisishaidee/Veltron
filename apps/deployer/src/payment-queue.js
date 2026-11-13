@@ -179,18 +179,21 @@ async function refresh() {
   $("queue").textContent = "Loading queued requests…";
   $("transfers").textContent = "Loading in-flight transfers…";
   try {
-    const blocks = await Promise.all(RPCS.map(endpoint => rpc(endpoint, "block", { finality: "final" })));
-    const hashes = blocks.map(block => block?.header?.hash);
-    const heights = blocks.map(block => block?.header?.height);
-    if (!hashes[0] || hashes[0] !== hashes[1] || heights[0] !== heights[1]) {
-      throw new Error("Providers do not agree on the same finalized block. All owner controls remain disabled.");
+    // Anchor both providers to one canonical finalized block. Their latest heads
+    // can differ briefly while one provider catches up; that alone is not a
+    // treasury-state disagreement.
+    const block = await rpc(RPCS[0], "block", { finality: "final" });
+    const blockHash = block?.header?.hash;
+    const blockHeight = block?.header?.height;
+    if (!blockHash || !Number.isSafeInteger(blockHeight)) {
+      throw new Error("The primary RPC did not return a valid finalized block.");
     }
-    const [first, second] = await Promise.all(RPCS.map(endpoint => readProvider(endpoint, hashes[0])));
+    const [first, second] = await Promise.all(RPCS.map(endpoint => readProvider(endpoint, blockHash)));
     if (current !== generation) return;
-    if (stable(first) !== stable(second)) throw new Error("Providers disagree on treasury state. Owner controls remain disabled.");
+    if (stable(first) !== stable(second)) throw new Error("Providers disagree on treasury state at the same finalized block. Owner controls remain disabled.");
     verifiedSnapshot = {
       ...first, verified: true, providersAgree: true,
-      checkedAt: Date.now(), blockHeight: heights[0]
+      checkedAt: Date.now(), blockHeight
     };
     render(verifiedSnapshot);
     clearTimeout(expiryTimer);
@@ -201,7 +204,7 @@ async function refresh() {
         $("read-status").textContent = "SNAPSHOT EXPIRED — refresh finalized state from both providers before approving or rejecting.";
       }
     }, 30000);
-    $("read-status").textContent = "VERIFIED — both providers agree at finalized block " + heights[0] + " (" + hashes[0] + "). Code hash: " + verifiedSnapshot.codeHash + ". " + (verifiedSnapshot.supportsApproval ? "Owner approval and rejection methods are supported by this contract version." : "This deployed contract version does not expose approve_payment/reject_payment; queue actions remain disabled until the exact reviewed release is installed.") + " Snapshot is actionable for 30 seconds. Last checked " + new Date(verifiedSnapshot.checkedAt).toLocaleTimeString() + ".";
+    $("read-status").textContent = "VERIFIED — both providers agree at finalized block " + blockHeight + " (" + blockHash + "). Code hash: " + verifiedSnapshot.codeHash + ". " + (verifiedSnapshot.supportsApproval ? "Owner approval and rejection methods are supported by this contract version." : "This deployed contract version does not expose approve_payment/reject_payment; queue actions remain disabled until the exact reviewed release is installed.") + " Snapshot is actionable for 30 seconds. Last checked " + new Date(verifiedSnapshot.checkedAt).toLocaleTimeString() + ".";
   } catch (error) {
     if (current === generation) {
       $("read-status").textContent = "STATE NOT VERIFIED — " + String(error?.message || error) + " No wallet action is available.";
