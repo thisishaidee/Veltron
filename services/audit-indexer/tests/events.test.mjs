@@ -198,3 +198,14 @@ test("scheduled collector ingests finalized blocks in order from configured star
   assert.ok(requested[0].startsWith("https://testnet.neardata.xyz/"));
   assert.match(db.statements[0].sql, /INSERT OR IGNORE INTO audit_events/);
 });
+
+
+test("rejects a failed finalized-head HTTP response before parsing JSON", async () => {
+  const db = fakeDb();
+  const fetchMock = async () => ({ ok: false, status: 503, json: async () => ({ block: { header: { height: 100 } } }) });
+  await assert.rejects(() => runFinalizedIndexer({
+    NETWORK: "testnet", TREASURY_ACCOUNT: "veltron-treasury.testnet",
+    START_BLOCK_HEIGHT: "100", MAX_BLOCKS_PER_TICK: "10", AUDIT_DB: db
+  }, fetchMock), /finalized-head request returned HTTP 503/);
+  assert.equal(db.statements.length, 0);
+});
