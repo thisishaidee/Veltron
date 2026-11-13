@@ -4,22 +4,26 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#101820"><title>VELTRON — Owner Controls</title>
 <style>
-:root{color-scheme:dark;font:16px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#101820;color:#edf2f4}
-*{box-sizing:border-box}body{width:min(100% - 32px,900px);margin:auto;padding:24px 0 max(40px,env(safe-area-inset-bottom))}
-h1{font-size:clamp(1.55rem,5vw,2rem);margin:.2rem 0}h2{font-size:1.12rem;margin:0 0 10px}p,li{color:#c5d0d6}
-nav{display:flex;flex-wrap:wrap;gap:12px;margin:14px 0 22px}a{color:#b8e1dd}
-.panel{border:1px solid #40515c;border-radius:12px;padding:clamp(14px,3vw,20px);margin:16px 0;min-width:0}
+:root{color-scheme:dark;font:15px/1.55 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#090e12;color:#edf4f1;--panel:#111a1d;--line:#293a35;--muted:#91a39d;--green:#68d7a5;--amber:#e7bd70}
+*{box-sizing:border-box}body{width:min(100% - 32px,980px);margin:auto;padding:22px 0 max(44px,env(safe-area-inset-bottom))}
+a{color:var(--green);text-decoration:none}a:hover{text-decoration:underline}
+header{padding:10px 0 20px;border-bottom:1px solid var(--line)}header>p:first-child{font-size:10px;letter-spacing:.18em;color:var(--green);font-weight:800;margin:0 0 8px}
+h1{font-size:clamp(1.7rem,5vw,2.4rem);letter-spacing:-.04em;line-height:1.15;margin:.2rem 0}h2{font-size:1.05rem;letter-spacing:-.02em;margin:0 0 10px}h3{font-size:.95rem;margin:18px 0 8px}p,li{color:#bdcbc5}
+nav{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 22px}nav a{font-size:13px;padding:8px 11px;border:1px solid var(--line);border-radius:9px;color:#c7d5cf}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:15px;padding:clamp(14px,3vw,22px);margin:14px 0;min-width:0;box-shadow:0 8px 28px #0002}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:12px}
-label{display:block;font-weight:650;margin:12px 0 5px}input{width:100%;min-width:0;padding:12px;background:#1b2932;border:1px solid #52636d;border-radius:8px;color:#edf2f4;font:inherit}
-button{width:100%;padding:13px 15px;margin:9px 0 2px;border:0;border-radius:8px;background:#b8e1dd;color:#101820;font:inherit;font-weight:750}
-button.secondary{background:#263640;color:#edf2f4;border:1px solid #60737e}button.danger{background:#e2a84b;color:#101820}button:disabled{opacity:.4}
-.status{padding:12px;border-radius:8px;background:#263640;white-space:pre-wrap;overflow-wrap:anywhere}.muted{font-size:.9rem;color:#9eafb8}.warn{border-left:4px solid #e2a84b;padding-left:12px}
-.value{font-size:1.2rem;font-weight:750;color:#b8e1dd;overflow-wrap:anywhere}.item{border-top:1px solid #40515c;padding:12px 0}.item:first-child{border-top:0}
+label{display:block;font-weight:650;margin:12px 0 5px;color:#cbd8d2}input{width:100%;min-width:0;padding:12px;background:#0c1415;border:1px solid #354640;border-radius:9px;color:#edf4f1;font:inherit}
+button{width:100%;padding:13px 15px;margin:9px 0 2px;border:1px solid transparent;border-radius:10px;background:var(--green);color:#07150f;font:inherit;font-weight:780;cursor:pointer}
+button.secondary{background:#1b2926;color:#e5eee9;border-color:#3a4b44}button.danger{background:#39251a;color:#ffe0b3;border:1px solid #79552d}button:disabled{opacity:.38;cursor:not-allowed}
+.status{padding:12px 14px;border-radius:10px;background:#0c1415;border:1px solid var(--line);white-space:pre-wrap;overflow-wrap:anywhere;color:#cbd8d2}.muted{font-size:.88rem;color:var(--muted)}.warn{border-left:4px solid var(--amber);padding-left:12px}
+.value{font-size:1.12rem;font-weight:780;color:var(--green);overflow-wrap:anywhere;font-variant-numeric:tabular-nums}.item{border-top:1px solid var(--line);padding:13px 0}.item:first-child{border-top:0}
+input[type=checkbox]{width:20px;min-width:20px;vertical-align:middle;accent-color:var(--green)}
+@media(min-width:760px){body{padding-top:30px}.panel{padding:22px}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
 </style></head>
 <body>
 <header><p class="muted">VELTRON / TREASURY</p><h1>Owner controls</h1><p>Agent permissions, reserve protection, emergency controls and commitment settlement.</p></header>
-<nav><a href="./index.html">Overview / preflight</a><a href="./payment-queue.html">Payment queue</a><a href="./commitment-management.html">Commitments</a><a href="./audit.html">Balance audit</a></nav>
+<nav aria-label="Treasury navigation"><a href="./index.html">Overview</a><a href="./owner-controls.html" aria-current="page">Agent & safety controls</a><a href="./payment-queue.html">Payment queue</a><a href="./commitment-management.html">Commitments</a><a href="./audit.html">Balance audit</a></nav>
 <section class="panel warn"><strong>Owner-authorized Testnet operations only.</strong><p>Every state-changing action requires a fresh dual-provider finalized snapshot and a separate wallet approval. This page never signs automatically. Check the exact signer, receiver, method and arguments in Meteor before approving.</p></section>
 <section class="panel">
 <h2>1 · Connect owner wallet</h2><button id="connect">Connect NEAR Testnet wallet</button><p id="wallet-status" class="status">Not connected.</p>
