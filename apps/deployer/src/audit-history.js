@@ -3,6 +3,7 @@ const $ = (id) => document.getElementById(id);
 let cursor = null;
 let loading = false;
 let filters = {};
+let activeNetwork = "testnet";
 
 function text(tag, value, className) {
   const node = document.createElement(tag);
@@ -13,7 +14,8 @@ function text(tag, value, className) {
 function setStatus(message) { $("results").textContent = message; }
 function explorer(path, value) {
   const link = document.createElement("a");
-  link.href = "https://testnet.nearblocks.io/" + path + "/" + encodeURIComponent(value);
+  const explorerHost = activeNetwork === "mainnet" ? "https://nearblocks.io/" : "https://testnet.nearblocks.io/";
+  link.href = explorerHost + path + "/" + encodeURIComponent(value);
   link.target = "_blank";
   link.rel = "noopener noreferrer";
   link.textContent = value;
@@ -67,6 +69,7 @@ async function load(reset) {
     const body = await response.json();
     for (const event of body.events || []) $("events").append(renderEvent(event));
     cursor = body.next_cursor || null;
+    activeNetwork = body.network === "mainnet" ? "mainnet" : "testnet";
     const index = body.indexing || {};
     $("coverage").textContent = index.coverage || "Unknown";
     $("watermark").textContent = index.indexed_through?.block_height ?? "No finalized block indexed";
