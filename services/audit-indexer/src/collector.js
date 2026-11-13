@@ -12,7 +12,7 @@ const NETWORKS = {
 };
 const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
 const MAX_BLOCKS_PER_RANGE = 100;
-const MAX_BLOCKS_PER_TICK = 200;
+const MAX_BLOCKS_PER_TICK = 500;
 const MAX_ACCOUNT_HISTORY_PAGE = 200;
 const MAX_TRANSACTION_BATCH = 20;
 // Re-read a rolling window so receipts created shortly before the current cursor
