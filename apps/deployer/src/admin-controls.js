@@ -132,7 +132,9 @@ async function readProvider(endpoint, blockHash) {
 }
 function readiness() {
   return !busy && accountId === OWNER && $("network-confirm").checked &&
-    snapshot?.verified === true && Number.isFinite(snapshot.checkedAtMonotonic) &&\n    performance.now() - snapshot.checkedAtMonotonic >= 0 &&\n    performance.now() - snapshot.checkedAtMonotonic <= SNAPSHOT_TTL_MS;
+    snapshot?.verified === true && Number.isFinite(snapshot.checkedAtMonotonic) &&
+    performance.now() - snapshot.checkedAtMonotonic >= 0 &&
+    performance.now() - snapshot.checkedAtMonotonic <= SNAPSHOT_TTL_MS;
 }
 function setActionButtons() {
   const ready = readiness();
