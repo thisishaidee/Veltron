@@ -55,7 +55,6 @@ test("stores a finalized VELTRON event and advances the cursor atomically", asyn
   assert.deepEqual(result, { accepted: 1, block_height: 120, history_complete: true });
   assert.equal(db.statements.length, 2);
   assert.match(db.statements[0].sql, /INSERT OR IGNORE INTO audit_events/);
-  assert.equal(db.statements[0].args[8], 4_000_000);
   assert.match(db.statements[1].sql, /INSERT INTO indexer_cursors/);
   assert.equal(db.statements[0].args[15], null);
 });
@@ -242,6 +241,7 @@ test("scheduled collector ingests indexed receipt events and bulk finalized head
   assert.equal(requested[3].url, "https://tx.test.fastnear.com/v0/transactions");
   assert.equal(requested[4].url, "https://tx.test.fastnear.com/v0/blocks");
   assert.match(db.statements[0].sql, /INSERT OR IGNORE INTO audit_events/);
+  assert.equal(db.statements[0].args[8], 4_000_000);
 });
 
 test("rejects a failed finalized-head HTTP response before parsing JSON", async () => {
