@@ -35,7 +35,7 @@ test("uses canonical NEAR RPC for finalized head and anchor, then checks full bl
       return Response.json({ jsonrpc: "2.0", id: body.id, result: { header } });
     }
     const height = Number(url.split("/").at(-1));
-    return Response.json({ block: { header: { height, hash: "h" + height, prev_hash: "h" + (height - 1), timestamp_nanosec: String(height) }, shards: [] } });
+    return Response.json({ block: { header: { height, hash: "h" + height, prev_hash: "h" + (height - 1), timestamp_nanosec: String(height) } }, shards: [] });
   };
   const result = await runFinalizedIndexer({
     NETWORK: "testnet", TREASURY_ACCOUNT: "veltron-treasury.testnet",
