@@ -169,7 +169,6 @@ test("scheduled collector ingests finalized blocks in order from configured star
     event: "treasury_initialized",
     data: [{ actor_id: "deployer.testnet", timestamp_ns: "1000000000" }]
   });
-  const head = { block: { header: { height: 100 } } };
   const blockDoc = {
     block: { header: { height: 100, hash: "block-100", prev_hash: "block-99", timestamp_nanosec: "1000000000" } },
     shards: [{ shard_id: 0, receipt_execution_outcomes: [{
@@ -182,14 +181,16 @@ test("scheduled collector ingests finalized blocks in order from configured star
     }] }]
   };
   const requested = [];
-  const anchorDoc = { block: { header: { height: 99, hash: "block-99" } } };
-  const fetchMock = async (url) => {
+  const fetchMock = async (url, init = {}) => {
     requested.push(url);
-    return {
-      ok: true,
-      json: async () => url.endsWith("/v0/last_block/final") ? head :
-        url.endsWith("/v0/block/99") ? anchorDoc : blockDoc
-    };
+    if (url === "https://rpc.testnet.near.org") {
+      const params = JSON.parse(init.body).params;
+      const header = params.finality === "final"
+        ? { height: 100, hash: "block-100" }
+        : { height: 99, hash: "block-99" };
+      return Response.json({ result: { header } });
+    }
+    return Response.json(blockDoc);
   };
   const result = await runFinalizedIndexer({
     NETWORK: "testnet",
@@ -200,33 +201,39 @@ test("scheduled collector ingests finalized blocks in order from configured star
   }, fetchMock);
   assert.deepEqual(result, { indexed_blocks: 1, indexed_events: 1, indexed_through: 100, finalized_head: 100 });
   assert.equal(requested.length, 3);
-  assert.ok(requested[0].startsWith("https://testnet.neardata.xyz/"));
-  assert.ok(requested.includes("https://testnet.neardata.xyz/v0/block/99"));
+  assert.equal(requested[0], "https://rpc.testnet.near.org");
+  assert.equal(requested[1], "https://rpc.testnet.near.org");
+  assert.equal(requested[2], "https://testnet.neardata.xyz/v0/block/100");
   assert.match(db.statements[0].sql, /INSERT OR IGNORE INTO audit_events/);
 });
 
 
 test("rejects a failed finalized-head HTTP response before parsing JSON", async () => {
   const db = fakeDb();
-  const fetchMock = async () => ({ ok: false, status: 503, json: async () => ({ block: { header: { height: 100 } } }) });
+  const fetchMock = async () => new Response("unavailable", { status: 503 });
   await assert.rejects(() => runFinalizedIndexer({
     NETWORK: "testnet", TREASURY_ACCOUNT: "veltron-treasury.testnet",
     START_BLOCK_HEIGHT: "100", MAX_BLOCKS_PER_TICK: "10", AUDIT_DB: db
-  }, fetchMock), /finalized-head request returned HTTP 503/);
+  }, fetchMock), /NEAR RPC block request returned HTTP 503/);
   assert.equal(db.statements.length, 0);
 });
 
 
 test("refuses to start history when the first block does not link to its anchor", async () => {
   const db = fakeDb();
-  const head = { block: { header: { height: 100 } } };
-  const fetchMock = async (url) => ({
-    ok: true,
-    json: async () => url.endsWith("/v0/last_block/final") ? head :
-      url.endsWith("/v0/block/99")
-        ? { block: { header: { height: 99, hash: "trusted-anchor" } } }
-        : { block: { header: { height: 100, hash: "block-100", prev_hash: "wrong-anchor", timestamp_nanosec: "1000000000" } }, shards: [] }
-  });
+  const fetchMock = async (url, init = {}) => {
+    if (url === "https://rpc.testnet.near.org") {
+      const params = JSON.parse(init.body).params;
+      const header = params.finality === "final"
+        ? { height: 100, hash: "block-100" }
+        : { height: 99, hash: "trusted-anchor" };
+      return Response.json({ result: { header } });
+    }
+    return Response.json({
+      block: { header: { height: 100, hash: "block-100", prev_hash: "wrong-anchor", timestamp_nanosec: "1000000000" } },
+      shards: []
+    });
+  };
   await assert.rejects(() => runFinalizedIndexer({
     NETWORK: "testnet", TREASURY_ACCOUNT: "veltron-treasury.testnet",
     START_BLOCK_HEIGHT: "100", MAX_BLOCKS_PER_TICK: "10", AUDIT_DB: db
