@@ -26,6 +26,8 @@ test("rejects malformed and duplicate pending records", () => {
   assert.throws(() => normalizePending([{...request(),id:"-1"}]));
   assert.throws(() => normalizePending([request(),request()]),/Duplicate/);
   assert.throws(() => normalizePending([{...request(),kind:{unknown:{}}}]),/Unknown/);
+  assert.throws(() => normalizePending([{...request(),id:9007199254740993}]),/invalid ID/);
+  assert.throws(() => normalizePending([{...request(),id:"18446744073709551616"}]),/invalid ID/);
 });
 
 test("provider disagreement or an unverified snapshot disables controls", () => {
