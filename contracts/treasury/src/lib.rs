@@ -2386,8 +2386,9 @@ mod tests {
         );
         let requested = emitted_events();
         assert!(has_event(&requested, "payment_requested"));
-        assert_eq!(requested[0]["data"][0]["request_id"], request_id.0.to_string());
-        assert_eq!(requested[0]["data"][0]["amount"], "100");
+        let payment_requested = requested.iter().find(|event| event["event"] == "payment_requested").unwrap();
+        assert_eq!(payment_requested["data"][0]["request_id"], request_id.0.to_string());
+        assert_eq!(payment_requested["data"][0]["amount"], "100");
 
         let mut owner_context = VMContextBuilder::new();
         owner_context.predecessor_account_id(account("owner.near"));
@@ -2395,7 +2396,8 @@ mod tests {
         contract.reject_payment(request_id);
         let rejected = emitted_events();
         assert!(has_event(&rejected, "payment_rejected"));
-        assert_eq!(rejected[0]["data"][0]["request_id"], request_id.0.to_string());
+        let payment_rejected = rejected.iter().find(|event| event["event"] == "payment_rejected").unwrap();
+        assert_eq!(payment_rejected["data"][0]["request_id"], request_id.0.to_string());
     }
 
     #[test]
