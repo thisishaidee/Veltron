@@ -87,3 +87,8 @@ The page also displays current pending transfers, active commitments, and the la
 
 Build includes `src/admin-controls.js`. Run the owner-controls regression checks with `npm run test:admin-controls`; browser coverage is included in `npm run test:e2e`.
 
+
+
+## Financial audit history
+
+The read-only audit history page is linked from the deployer overview. It requires the deployed audit-indexer Worker URL in the page's `veltron-audit-api` meta tag. Until the Worker, D1 schema and scheduled collector are configured and verified, the page deliberately reports that the service is not configured and does not claim to show historical records. Its API watermark is not proof of complete history.

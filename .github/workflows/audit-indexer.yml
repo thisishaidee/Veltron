@@ -1,0 +1,42 @@
+name: Audit indexer checks
+
+on:
+  pull_request:
+    paths:
+      - "services/audit-indexer/**"
+      - ".github/workflows/audit-indexer.yml"
+      - "apps/deployer/**"
+  push:
+    branches:
+      - main
+    paths:
+      - "services/audit-indexer/**"
+      - ".github/workflows/audit-indexer.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Run audit indexer validation tests
+        run: npm test --prefix services/audit-indexer
+
+  deployer-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "26"
+          cache: "npm"
+          cache-dependency-path: apps/deployer/package-lock.json
+      - name: Install deployer dependencies
+        run: npm ci --prefix apps/deployer
+      - name: Build deployer pages including audit history
+        run: npm run build --prefix apps/deployer

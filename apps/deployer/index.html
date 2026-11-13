@@ -29,15 +29,15 @@
 <body>
   <h1>VELTRON Testnet Deployer</h1>
   <p>Verify the official CI-built contract files, connect a NEAR Testnet wallet, and review a separately approved test-token deployment. No transaction is sent unless you click the deployment control and approve it in your wallet.</p>
-  <p><a href="./owner-controls.html">Owner controls</a> · <a href="./payment-queue.html">Payment queue</a> · <a href="./commitment-management.html">Commitment management</a> · <a href="./audit.html">Balance audit</a></p>
+  <p><a href="./owner-controls.html">Owner controls</a> · <a href="./payment-queue.html">Payment queue</a> · <a href="./commitment-management.html">Commitment management</a> · <a href="./audit.html">Balance audit</a> · <a href="./audit-history.html">Financial audit history</a></p>
   <div class="panel warn">
     <strong>Testnet only. No real funds.</strong>
     <p>Do not upload keys, seed phrases, or wallet backups. Only select the two <code>.wasm</code> files extracted from the matching GitHub Actions artifact.</p>
   </div>
   <div class="panel">
     <h2>Verified build reference</h2>
-    <p>Source commit: <code>0a88e9f632affc07b0b4315b647422700a99b7f0</code></p>
-    <p>Treasury SHA-256:<br><code>f8ab9eae796dcc48ea9ba33fbd41196efcc8132bfbf16e90484b0373dd2ed6cd</code></p>
+    <p>Source commit: <code>2bcc355cdbdf7962e671fcab6916e04c70345e68</code></p>
+    <p>Treasury SHA-256:<br><code>0c6495486e476ace94698a844a23925b07b088c759e04848e68d1dbb94f3ed2b</code></p>
     <p>Test-token SHA-256:<br><code>5d5041336cc8fc92cc9ca11fff1f0b1f7ead33c4826c6d12013f957ba1e7c95b</code></p>
     <p class="muted">These hashes identify the CI artifact built from this source commit. The treasury currently deployed on Testnet is still an older build; matching this file does not mean the updated treasury has been deployed. Do not initialize or rely on the updated treasury until its finalized on-chain hash is independently verified.</p>
   </div>
@@ -139,7 +139,7 @@
   </div>
   <p class="muted">A matching hash proves file identity against this recorded build, not contract safety or deployment success. The wallet approval screen is the final authority for what you are signing.</p>
   <script>
-    const expected={treasury:"f8ab9eae796dcc48ea9ba33fbd41196efcc8132bfbf16e90484b0373dd2ed6cd",token:"5d5041336cc8fc92cc9ca11fff1f0b1f7ead33c4826c6d12013f957ba1e7c95b"};
+    const expected={treasury:"0c6495486e476ace94698a844a23925b07b088c759e04848e68d1dbb94f3ed2b",token:"5d5041336cc8fc92cc9ca11fff1f0b1f7ead33c4826c6d12013f957ba1e7c95b"};
     const labels={treasury:"Treasury",token:"Test-token"};
     async function verify(kind){
       const file=document.getElementById(kind).files[0],result=document.getElementById(kind+"-result");

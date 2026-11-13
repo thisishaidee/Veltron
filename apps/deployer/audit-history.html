@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101820">
+<meta name="veltron-audit-api" content="">
+<title>VELTRON — Financial Audit History</title>
+<style>
+:root{color-scheme:dark;font:16px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#101820;color:#edf2f4}
+*{box-sizing:border-box}body{width:min(100% - 32px,900px);margin:auto;padding:24px 0 max(40px,env(safe-area-inset-bottom))}
+h1{font-size:1.65rem;line-height:1.2}h2{font-size:1.12rem}p{color:#c5d0d6}
+a{color:#b8e1dd}.panel,.event{border:1px solid #40515c;border-radius:12px;padding:16px;margin:14px 0;overflow-wrap:anywhere}
+.status{padding:12px;background:#263640;border-radius:8px;white-space:pre-wrap;overflow-wrap:anywhere}
+.muted{font-size:.9rem;color:#9eafb8}.warn{border-left:4px solid #e2a84b;padding-left:12px}
+input,select,button{width:100%;padding:12px;margin:6px 0;border-radius:8px;border:1px solid #52636d;background:#1b2932;color:#edf2f4;font:inherit}
+button{background:#b8e1dd;color:#101820;font-weight:750;border:0}button:disabled{opacity:.45}
+.grid{display:grid;grid-template-columns:1fr;gap:8px}.event h3{font-size:1rem;margin:0 0 8px;color:#b8e1dd}
+.meta{font-size:.88rem;color:#9eafb8}.payload{font-family:ui-monospace,monospace;font-size:.82rem;white-space:pre-wrap;overflow-wrap:anywhere}
+@media(min-width:650px){.grid{grid-template-columns:1fr 1fr}.filters{grid-template-columns:repeat(3,1fr)}}
+</style>
+</head>
+<body>
+<h1>VELTRON Financial Audit History</h1>
+<p><a href="./owner-controls.html">Owner controls</a> · <a href="./payment-queue.html">Payment queue</a> · <a href="./commitment-management.html">Commitments</a> · <a href="./audit.html">Balance audit</a></p>
+<section class="panel warn">
+<strong>Historical audit is not yet certified complete.</strong>
+<p>The API reports its indexing watermark and coverage status. A partial history must never be presented as a complete financial record. This page is read-only and cannot sign transactions or control treasury funds.</p>
+</section>
+<section class="panel">
+<h2>Indexing status</h2>
+<p id="service-status" class="status" role="status" aria-live="polite">Checking audit-history service configuration…</p>
+<p>Coverage: <strong id="coverage">Unknown</strong></p>
+<p>Indexed through block: <strong id="watermark">Unknown</strong></p>
+<p class="muted" id="coverage-note">A configured API and verified historical backfill are required before completeness can be claimed.</p>
+</section>
+<section class="panel">
+<h2>Filter events</h2>
+<div class="grid filters">
+<label>Event type<select id="type"><option value="">All events</option><option>treasury_initialized</option><option>deposit_credited</option><option>commitment_created</option><option>commitment_updated</option><option>commitment_cancelled</option><option>pause_status_changed</option><option>safety_reserve_updated</option><option>agent_configuration_updated</option><option>payment_requested</option><option>payment_approved</option><option>payment_rejected</option><option>transfer_started</option><option>transfer_succeeded</option><option>transfer_failed</option><option>balance_audit_requested</option><option>balance_audit_completed</option><option>balance_audit_failed</option><option>surplus_reconciled</option></select></label>
+<label>Actor account<input id="actor" placeholder="e.g. veltron-agent.testnet"></label>
+<label>Transfer ID<input id="transfer" placeholder="Optional transfer ID"></label>
+<label>Commitment ID<input id="commitment" placeholder="Optional commitment ID"></label>
+</div>
+<button id="apply" type="button">Apply filters</button>
+<button id="refresh" type="button">Refresh latest events</button>
+</section>
+<section class="panel">
+<h2>Event records</h2>
+<p id="results" class="status" role="status" aria-live="polite">No events loaded.</p>
+<div id="events" aria-live="polite"></div>
+<button id="more" type="button" disabled>Load more</button>
+</section>
+<p class="muted">Each record includes its block, transaction, receipt and log provenance. Transaction links open the matching NEAR Explorer for the indexed network. Event payloads are displayed as untrusted text. Failed or unknown receipt outcomes are retained for audit but do not prove that the logged state change committed; inspect the receipt status and transaction outcome.</p>
+<script type="module" src="./dist/audit-history.js"></script>
+</body>
+</html>
