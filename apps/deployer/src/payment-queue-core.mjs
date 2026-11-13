@@ -43,8 +43,14 @@ export function normalizePending(records) {
     seen.add(id);
     const keys = Object.keys(item.kind);
     if (keys.length !== 1) throw new Error("Pending record kind is ambiguous.");
-    const kind = keys[0];
-    const detail = item.kind[kind];
+    const serializedKind = keys[0];
+    const kind = ({
+      DiscretionaryRequest: "discretionary_request",
+      Discretionary: "discretionary",
+      CommitmentSettlement: "commitment_settlement"
+    })[serializedKind];
+    if (!kind) throw new Error("Unknown pending record kind: " + serializedKind);
+    const detail = item.kind[serializedKind];
     if (!detail || typeof detail !== "object") throw new Error("Pending record details are malformed.");
     const record = { id, amount: String(item.amount), created_at_ns: String(item.created_at_ns), kind, detail };
     if (kind === "discretionary_request") {
@@ -64,8 +70,6 @@ export function normalizePending(records) {
         throw new Error("Commitment settlement record is malformed.");
       }
       transfers.push(record);
-    } else {
-      throw new Error("Unknown pending record kind: " + kind);
     }
   }
   return { queued, transfers };
