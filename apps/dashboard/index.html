@@ -150,7 +150,7 @@
     try {
       const audit = await readAuditStatus();
       byId("indexer-status").textContent = "Connected · " + audit.network;
-      byId("indexer-coverage").textContent = audit.history_complete ? "Complete from block " + audit.coverage_start_height : "Backfill in progress";
+      byId("indexer-coverage").textContent = audit.history_complete ? "Complete from block " + audit.coverage_start_height : audit.coverage_start_height ? "Backfill in progress" : "Awaiting release start block";
       byId("indexer-watermark").textContent = audit.indexed_through?.block_height == null ? "Not indexed yet" : String(audit.indexed_through.block_height);
       byId("indexer-event-count").textContent = String(audit.events.length);
       byId("indexer-note").textContent = audit.note || "Coverage is not complete until the finalized head has been scanned from the configured start block.";

@@ -71,11 +71,12 @@ async function load(reset) {
     cursor = body.next_cursor || null;
     activeNetwork = body.network === "mainnet" ? "mainnet" : "testnet";
     const index = body.indexing || {};
-    $("coverage").textContent = index.history_complete && index.coverage_start_height ? "Complete from block " + index.coverage_start_height : "Backfill in progress";
+    $("coverage").textContent = index.history_complete && index.coverage_start_height ? "Complete from block " + index.coverage_start_height : index.coverage_start_height ? "Backfill in progress" : "Awaiting release start block";
     $("watermark").textContent = index.indexed_through?.block_height ?? "No finalized block indexed";
     $("coverage-note").textContent = index.note || "Coverage has not been verified.";
     $("service-status").textContent = "Connected · " + (body.network || "unknown network") + " · " + (body.contract_id || "unknown contract");
-    setStatus((body.events || []).length + " event(s) loaded. " + (index.history_complete ? "All finalized blocks from block " + index.coverage_start_height + " through block " + index.finalized_head_height + " are indexed." : "Historical coverage is still in progress or unverified."));
+    const coverageStatus = index.history_complete ? "All finalized blocks from block " + index.coverage_start_height + " through block " + index.finalized_head_height + " are indexed." : index.coverage_start_height ? "Backfill is still in progress." : "Waiting for the event-emitting release block; historical coverage has not started.";
+    setStatus((body.events || []).length + " event(s) loaded. " + coverageStatus);
     $("more").disabled = !cursor;
   } catch (error) {
     setStatus("LOAD FAILED — " + String(error.message || error));
