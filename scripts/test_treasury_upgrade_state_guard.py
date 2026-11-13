@@ -7,6 +7,7 @@ from treasury_upgrade_state_guard import (
     assert_commitments_match_position,
     assert_upgrade_safe_state,
     deployment_access_key,
+    assert_owner_agent_config,
 )
 
 
@@ -197,6 +198,39 @@ class CommitmentPaginationTests(unittest.TestCase):
         with patch("treasury_upgrade_state_guard.view", side_effect=pages):
             with self.assertRaisesRegex(RuntimeError, "six-page bound"):
                 all_commitments("test-rpc")
+
+
+class OwnerAgentConfigTests(unittest.TestCase):
+    def test_accepts_exact_owner_agent_and_cap(self):
+        assert_owner_agent_config({
+            "owner": "haideedotxyz.testnet",
+            "agent_config": {
+                "agent_id": "veltron-agent.testnet",
+                "max_per_transaction": "50000000",
+            },
+        }, "near")
+
+    def test_rejects_wrong_agent_cap(self):
+        with self.assertRaisesRegex(RuntimeError, "does not match the reviewed"):
+            assert_owner_agent_config({
+                "owner": "haideedotxyz.testnet",
+                "agent_config": {
+                    "agent_id": "veltron-agent.testnet",
+                    "max_per_transaction": "50000001",
+                },
+            }, "near")
+
+    def test_rejects_wrong_owner_or_agent(self):
+        with self.assertRaisesRegex(RuntimeError, "owner changed"):
+            assert_owner_agent_config({
+                "owner": "attacker.testnet",
+                "agent_config": {"agent_id": "veltron-agent.testnet", "max_per_transaction": "50000000"},
+            }, "near")
+        with self.assertRaisesRegex(RuntimeError, "agent changed"):
+            assert_owner_agent_config({
+                "owner": "haideedotxyz.testnet",
+                "agent_config": {"agent_id": "attacker.testnet", "max_per_transaction": "50000000"},
+            }, "near")
 
 
 if __name__ == "__main__":
