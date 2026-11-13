@@ -1,7 +1,7 @@
 import { NearConnector } from "@hot-labs/near-connect";
 import {
   OWNER, TREASURY, RPCS, stable, formatVtt, normalizePending,
-  actionReadiness, paymentCall, uncertainOutcomeMessage
+  actionReadiness, paymentCall, uncertainOutcomeMessage, EVENT_AWARE_CONTRACT_CODE_HASH
 } from "./payment-queue-core.mjs";
 
 const $ = id => document.getElementById(id);
@@ -69,17 +69,21 @@ function normalizePosition(position, endpointName) {
 async function readProvider(endpoint, blockHash) {
   const network = await rpc(endpoint, "status", []);
   if (network.chain_id !== "testnet") throw new Error(endpoint.name + " did not confirm NEAR Testnet.");
-  const [owner, position, paused, pending] = await Promise.all([
+  const [account, owner, position, paused, pending] = await Promise.all([
+    rpc(endpoint, "query", { request_type: "view_account", account_id: TREASURY, block_id: blockHash }),
     view(endpoint, "get_owner", {}, blockHash),
     view(endpoint, "get_financial_position", {}, blockHash),
     view(endpoint, "get_pause_status", {}, blockHash),
     view(endpoint, "get_pending_transfers", {}, blockHash)
   ]);
+  if (!account || typeof account.code_hash !== "string" || !account.code_hash || (account.block_hash && account.block_hash !== blockHash)) throw new Error(endpoint.name + " returned an invalid treasury code-hash snapshot.");
   if (owner !== OWNER) throw new Error(endpoint.name + " reports an unexpected treasury owner.");
   if (typeof paused !== "boolean") throw new Error(endpoint.name + " returned an invalid pause state.");
   const classified = normalizePending(pending);
   return {
-    blockHash, owner, position: normalizePosition(position, endpoint.name),
+    blockHash, codeHash: account.code_hash,
+    supportsApproval: account.code_hash === EVENT_AWARE_CONTRACT_CODE_HASH,
+    owner, position: normalizePosition(position, endpoint.name),
     paused, queued: classified.queued, transfers: classified.transfers
   };
 }
@@ -197,7 +201,7 @@ async function refresh() {
         $("read-status").textContent = "SNAPSHOT EXPIRED — refresh finalized state from both providers before approving or rejecting.";
       }
     }, 30000);
-    $("read-status").textContent = "VERIFIED — both providers agree at finalized block " + heights[0] + " (" + hashes[0] + "). Snapshot is actionable for 30 seconds. Last checked " + new Date(verifiedSnapshot.checkedAt).toLocaleTimeString() + ".";
+    $("read-status").textContent = "VERIFIED — both providers agree at finalized block " + heights[0] + " (" + hashes[0] + "). Code hash: " + verifiedSnapshot.codeHash + ". " + (verifiedSnapshot.supportsApproval ? "Owner approval and rejection methods are supported by this contract version." : "This deployed contract version does not expose approve_payment/reject_payment; queue actions remain disabled until the exact reviewed release is installed.") + " Snapshot is actionable for 30 seconds. Last checked " + new Date(verifiedSnapshot.checkedAt).toLocaleTimeString() + ".";
   } catch (error) {
     if (current === generation) {
       $("read-status").textContent = "STATE NOT VERIFIED — " + String(error?.message || error) + " No wallet action is available.";
