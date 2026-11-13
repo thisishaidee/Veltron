@@ -96,14 +96,18 @@ async function getEvents(request, env) {
         block_timestamp_ns: watermark.block_timestamp_ns
       } : null,
       coverage_start_height: watermark && watermark.coverage_start_height > 0 ? watermark.coverage_start_height : null,
-      finalized_head_height: watermark ? watermark.finalized_head_height : null,
+      finalized_head_height: watermark && watermark.finalized_head_height > 0 ? watermark.finalized_head_height : null,
       history_complete: Boolean(watermark && watermark.history_complete === 1 && watermark.coverage_start_height > 0),
       coverage: watermark && watermark.history_complete === 1 && watermark.coverage_start_height > 0
         ? "complete_from_start_height"
-        : "partial_or_unknown",
+        : watermark && watermark.coverage_start_height > 0
+          ? "partial_or_unknown"
+          : "awaiting_coverage_start",
       note: watermark && watermark.history_complete === 1 && watermark.coverage_start_height > 0
         ? "All finalized blocks from the configured coverage start block through the recorded finalized head have been scanned. Earlier blocks are outside this coverage window."
-        : "Backfill is still in progress or has not been anchored to a configured coverage start block."
+        : watermark && watermark.coverage_start_height > 0
+          ? "Backfill is in progress from the configured coverage start block through the recorded finalized head."
+          : "Awaiting the event-emitting treasury release block. The scheduled scan remains paused until its exact finalized block is configured."
     }
   }, 200, PUBLIC_CORS_HEADERS);
 }
