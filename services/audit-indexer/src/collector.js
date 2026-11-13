@@ -55,12 +55,6 @@ export function extractContractEvents(block, contractId) {
   return events;
 }
 
-async function fetchJson(url) {
-  const response = await fetch(url, { headers: { accept: "application/json" } });
-  if (!response.ok) throw new Error("NEAR Data returned HTTP " + response.status);
-  return response.json();
-}
-
 export async function runFinalizedIndexer(env, fetchImpl = fetch) {
   const baseUrl = NETWORKS[env.NETWORK];
   if (!baseUrl) throw new Error("NETWORK must be testnet or mainnet");
