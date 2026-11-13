@@ -29,6 +29,7 @@ The ingestion body has this shape:
   "finalized": true,
   "block_height": 123,
   "block_hash": "NEAR block hash",
+  "prev_block_hash": "previous NEAR block hash",
   "block_timestamp_ns": "123456789",
   "events": [{
     "receipt_id": "receipt ID",
