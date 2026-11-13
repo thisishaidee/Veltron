@@ -97,7 +97,7 @@ export async function runFinalizedIndexer(env, fetchImpl = fetch) {
   if (!Number.isSafeInteger(maxBlocks)) throw new Error("MAX_BLOCKS_PER_TICK must be an integer");
 
   const cursor = await env.AUDIT_DB.prepare(
-    "SELECT block_height, block_hash FROM indexer_cursors WHERE network = ? AND contract_id = ?"
+    "SELECT block_height, block_hash, coverage_start_height, finalized_head_height, history_complete FROM indexer_cursors WHERE network = ? AND contract_id = ?"
   ).bind(env.NETWORK, contractId).first();
   const startHeight = cursor ? cursor.block_height + 1 : Number(env.START_BLOCK_HEIGHT);
   if (!Number.isSafeInteger(startHeight) || startHeight < 0) throw new Error("Set START_BLOCK_HEIGHT to the first finalized block at or before treasury deployment");
@@ -108,7 +108,9 @@ export async function runFinalizedIndexer(env, fetchImpl = fetch) {
   const headHeight = headHeader.height;
   if (!Number.isSafeInteger(headHeight)) throw new Error("NEAR RPC finalized head response is invalid");
 
+  const coverageStartHeight = cursor ? cursor.coverage_start_height : startHeight;
   let indexedBlocks = 0, indexedEvents = 0, lastHeight = cursor?.block_height ?? null;
+  let historyComplete = cursor?.history_complete === 1;
   let expectedPreviousHash = cursor?.block_hash ?? null;
   if (!cursor && startHeight > 0 && startHeight <= headHeight) {
     const anchorHeader = await getRpcBlockHeader(network.rpc, { block_id: startHeight - 1 }, fetchImpl);
@@ -133,12 +135,19 @@ export async function runFinalizedIndexer(env, fetchImpl = fetch) {
     const result = await ingestBlock(env.AUDIT_DB, { network: env.NETWORK, contractId }, {
       network: env.NETWORK, contract_id: contractId, finalized: true,
       block_height: height, block_hash: header.hash, prev_block_hash: header.prev_hash,
-      block_timestamp_ns: header.timestamp_nanosec, events
+      block_timestamp_ns: header.timestamp_nanosec, coverage_start_height: coverageStartHeight,
+      finalized_head_height: headHeight, events
     });
     expectedPreviousHash = header.hash;
     indexedBlocks++;
     indexedEvents += result.accepted;
     lastHeight = height;
+    historyComplete = result.history_complete;
   }
-  return { indexed_blocks: indexedBlocks, indexed_events: indexedEvents, indexed_through: lastHeight, finalized_head: headHeight };
+  if (cursor && coverageStartHeight > 0 && lastHeight !== null && lastHeight >= headHeight && !historyComplete) {
+    await env.AUDIT_DB.prepare("UPDATE indexer_cursors SET finalized_head_height = ?, history_complete = 1, updated_at = CURRENT_TIMESTAMP WHERE network = ? AND contract_id = ?")
+      .bind(headHeight, env.NETWORK, contractId).run();
+    historyComplete = true;
+  }
+  return { indexed_blocks: indexedBlocks, indexed_events: indexedEvents, indexed_through: lastHeight, finalized_head: headHeight, coverage_start_height: coverageStartHeight, history_complete: historyComplete };
 }
