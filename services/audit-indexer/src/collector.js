@@ -217,7 +217,7 @@ async function fetchTransactionDetails(historyUrl, hashes, fetchImpl) {
 async function fetchBlockRange(historyUrl, fromHeight, toHeight, fetchImpl) {
   const limit = toHeight - fromHeight;
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_BLOCKS_PER_RANGE) {
-    throw new Error("FastNear block range must contain between 1 and 100 blocks");
+    throw new Error("FastNear block range must contain between 1 and 100 blocks (from=" + fromHeight + ", to=" + toHeight + ", limit=" + limit + ")");
   }
   const document = await fetchJsonWithRetry(
     historyUrl + "/v0/blocks",
