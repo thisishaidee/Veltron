@@ -133,7 +133,7 @@ test("paginates account history and deduplicates transaction hashes before batch
       assert.equal(body.resume_token, "page-2");
       return Response.json({
         account_txs: [
-          { transaction_hash: "tx-a", tx_block_height: 99 },
+          { transaction_hash: "tx-a", tx_block_height: 99, tx_index: 1 },
           { transaction_hash: "tx-b", tx_block_height: 100, tx_index: 2 }
         ],
         resume_token: null
