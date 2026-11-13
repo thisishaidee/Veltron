@@ -75,7 +75,9 @@ export async function runFinalizedIndexer(env, fetchImpl = fetch) {
   const startHeight = cursor ? cursor.block_height + 1 : Number(env.START_BLOCK_HEIGHT);
   if (!Number.isSafeInteger(startHeight) || startHeight < 0) throw new Error("Set START_BLOCK_HEIGHT to the first finalized block at or before treasury deployment");
 
-  const headDocument = await (await fetchImpl(baseUrl + "/v0/last_block/final", { headers: { accept: "application/json" } })).json();
+  const headResponse = await fetchImpl(baseUrl + "/v0/last_block/final", { headers: { accept: "application/json" } });
+  if (!headResponse.ok) throw new Error("NEAR Data finalized-head request returned HTTP " + headResponse.status);
+  const headDocument = await headResponse.json();
   const headHeight = headDocument?.block?.header?.height;
   if (!Number.isSafeInteger(headHeight)) throw new Error("NEAR Data finalized head response is invalid");
 
