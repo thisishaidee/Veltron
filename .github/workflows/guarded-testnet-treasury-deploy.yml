@@ -35,7 +35,7 @@ jobs:
       - name: Check out reviewed read-only preflight tools
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
-          ref: c9240911187fe1cf7d9fcdc5ef4b69df1400f9ea
+          ref: ${{ github.sha }}
           path: preflight-tools
           persist-credentials: false
 
@@ -46,9 +46,21 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           repository: thisishaidee/Veltron
-          ref: c03db083db5d7628419154474b4b456a14d60cfe
+          ref: f156719af7dd0525e4ba1be735324774785cf5dd
           path: preflight-tools/candidate-contract
           persist-credentials: false
+
+      - name: Check out exact currently deployed contract source for storage compatibility
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          repository: thisishaidee/Veltron
+          ref: c03db083db5d7628419154474b4b456a14d60cfe
+          path: preflight-tools/deployed-contract
+          persist-credentials: false
+
+      - name: Verify Borsh storage layout compatibility
+        working-directory: preflight-tools
+        run: python3 scripts/check_treasury_storage_compat.py --deployed deployed-contract/contracts/treasury/src/lib.rs --candidate candidate-contract/contracts/treasury/src/lib.rs
 
       - name: Install pinned Rust toolchain
         run: |
@@ -58,7 +70,7 @@ jobs:
           cargo --version
 
       - name: Verify exact reviewed source commit
-        run: test "$(git -C preflight-tools/candidate-contract rev-parse HEAD)" = "c03db083db5d7628419154474b4b456a14d60cfe"
+        run: test "$(git -C preflight-tools/candidate-contract rev-parse HEAD)" = "f156719af7dd0525e4ba1be735324774785cf5dd"
 
       - name: Build exact treasury and Testnet token WASM
         working-directory: preflight-tools/candidate-contract
@@ -71,8 +83,8 @@ jobs:
       - name: Verify reviewed treasury WASM size and SHA-256
         working-directory: preflight-tools/candidate-contract
         run: |
-          test "$(wc -c < target/wasm32-unknown-unknown/release/veltron_treasury.wasm | tr -d ' ')" = "339256"
-          echo "a70d8aea3538fd177859fdb7e31b8c1c1e7a982de24d76dbdcf4d88b006d2aca  target/wasm32-unknown-unknown/release/veltron_treasury.wasm" | sha256sum --check -
+          test "$(wc -c < target/wasm32-unknown-unknown/release/veltron_treasury.wasm | tr -d ' ')" = "410613"
+          echo "0c6495486e476ace94698a844a23925b07b088c759e04848e68d1dbb94f3ed2b  target/wasm32-unknown-unknown/release/veltron_treasury.wasm" | sha256sum --check -
 
       - name: Run full workspace and NEAR Sandbox tests
         working-directory: preflight-tools/candidate-contract
@@ -108,7 +120,7 @@ jobs:
         run: |
           {
             echo "## VELTRON Testnet deployment preflight"
-            echo "- Reviewed treasury artifact SHA-256: \`a70d8aea3538fd177859fdb7e31b8c1c1e7a982de24d76dbdcf4d88b006d2aca\`"
+            echo "- Reviewed treasury artifact SHA-256: \`0c6495486e476ace94698a844a23925b07b088c759e04848e68d1dbb94f3ed2b\`"
             echo "- Full workspace/Sandbox tests and live Testnet preflights passed."
             echo "- Exact reviewed treasury FullAccess key and complete paginated commitments verified on two RPC providers."
             echo "- No secret was loaded and no transaction was signed or submitted."
@@ -193,7 +205,7 @@ jobs:
       - name: Check out reviewed read-only preflight tools
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
-          ref: c9240911187fe1cf7d9fcdc5ef4b69df1400f9ea
+          ref: ${{ github.sha }}
           path: preflight-tools
           persist-credentials: false
 
@@ -201,9 +213,21 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           repository: thisishaidee/Veltron
-          ref: c03db083db5d7628419154474b4b456a14d60cfe
+          ref: f156719af7dd0525e4ba1be735324774785cf5dd
           path: preflight-tools/candidate-contract
           persist-credentials: false
+
+      - name: Check out exact currently deployed contract source for storage compatibility
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          repository: thisishaidee/Veltron
+          ref: c03db083db5d7628419154474b4b456a14d60cfe
+          path: preflight-tools/deployed-contract
+          persist-credentials: false
+
+      - name: Verify Borsh storage layout compatibility
+        working-directory: preflight-tools
+        run: python3 scripts/check_treasury_storage_compat.py --deployed deployed-contract/contracts/treasury/src/lib.rs --candidate candidate-contract/contracts/treasury/src/lib.rs
 
       - name: Install pinned Rust toolchain
         run: |
@@ -220,11 +244,11 @@ jobs:
         env:
           CARGO_TARGET_DIR: ${{ github.workspace }}/preflight-tools/candidate-contract/target
         run: |
-          test "$(git rev-parse HEAD)" = "c03db083db5d7628419154474b4b456a14d60cfe"
+          test "$(git rev-parse HEAD)" = "f156719af7dd0525e4ba1be735324774785cf5dd"
           cargo build --locked --release -p veltron-treasury --target wasm32-unknown-unknown
           cargo build --locked --release -p veltron-test-token --target wasm32-unknown-unknown
-          test "$(wc -c < target/wasm32-unknown-unknown/release/veltron_treasury.wasm | tr -d ' ')" = "339256"
-          echo "a70d8aea3538fd177859fdb7e31b8c1c1e7a982de24d76dbdcf4d88b006d2aca  target/wasm32-unknown-unknown/release/veltron_treasury.wasm" | sha256sum --check -
+          test "$(wc -c < target/wasm32-unknown-unknown/release/veltron_treasury.wasm | tr -d ' ')" = "410613"
+          echo "0c6495486e476ace94698a844a23925b07b088c759e04848e68d1dbb94f3ed2b  target/wasm32-unknown-unknown/release/veltron_treasury.wasm" | sha256sum --check -
           cargo test --locked --workspace -- --nocapture
 
       - name: Repeat fresh live Testnet state and fee checks
