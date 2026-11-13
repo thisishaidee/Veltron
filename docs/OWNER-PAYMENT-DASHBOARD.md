@@ -30,3 +30,6 @@ This page is a follow-on to the contract API in PR #35. It must not be merged in
 - No automatic approval and no direct NEP-141 call from the browser.
 - A queued request only becomes a token transfer through the owner-approved contract method.
 - Do not expose owner controls when RPC providers disagree, the snapshot is stale, the account is not the owner, or Testnet confirmation is absent.
+
+
+Commitment settlement in the owner-controls dashboard uses `settle_commitment_checked(id, expected_recipient_id, expected_amount)`. The contract compares the expected values with the currently stored commitment before scheduling the token transfer, preventing a stale dashboard snapshot from redirecting or resizing an approved settlement.
