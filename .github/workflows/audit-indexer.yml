@@ -9,7 +9,6 @@ on:
   push:
     branches:
       - main
-      - "feat/persistent-audit-indexer-api"
     paths:
       - "services/audit-indexer/**"
       - ".github/workflows/audit-indexer.yml"
