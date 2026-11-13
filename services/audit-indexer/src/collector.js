@@ -1,4 +1,4 @@
-import { ingestBlock } from "./storage.js";
+import { ingestBlocks } from "./storage.js";
 
 const NETWORKS = {
   testnet: {
@@ -274,6 +274,7 @@ export async function runFinalizedIndexer(env, fetchImpl = fetch) {
   const transactionIndexes = new Map(accountRows.map((row) => [row.transaction_hash, row.tx_index]));
   const eventsByBlock = extractTransactionEvents(transactionDetails, contractId, startHeight, headHeight, transactionIndexes);
 
+  const pendingBlocks = [];
   while (startHeight + indexedBlocks <= headHeight && indexedBlocks < maxBlocks) {
     const rangeStart = startHeight + indexedBlocks;
     const rangeEnd = Math.min(headHeight + 1, rangeStart + Math.min(MAX_BLOCKS_PER_RANGE, maxBlocks - indexedBlocks));
@@ -294,7 +295,7 @@ export async function runFinalizedIndexer(env, fetchImpl = fetch) {
       if (expectedPreviousHash && header.prev_block_hash !== expectedPreviousHash) {
         throw new Error("Finalized block " + height + " does not link to the verified previous block hash; cursor was not advanced");
       }
-      const result = await ingestBlock(env.AUDIT_DB, { network: env.NETWORK, contractId }, {
+      pendingBlocks.push({
         network: env.NETWORK,
         contract_id: contractId,
         finalized: true,
@@ -308,10 +309,14 @@ export async function runFinalizedIndexer(env, fetchImpl = fetch) {
       });
       expectedPreviousHash = header.block_hash;
       indexedBlocks++;
-      indexedEvents += result.accepted;
       lastHeight = height;
-      historyComplete = result.history_complete;
     }
+  }
+
+  if (pendingBlocks.length > 0) {
+    const result = await ingestBlocks(env.AUDIT_DB, { network: env.NETWORK, contractId }, pendingBlocks);
+    indexedEvents = result.accepted;
+    historyComplete = result.history_complete;
   }
 
   if (cursor && coverageStartHeight > 0 && lastHeight !== null && lastHeight >= headHeight && !historyComplete) {
