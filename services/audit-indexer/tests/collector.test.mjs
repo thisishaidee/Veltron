@@ -100,3 +100,35 @@ test("does not certify coverage until the finalized head has been scanned", asyn
   assert.equal(db.cursor.finalized_head_height, 55);
   assert.equal(db.cursor.history_complete, 0);
 });
+
+test("retries NEAR Data rate limits using Retry-After before advancing the cursor", async () => {
+  const db = fakeDb();
+  let blockAttempts = 0;
+  const fetchImpl = async (url, init = {}) => {
+    if (url === "https://rpc.testnet.fastnear.com") {
+      const body = JSON.parse(init.body);
+      const header = body.params.finality === "final"
+        ? { height: 70, hash: "h70" }
+        : { height: 69, hash: "h69" };
+      return Response.json({ jsonrpc: "2.0", id: body.id, result: { header } });
+    }
+    if (url === "https://testnet.neardata.xyz/v0/block/70") {
+      blockAttempts++;
+      if (blockAttempts === 1) {
+        return new Response("rate limited", { status: 429, headers: { "retry-after": "0.001" } });
+      }
+      return Response.json({
+        block: { header: { height: 70, hash: "h70", prev_hash: "h69", timestamp_nanosec: "70" } },
+        shards: []
+      });
+    }
+    throw new Error("Unexpected URL: " + url);
+  };
+  const result = await runFinalizedIndexer({
+    NETWORK: "testnet", TREASURY_ACCOUNT: "veltron-treasury.testnet",
+    START_BLOCK_HEIGHT: "70", MAX_BLOCKS_PER_TICK: "1", AUDIT_DB: db
+  }, fetchImpl);
+  assert.equal(blockAttempts, 2);
+  assert.equal(result.indexed_through, 70);
+  assert.equal(db.cursor.block_height, 70);
+});
