@@ -37,4 +37,5 @@ test("surplus reconciliation requires a completed current audit and no pending t
 test("UI explicitly avoids claiming a complete historical event log", () => {
   assert.match(html, /not a complete historical event log/i);
   assert.match(html, /requires an indexed event source/i);
+  assert.match(html, /contract does not enforce an audit-age limit/i);
 });
