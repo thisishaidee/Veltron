@@ -35,6 +35,14 @@
     .empty{padding:20px 8px;color:#aab7c5;text-align:center;font-size:13px}
     .good{color:#8fe3c0}.warn{color:#ffd18a}.bad{color:#ff9b9b}
     code{color:#b8d7ed;overflow-wrap:anywhere}
+    .quick-links{display:flex;gap:10px;flex-wrap:wrap;margin:-8px 0 18px}
+    .quick-links a,.panel-link{display:inline-block;color:#b8d7ed;text-decoration:none;border:1px solid #38536a;border-radius:10px;padding:9px 12px;font-size:12px}
+    .quick-links a:hover,.panel-link:hover{text-decoration:underline}
+    .audit-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:12px 0}
+    .audit-metric{background:#121a24;border:1px solid #2a3949;border-radius:12px;padding:12px;min-width:0}
+    .audit-metric span{display:block;color:#9aabba;font-size:11px;margin-bottom:8px}
+    .audit-metric strong{display:block;font-size:15px;overflow-wrap:anywhere}
+    @media(max-width:520px){.audit-grid{grid-template-columns:1fr}}
     @media(max-width:900px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.metric:last-child{grid-column:span 2}}
     @media(max-width:520px){main{padding:22px 14px 40px}.grid{gap:9px}.metric{padding:13px}.panel{padding:13px}header{align-items:flex-start}.status{font-size:11px}}
   </style>
@@ -49,6 +57,11 @@
     </div>
     <div id="connection-status" class="status" role="status">Checking NEAR Testnet…</div>
   </header>
+
+  <nav class="quick-links" aria-label="VELTRON sections">
+    <a href="https://veltron-deployer.pages.dev/">Owner control center</a>
+    <a href="https://veltron-deployer.pages.dev/audit-history.html">Full financial audit history</a>
+  </nav>
 
   <div class="notice">
     <strong>Read-only monitor.</strong> This dashboard reads finalized Testnet state only.
@@ -82,6 +95,18 @@
     <p id="audit-state" class="muted">Waiting for contract data.</p>
   </section>
 
+  <section class="panel" aria-label="Financial audit history status">
+    <div class="section-head"><h2>Financial audit history</h2><span id="indexer-status" class="muted">Checking indexer…</span></div>
+    <div class="audit-grid">
+      <div class="audit-metric"><span>Coverage</span><strong id="indexer-coverage">—</strong></div>
+      <div class="audit-metric"><span>Indexed through block</span><strong id="indexer-watermark">—</strong></div>
+      <div class="audit-metric"><span>Recent events loaded</span><strong id="indexer-event-count">—</strong></div>
+    </div>
+    <p id="indexer-note" class="muted">Checking the independent audit indexer…</p>
+    <div id="indexer-events" class="empty">Waiting for audit history.</div>
+    <p><a class="panel-link" href="https://veltron-deployer.pages.dev/audit-history.html">Open full financial audit history</a></p>
+  </section>
+
   <section class="panel">
     <div class="section-head"><h2>Network and account</h2><button id="refresh" type="button">Refresh</button></div>
     <p class="muted">Network: <strong id="network">NEAR Testnet</strong></p>
@@ -93,6 +118,7 @@
 
 <script type="module">
   import { readTreasurySnapshot, callView, isCurrentSnapshotRequest, classifyTokenAudit } from "./src/dashboard.mjs";
+  import { readAuditStatus } from "./src/audit.mjs";
   let nextCommitmentCursor = null;
   let commitmentRows = [];
   let activeSnapshot = null;
@@ -117,6 +143,38 @@
       commitmentRows.map(c => [c.id,c.recipient_id,amount(c.amount),c.settlement_pending ? "Settlement pending" : "Active"])
     );
     byId("load-more").hidden = !nextCommitmentCursor;
+  }
+
+  async function refreshAudit() {
+    byId("indexer-status").textContent = "Checking indexer…";
+    try {
+      const audit = await readAuditStatus();
+      byId("indexer-status").textContent = "Connected · " + audit.network;
+      byId("indexer-coverage").textContent = audit.history_complete ? "Complete" : "Partial / unknown";
+      byId("indexer-watermark").textContent = audit.indexed_through?.block_height == null ? "Not indexed yet" : String(audit.indexed_through.block_height);
+      byId("indexer-event-count").textContent = String(audit.events.length);
+      byId("indexer-note").textContent = audit.note || "The indexer watermark is not proof of complete historical coverage.";
+      if (!audit.events.length) {
+        byId("indexer-events").textContent = "No VELTRON audit events have been indexed yet. The historical backfill is still in progress.";
+      } else {
+        byId("indexer-events").innerHTML = table(
+          ["Block", "Event", "Actor", "Receipt status"],
+          audit.events.map(event => [
+            event.provenance?.block_height,
+            event.event,
+            event.data?.actor_id,
+            event.provenance?.receipt_status
+          ])
+        );
+      }
+    } catch (error) {
+      byId("indexer-status").textContent = "Unavailable";
+      byId("indexer-coverage").textContent = "Unknown";
+      byId("indexer-watermark").textContent = "—";
+      byId("indexer-event-count").textContent = "—";
+      byId("indexer-note").textContent = "Audit API unavailable: " + error.message;
+      byId("indexer-events").textContent = "No current audit status is available. Treasury monitoring remains separate.";
+    }
   }
 
   async function loadMoreCommitments() {
@@ -215,9 +273,10 @@
     }
   }
 
-  byId("refresh").addEventListener("click", refresh);
+  byId("refresh").addEventListener("click", () => { refresh(); refreshAudit(); });
   byId("load-more").addEventListener("click", loadMoreCommitments);
   refresh();
+  refreshAudit();
 </script>
 </body>
 </html>
