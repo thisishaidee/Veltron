@@ -42,4 +42,6 @@ npm test
 
 The dashboard also reads the dedicated VELTRON Testnet audit API at `https://veltron-audit-indexer.haideecoded-e0f.workers.dev`. It displays the latest indexed block, coverage status, and recent events. A partial watermark is never treated as proof of complete history.
 
+The currently deployed treasury source predates structured `EVENT_JSON:` audit emission. Until the event-emitting contract release is safely upgraded, an empty event feed is expected; the indexer cannot recreate historical events from current contract state. The UI states this limitation explicitly rather than implying that a backfill is progressing.
+
 The **Owner control center** and **Full financial audit history** links open the separately deployed Cloudflare Pages application. The dashboard itself remains read-only and never requests a wallet signature.
