@@ -38,6 +38,9 @@ test("read-only audit history response includes cross-origin access headers", as
   assert.deepEqual(body.events, []);
   assert.equal(body.history_complete, undefined);
   assert.equal(body.indexing.history_complete, false);
+  assert.equal(body.indexing.coverage, "partial_or_unknown");
+  assert.equal(body.indexing.coverage_start_height, null);
+  assert.equal(body.indexing.finalized_head_height, null);
 });
 
 test("health endpoint includes cross-origin access headers", async () => {
