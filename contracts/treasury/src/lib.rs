@@ -1111,15 +1111,21 @@ mod tests {
     fn rejects_commitments_beyond_active_limit() {
         let mut contract = setup("owner.near");
         contract.treasury_balance = 1_000_000;
+        // Seed the bounded collection directly: separate NEAR calls have
+        // separate receipt log budgets, while this unit test shares one mock
+        // receipt and would otherwise accumulate every emitted audit event.
         for index in 0..MAX_COMMITMENTS {
             let id = format!("commitment-{index:03}");
-            contract.create_commitment(
-                id,
-                account("vendor.near"),
-                U128(1),
-                "Bounded commitment".to_string(),
-            );
+            let commitment = Commitment {
+                id: id.clone(),
+                recipient_id: account("vendor.near"),
+                amount: 1,
+                description: "Bounded commitment".to_string(),
+            };
+            contract.commitments.insert(&id, &commitment);
+            contract.commitment_ids.insert(&id);
         }
+        contract.active_commitments_total = MAX_COMMITMENTS as u128;
         contract.create_commitment(
             "one-too-many".to_string(),
             account("vendor.near"),
