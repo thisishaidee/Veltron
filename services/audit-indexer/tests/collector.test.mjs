@@ -104,6 +104,8 @@ test("uses indexed account history, batched transaction receipts, and bulk final
     indexed_through: 100,
     finalized_head: 101,
     coverage_start_height: 100,
+    configured_start_height: 100,
+    coverage_start_matches_config: true,
     history_complete: false,
     account_transactions: 1
   });
