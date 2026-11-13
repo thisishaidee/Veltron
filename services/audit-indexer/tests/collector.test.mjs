@@ -242,3 +242,32 @@ test("does not certify coverage until the finalized head has been scanned", asyn
   assert.equal(db.cursor.finalized_head_height, 101);
   assert.equal(db.cursor.history_complete, 0);
 });
+
+test("honors Retry-After when FastNear account history is rate limited", async () => {
+  const db = fakeDb();
+  let accountAttempts = 0;
+  const fetchImpl = async (url, init = {}) => {
+    if (url === "https://rpc.testnet.fastnear.com") return rpcResponse(JSON.parse(init.body));
+    if (url === "https://tx.test.fastnear.com/v0/account") {
+      accountAttempts++;
+      if (accountAttempts === 1) {
+        return new Response("rate limited", { status: 429, headers: { "retry-after": "0.001" } });
+      }
+      return Response.json({ account_txs: [], txs_count: 0 });
+    }
+    if (url === "https://tx.test.fastnear.com/v0/blocks") {
+      return Response.json({ blocks: [
+        { block_height: 100, block_hash: "h100", prev_block_hash: "h99", block_timestamp: "100" },
+        { block_height: 101, block_hash: "h101", prev_block_hash: "h100", block_timestamp: "101" }
+      ] });
+    }
+    throw new Error("Unexpected URL: " + url);
+  };
+  const result = await runFinalizedIndexer({
+    NETWORK: "testnet", TREASURY_ACCOUNT: contractId,
+    START_BLOCK_HEIGHT: "100", MAX_BLOCKS_PER_TICK: "2", AUDIT_DB: db
+  }, fetchImpl);
+  assert.equal(accountAttempts, 2);
+  assert.equal(result.indexed_through, 101);
+  assert.equal(db.cursor.block_height, 101);
+});
