@@ -3,6 +3,8 @@ import { NearConnector } from "@hot-labs/near-connect";
 const OWNER = "haideedotxyz.testnet";
 const TREASURY = "veltron-treasury.testnet";
 const TOKEN_DECIMALS = 6;
+// Base58(SHA-256) of the exact event-aware release artifact verified by CI.
+const EVENT_AWARE_CONTRACT_CODE_HASH = "qNrDinLxStGuvUQQKj6NZDWKmj3vSccU6rnfVUrseAn";
 const GAS = "30000000000000";
 const RPCS = [
   { name: "NEAR Public RPC", url: "https://rpc.testnet.near.org" },
@@ -96,7 +98,8 @@ async function readAllCommitments(endpoint, blockHash) {
 async function readProvider(endpoint, blockHash) {
   const network = await rpc(endpoint, "status", []);
   if (network.chain_id !== "testnet") throw new Error(endpoint.name + " did not confirm Testnet.");
-  const [owner, agent, position, paused, commitments, pending, audit] = await Promise.all([
+  const [account, owner, agent, position, paused, commitments, pending, audit] = await Promise.all([
+    rpc(endpoint, "query", { request_type: "view_account", account_id: TREASURY, block_id: blockHash }),
     view(endpoint, "get_owner", {}, blockHash),
     view(endpoint, "get_agent_config", {}, blockHash),
     view(endpoint, "get_financial_position", {}, blockHash),
@@ -105,6 +108,7 @@ async function readProvider(endpoint, blockHash) {
     view(endpoint, "get_pending_transfers", {}, blockHash),
     view(endpoint, "get_token_balance_audit", {}, blockHash)
   ]);
+  if (!account || typeof account.code_hash !== "string" || !account.code_hash || (account.block_hash && account.block_hash !== blockHash)) throw new Error(endpoint.name + " returned an invalid treasury code-hash snapshot.");
   if (owner !== OWNER) throw new Error(endpoint.name + " reports an unexpected owner.");
   if (!agent || typeof agent.agent_id !== "string") throw new Error(endpoint.name + " returned invalid agent configuration.");
   if (!position || typeof paused !== "boolean" || typeof audit?.audit_pending !== "boolean" || !Array.isArray(pending) || !Array.isArray(commitments)) {
@@ -125,7 +129,8 @@ async function readProvider(endpoint, blockHash) {
     observed_at_ns: audit?.observed_at_ns == null ? null : raw(audit.observed_at_ns, "audit timestamp")
   };
   return {
-    blockHash, owner, agent: normalizedAgent, position: normalizedPosition, paused,
+    blockHash, codeHash: account.code_hash, supportsCheckedSettlement: account.code_hash === EVENT_AWARE_CONTRACT_CODE_HASH,
+    owner, agent: normalizedAgent, position: normalizedPosition, paused,
     commitments,
     pending, audit: normalizedAudit
   };
@@ -143,7 +148,7 @@ function setActionButtons() {
   $("resume").disabled = !ready || snapshot?.paused !== true;
   $("reconcile").disabled = !ready || !reconciliationReady();
   for (const button of $("commitments").querySelectorAll("button[data-settlement]")) {
-    button.disabled = !ready || button.dataset.settlementPending === "true" || snapshot?.paused === true;
+    button.disabled = !ready || snapshot?.supportsCheckedSettlement !== true || button.dataset.settlementPending === "true" || snapshot?.paused === true;
   }
 }
 function reconciliationReady() {
@@ -198,7 +203,7 @@ function renderCommitments(items) {
     const details = document.createElement("p");
     details.textContent = formatVtt(raw(item.amount, "commitment amount")) + " · " + item.recipient_id + (item.settlement_pending ? " · SETTLEMENT PENDING" : "");
     const action = document.createElement("button"); action.className = "secondary";
-    action.textContent = item.settlement_pending ? "Settlement pending" : "Review settlement";
+    action.textContent = item.settlement_pending ? "Settlement pending" : snapshot?.supportsCheckedSettlement === true ? "Review checked settlement" : "Upgrade required for checked settlement";
     action.dataset.settlement = "true";
     action.dataset.settlementPending = String(item.settlement_pending === true);
     action.disabled = !readiness() || item.settlement_pending || snapshot.paused;
@@ -248,7 +253,7 @@ async function refresh() {
     if (stable(a) !== stable(b)) throw new Error("RPC providers disagree at the same finalized block. State is withheld.");
     snapshot = { ...a, blockTimestampNs, verified: true, checkedAtMonotonic: performance.now() };
     render(snapshot);
-    $("read-status").textContent = "VERIFIED — both providers agree at finalized block " + hash + ". Snapshot expires after 30 seconds. No transaction was sent.";
+    $("read-status").textContent = "VERIFIED — both providers agree at finalized block " + hash + ". Code hash: " + snapshot.codeHash + ". " + (snapshot.supportsCheckedSettlement ? "Checked settlement and event-aware contract features are available." : "This deployed contract version does not include checked settlement or structured audit events; those controls remain disabled until the exact reviewed release is installed.") + " Snapshot expires after 30 seconds. No transaction was sent.";
     setActionButtons();
     setTimeout(() => {
       if (snapshot && performance.now() - snapshot.checkedAtMonotonic > SNAPSHOT_TTL_MS) {
@@ -345,6 +350,7 @@ $("resume").addEventListener("click", async () => {
 });
 async function settle(item) {
   try {
+    if (snapshot?.supportsCheckedSettlement !== true) throw new Error("Checked settlement is unavailable on this deployed contract version. Install the exact reviewed event-aware release first.");
     if (item.settlement_pending) throw new Error("Settlement is already pending.");
     const expectedAmount = raw(item.amount, "commitment amount");
     const expectedRecipient = item.recipient_id;
