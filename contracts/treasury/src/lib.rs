@@ -822,6 +822,20 @@ mod tests {
         )
     }
 
+    fn emitted_events() -> Vec<serde_json::Value> {
+        get_logs().into_iter()
+            .filter(|log| log.starts_with("EVENT_JSON:"))
+            .map(|log| serde_json::from_str(&log["EVENT_JSON:".len()..]).expect("valid NEP-297 event JSON"))
+            .collect()
+    }
+
+    fn has_event(events: &[serde_json::Value], name: &str) -> bool {
+        events.iter().any(|event| event["standard"] == "veltron"
+            && event["version"] == "1.0.0"
+            && event["event"] == name
+            && event["data"].as_array().is_some_and(|data| data.len() == 1))
+    }
+
 
 
     #[test]
@@ -2302,6 +2316,107 @@ mod tests {
         assert_eq!(final_position.spendable_balance.0, 200);
         assert!(contract.get_commitments(None, None).commitments.is_empty());
         assert!(contract.get_pending_transfers().is_empty());
+    }
+
+
+    #[test]
+    fn emits_structured_events_for_owner_configuration_and_commitment_changes() {
+        let mut contract = setup("owner.near");
+        contract.treasury_balance = 1_000;
+        contract.create_commitment(
+            "invoice-42".to_string(),
+            account("vendor.near"),
+            U128(100),
+            "Monthly hosting".to_string(),
+        );
+        contract.update_commitment(
+            "invoice-42".to_string(),
+            account("vendor-two.near"),
+            U128(150),
+            "Updated hosting invoice".to_string(),
+        );
+        contract.cancel_commitment("invoice-42".to_string());
+        contract.set_safety_reserve(U128(125));
+        contract.set_agent(account("replacement-agent.near"), U128(750));
+        contract.set_paused(true);
+
+        let events = emitted_events();
+        for name in [
+            "commitment_created",
+            "commitment_updated",
+            "commitment_cancelled",
+            "safety_reserve_updated",
+            "agent_configuration_updated",
+            "pause_status_changed",
+        ] {
+            assert!(has_event(&events, name), "missing structured event: {name}");
+        }
+        let created = events.iter().find(|event| event["event"] == "commitment_created").unwrap();
+        assert_eq!(created["data"][0]["commitment_id"], "invoice-42");
+        assert_eq!(created["data"][0]["amount"], "100");
+        assert_eq!(created["data"][0]["actor_id"], "owner.near");
+        assert!(created["data"][0]["timestamp_ns"].as_str().is_some());
+    }
+
+    #[test]
+    fn emits_structured_payment_request_and_rejection_events() {
+        let mut contract = setup("agent.near");
+        contract.treasury_balance = 1_000;
+        let request_id = contract.request_payment(
+            account("vendor.near"),
+            U128(100),
+            Some("Approved vendor invoice".to_string()),
+        );
+        let requested = emitted_events();
+        assert!(has_event(&requested, "payment_requested"));
+        assert_eq!(requested[0]["data"][0]["request_id"], request_id.0.to_string());
+        assert_eq!(requested[0]["data"][0]["amount"], "100");
+
+        let mut owner_context = VMContextBuilder::new();
+        owner_context.predecessor_account_id(account("owner.near"));
+        testing_env!(owner_context.build());
+        contract.reject_payment(request_id);
+        let rejected = emitted_events();
+        assert!(has_event(&rejected, "payment_rejected"));
+        assert_eq!(rejected[0]["data"][0]["request_id"], request_id.0.to_string());
+    }
+
+    #[test]
+    fn emits_transfer_started_and_failed_events_without_losing_failed_obligation() {
+        let mut contract = setup("owner.near");
+        contract.treasury_balance = 1_000;
+        contract.create_commitment(
+            "failed-invoice".to_string(),
+            account("vendor.near"),
+            U128(200),
+            "Retryable invoice".to_string(),
+        );
+        contract.settle_commitment("failed-invoice".to_string());
+        let started = emitted_events();
+        assert!(has_event(&started, "transfer_started"));
+        assert_eq!(started.last().unwrap()["data"][0]["kind"], "commitment_settlement");
+
+        callback_context();
+        contract.on_transfer_complete(0, Err(PromiseError::Failed));
+        let failed = emitted_events();
+        assert!(has_event(&failed, "transfer_failed"));
+        assert_eq!(failed.last().unwrap()["data"][0]["transfer_id"], "0");
+        assert_eq!(failed.last().unwrap()["data"][0]["amount"], "200");
+        assert_eq!(contract.get_commitments(None, None).commitments.len(), 1);
+    }
+
+    #[test]
+    fn emits_deposit_credit_event_with_token_and_sender_provenance() {
+        let mut contract = setup("owner.near");
+        let mut token_context = VMContextBuilder::new();
+        token_context.predecessor_account_id(account("token.near"));
+        testing_env!(token_context.build());
+        contract.ft_on_transfer(account("depositor.near"), U128(75), String::new());
+        let events = emitted_events();
+        assert!(has_event(&events, "deposit_credited"));
+        assert_eq!(events[0]["data"][0]["sender_id"], "depositor.near");
+        assert_eq!(events[0]["data"][0]["token_id"], "token.near");
+        assert_eq!(events[0]["data"][0]["amount"], "75");
     }
 
 }
