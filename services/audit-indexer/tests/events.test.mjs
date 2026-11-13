@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ingestBlock } from "../src/index.js";
+import { ingestBlock } from "../src/storage.js";
 import { extractContractEvents, runFinalizedIndexer } from "../src/collector.js";
 
 const config = { network: "testnet", contractId: "veltron-treasury.testnet" };
