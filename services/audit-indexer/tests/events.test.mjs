@@ -163,7 +163,7 @@ test("requires the previous finalized block hash to chain to the cursor", async 
   );
 });
 
-test("scheduled collector ingests finalized blocks in order from configured start height", async () => {
+test("scheduled collector ingests indexed receipt events and bulk finalized headers", async () => {
   const db = fakeDb();
   const eventLog = "EVENT_JSON:" + JSON.stringify({
     standard: "veltron",
@@ -171,20 +171,9 @@ test("scheduled collector ingests finalized blocks in order from configured star
     event: "treasury_initialized",
     data: [{ actor_id: "deployer.testnet", timestamp_ns: "1000000000" }]
   });
-  const blockDoc = {
-    block: { header: { height: 100, hash: "block-100", prev_hash: "block-99", timestamp_nanosec: "1000000000" } },
-    shards: [{ shard_id: 0, receipt_execution_outcomes: [{
-      tx_hash: "tx-init",
-      execution_outcome: { id: "receipt-init", outcome: {
-        executor_id: "veltron-treasury.testnet",
-        logs: [eventLog],
-        status: { SuccessValue: "" }
-      } }
-    }] }]
-  };
   const requested = [];
   const fetchMock = async (url, init = {}) => {
-    requested.push(url);
+    requested.push({ url, body: init.body ? JSON.parse(init.body) : null });
     if (url === "https://rpc.testnet.fastnear.com") {
       const params = JSON.parse(init.body).params;
       const header = params.finality === "final"
@@ -192,7 +181,41 @@ test("scheduled collector ingests finalized blocks in order from configured star
         : { height: 99, hash: "block-99" };
       return Response.json({ result: { header } });
     }
-    return Response.json(blockDoc);
+    if (url === "https://tx.test.fastnear.com/v0/account") {
+      return Response.json({
+        account_txs: [{ transaction_hash: "tx-init", tx_block_height: 99 }],
+        txs_count: 1
+      });
+    }
+    if (url === "https://tx.test.fastnear.com/v0/transactions") {
+      return Response.json({
+        transactions: [{
+          transaction: { hash: "tx-init" },
+          receipts: [{
+            execution_outcome: {
+              id: "receipt-init",
+              block_height: 100,
+              outcome: {
+                executor_id: "veltron-treasury.testnet",
+                logs: [eventLog],
+                status: { SuccessValue: "" }
+              }
+            }
+          }]
+        }]
+      });
+    }
+    if (url === "https://tx.test.fastnear.com/v0/blocks") {
+      return Response.json({
+        blocks: [{
+          block_height: 100,
+          block_hash: "block-100",
+          prev_block_hash: "block-99",
+          block_timestamp: "1000000000"
+        }]
+      });
+    }
+    throw new Error("Unexpected URL: " + url);
   };
   const result = await runFinalizedIndexer({
     NETWORK: "testnet",
@@ -201,14 +224,23 @@ test("scheduled collector ingests finalized blocks in order from configured star
     MAX_BLOCKS_PER_TICK: "10",
     AUDIT_DB: db
   }, fetchMock);
-  assert.deepEqual(result, { indexed_blocks: 1, indexed_events: 1, indexed_through: 100, finalized_head: 100, coverage_start_height: 100, history_complete: true });
-  assert.equal(requested.length, 3);
-  assert.equal(requested[0], "https://rpc.testnet.fastnear.com");
-  assert.equal(requested[1], "https://rpc.testnet.fastnear.com");
-  assert.equal(requested[2], "https://testnet.neardata.xyz/v0/block/100");
+  assert.deepEqual(result, {
+    indexed_blocks: 1,
+    indexed_events: 1,
+    indexed_through: 100,
+    finalized_head: 100,
+    coverage_start_height: 100,
+    history_complete: true,
+    account_transactions: 1
+  });
+  assert.equal(requested.length, 5);
+  assert.equal(requested[0].url, "https://rpc.testnet.fastnear.com");
+  assert.equal(requested[1].url, "https://rpc.testnet.fastnear.com");
+  assert.equal(requested[2].url, "https://tx.test.fastnear.com/v0/account");
+  assert.equal(requested[3].url, "https://tx.test.fastnear.com/v0/transactions");
+  assert.equal(requested[4].url, "https://tx.test.fastnear.com/v0/blocks");
   assert.match(db.statements[0].sql, /INSERT OR IGNORE INTO audit_events/);
 });
-
 
 test("rejects a failed finalized-head HTTP response before parsing JSON", async () => {
   const db = fakeDb();
@@ -221,7 +253,7 @@ test("rejects a failed finalized-head HTTP response before parsing JSON", async 
 });
 
 
-test("refuses to start history when the first block does not link to its anchor", async () => {
+test("refuses to start history when the first bulk block header does not link to its anchor", async () => {
   const db = fakeDb();
   const fetchMock = async (url, init = {}) => {
     if (url === "https://rpc.testnet.fastnear.com") {
@@ -231,10 +263,20 @@ test("refuses to start history when the first block does not link to its anchor"
         : { height: 99, hash: "trusted-anchor" };
       return Response.json({ result: { header } });
     }
-    return Response.json({
-      block: { header: { height: 100, hash: "block-100", prev_hash: "wrong-anchor", timestamp_nanosec: "1000000000" } },
-      shards: []
-    });
+    if (url === "https://tx.test.fastnear.com/v0/account") {
+      return Response.json({ account_txs: [], txs_count: 0 });
+    }
+    if (url === "https://tx.test.fastnear.com/v0/blocks") {
+      return Response.json({
+        blocks: [{
+          block_height: 100,
+          block_hash: "block-100",
+          prev_block_hash: "wrong-anchor",
+          block_timestamp: "1000000000"
+        }]
+      });
+    }
+    throw new Error("Unexpected URL: " + url);
   };
   await assert.rejects(() => runFinalizedIndexer({
     NETWORK: "testnet", TREASURY_ACCOUNT: "veltron-treasury.testnet",
