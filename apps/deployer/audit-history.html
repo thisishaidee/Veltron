@@ -24,8 +24,8 @@ button{background:#b8e1dd;color:#101820;font-weight:750;border:0}button:disabled
 <h1>VELTRON Financial Audit History</h1>
 <p><a href="./owner-controls.html">Owner controls</a> · <a href="./payment-queue.html">Payment queue</a> · <a href="./commitment-management.html">Commitments</a> · <a href="./audit.html">Balance audit</a></p>
 <section class="panel warn">
-<strong>Historical audit is not yet certified complete.</strong>
-<p>The API reports its indexing watermark and coverage status. A partial history must never be presented as a complete financial record. This page is read-only and cannot sign transactions or control treasury funds.</p>
+<strong>Historical audit is partial; the currently deployed treasury contract does not emit structured VELTRON audit events.</strong>
+<p>The indexer can only record events emitted by contract receipts; it cannot reconstruct earlier activity from current balances. New audit events will appear after the event-emitting contract release is safely installed. The API reports its indexing watermark and coverage status, and this page never labels partial history as complete. This page is read-only and cannot sign transactions or control treasury funds.</p>
 </section>
 <section class="panel">
 <h2>Indexing status</h2>
