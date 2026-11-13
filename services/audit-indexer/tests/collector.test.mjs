@@ -27,7 +27,7 @@ test("uses canonical NEAR RPC for finalized head and anchor, then checks full bl
   const calls = [];
   const fetchImpl = async (url, init = {}) => {
     calls.push({ url, init });
-    if (url === "https://rpc.testnet.near.org") {
+    if (url === "https://rpc.testnet.fastnear.com") {
       const body = JSON.parse(init.body);
       const header = body.params.finality === "final"
         ? { height: 100, hash: "h100" }
@@ -42,20 +42,24 @@ test("uses canonical NEAR RPC for finalized head and anchor, then checks full bl
     START_BLOCK_HEIGHT: "100", MAX_BLOCKS_PER_TICK: "1", AUDIT_DB: db
   }, fetchImpl);
   assert.deepEqual(result, { indexed_blocks: 1, indexed_events: 0, indexed_through: 100, finalized_head: 100 });
-  assert.equal(calls[0].url, "https://rpc.testnet.near.org");
+  assert.equal(calls[0].url, "https://rpc.testnet.fastnear.com");
   assert.equal(JSON.parse(calls[0].init.body).params.finality, "final");
   assert.equal(JSON.parse(calls[1].init.body).params.block_id, 99);
   assert.equal(calls[2].url, "https://testnet.neardata.xyz/v0/block/100");
   assert.equal(db.cursor.block_height, 100);
 });
 
-test("retries a rate-limited finalized-head RPC request", async () => {
+test("falls back to another NEAR RPC provider after repeated rate limits", async () => {
   const db = fakeDb();
   let attempts = 0;
+  let fallbackCalls = 0;
   const fetchImpl = async (url, init = {}) => {
-    if (url === "https://rpc.testnet.near.org") {
+    if (url === "https://rpc.testnet.fastnear.com") {
       attempts++;
-      if (attempts === 1) return new Response("rate limited", { status: 429 });
+      return new Response("rate limited", { status: 429 });
+    }
+    if (url === "https://near-testnet.drpc.org") {
+      fallbackCalls++;
       const body = JSON.parse(init.body);
       const header = body.params.finality === "final" ? { height: 50, hash: "h50" } : { height: 49, hash: "h49" };
       return Response.json({ jsonrpc: "2.0", id: body.id, result: { header } });
@@ -66,6 +70,7 @@ test("retries a rate-limited finalized-head RPC request", async () => {
     NETWORK: "testnet", TREASURY_ACCOUNT: "veltron-treasury.testnet",
     START_BLOCK_HEIGHT: "50", MAX_BLOCKS_PER_TICK: "1", AUDIT_DB: db
   }, fetchImpl);
-  assert.equal(attempts, 3);
+  assert.equal(attempts, 4);
+  assert.equal(fallbackCalls, 2);
   assert.equal(result.indexed_through, 50);
 });
