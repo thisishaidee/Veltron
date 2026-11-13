@@ -168,7 +168,7 @@ impl Veltron {
         require!(agent_id != token_id, "Agent and token contract must differ");
         require!(owner_id != agent_id, "Owner and agent must differ");
         require!(max_per_transaction.0 > 0, "Transaction limit must be positive");
-        Self {
+        let contract = Self {
             owner_id,
             token_id,
             agent_id,
@@ -186,7 +186,18 @@ impl Veltron {
             observed_token_balance: None,
             ledger_balance_at_observation: None,
             balance_observed_at_ns: None,
-        }
+        };
+        emit_event("treasury_initialized", json!({
+            "treasury_id": treasury_id.as_str(),
+            "owner_id": contract.owner_id.as_str(),
+            "token_id": contract.token_id.as_str(),
+            "agent_id": contract.agent_id.as_str(),
+            "max_per_transaction": contract.max_per_transaction.to_string(),
+            "safety_reserve": contract.safety_reserve.to_string(),
+            "treasury_balance": "0",
+            "paused": false
+        }));
+        contract
     }
 
     /// NEP-141 receiver. Only the configured token contract can credit the ledger.
@@ -837,6 +848,34 @@ mod tests {
     }
 
 
+
+    #[test]
+    fn initialization_emits_the_initial_treasury_configuration() {
+        let mut builder = VMContextBuilder::new();
+        builder.current_account_id(account("treasury.near"));
+        builder.predecessor_account_id(account("deployer.near"));
+        testing_env!(builder.build());
+        let _ = Veltron::new(
+            account("owner.near"),
+            account("token.near"),
+            account("agent.near"),
+            U128(500),
+            U128(100),
+        );
+        let events = emitted_events();
+        let event = events.iter().find(|event| event["event"] == "treasury_initialized")
+            .expect("initialization event should be emitted");
+        let data = &event["data"][0];
+        assert_eq!(data["treasury_id"], "treasury.near");
+        assert_eq!(data["owner_id"], "owner.near");
+        assert_eq!(data["token_id"], "token.near");
+        assert_eq!(data["agent_id"], "agent.near");
+        assert_eq!(data["max_per_transaction"], "500");
+        assert_eq!(data["safety_reserve"], "100");
+        assert_eq!(data["treasury_balance"], "0");
+        assert_eq!(data["paused"], false);
+        assert_eq!(data["actor_id"], "deployer.near");
+    }
 
     #[test]
     #[should_panic(expected = "Owner and agent must differ")]
