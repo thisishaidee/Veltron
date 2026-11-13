@@ -1,3 +1,5 @@
+import { runFinalizedIndexer } from "./collector.js";
+
 const EVENT_NAMES = new Set([
   "treasury_initialized",
   "deposit_credited",
@@ -130,6 +132,7 @@ export async function ingestBlock(db, config, block) {
   if (block.contract_id !== config.contractId) throw new Error("Contract mismatch");
   if (!isSafeInteger(block.block_height)) throw new Error("Invalid block height");
   requiredString(block.block_hash, "block_hash");
+  requiredString(block.prev_block_hash, "prev_block_hash");
   requiredString(block.block_timestamp_ns, "block_timestamp_ns");
   if (!/^\d+$/.test(block.block_timestamp_ns)) throw new Error("block_timestamp_ns must be a decimal integer string");
   if (!Array.isArray(block.events) || block.events.length > MAX_BATCH_EVENTS) {
@@ -148,6 +151,9 @@ export async function ingestBlock(db, config, block) {
   }
   if (existing && block.block_height > existing.block_height + 1) {
     throw new Error("Block gap detected; refusing to advance the cursor past unindexed heights");
+  }
+  if (existing && block.block_height === existing.block_height + 1 && block.prev_block_hash !== existing.block_hash) {
+    throw new Error("Previous block hash does not match the durable finalized cursor");
   }
 
   const statements = validated.map((event) => db.prepare(`
@@ -252,5 +258,12 @@ export default {
       }
     }
     return jsonResponse({ error: "Not found" }, 404);
+  },
+  async scheduled(_controller, env, ctx) {
+    ctx.waitUntil(runFinalizedIndexer(env).then((result) => {
+      console.log(JSON.stringify({ event: "audit_indexer_tick_complete", ...result }));
+    }).catch((error) => {
+      console.error(JSON.stringify({ event: "audit_indexer_tick_failed", message: String(error.message || error) }));
+    }));
   }
 };
