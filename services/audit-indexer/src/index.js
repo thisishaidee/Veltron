@@ -1,27 +1,5 @@
-import { ingestBlock } from "./storage.js";
 import { runFinalizedIndexer } from "./collector.js";
 
-const EVENT_NAMES = new Set([
-  "treasury_initialized",
-  "deposit_credited",
-  "commitment_created",
-  "commitment_updated",
-  "commitment_cancelled",
-  "pause_status_changed",
-  "safety_reserve_updated",
-  "agent_configuration_updated",
-  "payment_requested",
-  "payment_approved",
-  "payment_rejected",
-  "transfer_started",
-  "transfer_succeeded",
-  "transfer_failed",
-  "balance_audit_requested",
-  "balance_audit_completed",
-  "balance_audit_failed",
-  "surplus_reconciled"
-]);
-const MAX_BATCH_EVENTS = 500;
 const MAX_PAGE_SIZE = 100;
 const PUBLIC_CORS_HEADERS = {
   "access-control-allow-origin": "*",
@@ -29,13 +7,6 @@ const PUBLIC_CORS_HEADERS = {
   "access-control-allow-headers": "Accept",
   "access-control-max-age": "86400"
 };
-
-function jsonResponse(body, status = 200, headers = {}) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...headers }
-  });
-}
 
 function isSafeInteger(value) {
   return Number.isSafeInteger(value) && value >= 0;
@@ -81,19 +52,6 @@ function validateEvent(input, block, expectedContract) {
     logIndex: input.log_index,
     receiptStatus: input.receipt_status
   };
-}
-
-async function tokenMatches(provided, expected) {
-  if (!provided || !expected) return false;
-  const encoder = new TextEncoder();
-  const [a, b] = await Promise.all([
-    crypto.subtle.digest("SHA-256", encoder.encode(provided)),
-    crypto.subtle.digest("SHA-256", encoder.encode(expected))
-  ]);
-  const aa = new Uint8Array(a), bb = new Uint8Array(b);
-  let difference = 0;
-  for (let i = 0; i < aa.length; i++) difference |= aa[i] ^ bb[i];
-  return difference === 0;
 }
 
 function encodeCursor(row) {
@@ -191,23 +149,6 @@ export default {
     if (request.method === "GET" && url.pathname === "/v1/events") {
       try { return await getEvents(request, env); }
       catch { return jsonResponse({ error: "Unable to query audit history" }, 500, PUBLIC_CORS_HEADERS); }
-    }
-    if (request.method === "POST" && url.pathname === "/internal/v1/blocks") {
-      const auth = request.headers.get("authorization") || "";
-      const provided = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-      if (!await tokenMatches(provided, env.INGEST_TOKEN)) return jsonResponse({ error: "Unauthorized" }, 401);
-      let block;
-      try { block = await request.json(); }
-      catch { return jsonResponse({ error: "Invalid JSON body" }, 400); }
-      try {
-        const result = await ingestBlock(env.AUDIT_DB, {
-          network: env.NETWORK,
-          contractId: env.TREASURY_ACCOUNT
-        }, block);
-        return jsonResponse({ ok: true, ...result }, 202);
-      } catch (error) {
-        return jsonResponse({ error: String(error.message || error) }, 400);
-      }
     }
     return jsonResponse({ error: "Not found" }, 404);
   },
