@@ -4,6 +4,10 @@
   "main": "src/index.js",
   "compatibility_date": "2026-11-13",
   "workers_dev": true,
+  "keep_vars": true,
+  "secrets": {
+    "required": ["INDEXER_TRIGGER_TOKEN"]
+  },
   "triggers": {
     "crons": [
       "* * * * *"
