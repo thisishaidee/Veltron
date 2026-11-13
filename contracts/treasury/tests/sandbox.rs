@@ -644,13 +644,22 @@ async fn sandbox_failed_nep141_transfer_clears_pending_and_preserves_treasury() 
 
     // The NEP-141 token rejects transfers to accounts that have not registered.
     // The treasury callback must handle that failed cross-contract receipt.
-    let failed_payment_result = agent
+    let request_result = agent
         .call(treasury.id(), "request_payment")
         .args_json(json!({
             "recipient_id": unregistered_recipient.id(),
             "amount": "200",
             "memo": "Expected failed transfer"
         }))
+        .max_gas()
+        .transact()
+        .await?;
+    request_result.into_result()?;
+
+    // The queued request does not transfer tokens; owner approval starts the NEP-141 call.
+    let failed_payment_result = owner
+        .call(treasury.id(), "approve_payment")
+        .args_json(json!({ "request_id": "0" }))
         .max_gas()
         .transact()
         .await?;
