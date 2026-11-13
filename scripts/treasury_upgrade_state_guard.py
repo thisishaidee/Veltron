@@ -18,6 +18,7 @@ TREASURY_PUBLIC_KEY = "ed25519:9igPiXMDj4UrbmZwotWuJtuRAP9BiTefweYwgndKBQNS"
 OLD_TREASURY_SHA256 = "a70d8aea3538fd177859fdb7e31b8c1c1e7a982de24d76dbdcf4d88b006d2aca"
 NEW_TREASURY_SHA256 = "0c6495486e476ace94698a844a23925b07b088c759e04848e68d1dbb94f3ed2b"
 TOKEN_SHA256 = "5d5041336cc8fc92cc9ca11fff1f0b1f7ead33c4826c6d12013f957ba1e7c95b"
+EXPECTED_AGENT_MAX_PER_TRANSACTION = 50_000_000
 
 
 def rpc(endpoint, method, params, request_id):
@@ -138,6 +139,24 @@ def assert_commitments_match_position(state, provider):
         )
 
 
+def assert_owner_agent_config(state, provider):
+    """Require the exact initialized owner, agent, and per-transaction cap."""
+    if state.get("owner") != OWNER:
+        raise RuntimeError(f"{provider}: configured treasury owner changed: {state.get('owner')}")
+    config = state.get("agent_config")
+    if not isinstance(config, dict) or config.get("agent_id") != AGENT:
+        raise RuntimeError(f"{provider}: configured agent changed or has an unexpected shape: {config}")
+    try:
+        maximum = int(config["max_per_transaction"])
+    except (KeyError, TypeError, ValueError):
+        raise RuntimeError(f"{provider}: agent transaction limit is missing or invalid: {config}")
+    if maximum != EXPECTED_AGENT_MAX_PER_TRANSACTION:
+        raise RuntimeError(
+            f"{provider}: agent transaction limit {maximum} does not match the reviewed "
+            f"{EXPECTED_AGENT_MAX_PER_TRANSACTION} raw-unit cap"
+        )
+
+
 def assert_upgrade_safe_state(state, provider):
     """Enforce the on-chain quiescence conditions before replacing contract code."""
     if state.get("paused") is not True:
@@ -175,23 +194,13 @@ def snapshot(provider, endpoint, expected_treasury_hash):
         "commitments": all_commitments(endpoint),
         "pending_transfers": view(endpoint, TREASURY, "get_pending_transfers"),
         "token_audit": view(endpoint, TREASURY, "get_token_balance_audit"),
+        "owner": view(endpoint, TREASURY, "get_owner"),
+        "agent_config": view(endpoint, TREASURY, "get_agent_config"),
         "token_metadata": view(endpoint, TOKEN, "ft_metadata"),
         "treasury_token_balance": view(endpoint, TOKEN, "ft_balance_of", {"account_id": TREASURY}),
         "treasury_token_storage": view(endpoint, TOKEN, "storage_balance_of", {"account_id": TREASURY}),
     }
-    if expected_treasury_hash == NEW_TREASURY_SHA256:
-        state["owner"] = view(endpoint, TREASURY, "get_owner")
-        state["agent_config"] = view(endpoint, TREASURY, "get_agent_config")
-        if state["owner"] != OWNER:
-            raise RuntimeError(f"{provider}: configured treasury owner changed: {state['owner']}")
-        if not isinstance(state["agent_config"], dict) or state["agent_config"].get("agent_id") != AGENT:
-            raise RuntimeError(f"{provider}: configured agent changed or has an unexpected shape: {state['agent_config']}")
-        try:
-            max_per_transaction = int(state["agent_config"]["max_per_transaction"])
-        except (KeyError, TypeError, ValueError):
-            raise RuntimeError(f"{provider}: agent transaction limit is missing or invalid: {state['agent_config']}")
-        if max_per_transaction <= 0:
-            raise RuntimeError(f"{provider}: agent transaction limit must remain positive: {state['agent_config']}")
+    assert_owner_agent_config(state, provider)
     if not isinstance(state["financial_position"], dict) or not isinstance(state["paused"], bool):
         raise RuntimeError(f"{provider}: treasury state response has unexpected shape")
     if not isinstance(state["pending_transfers"], list):
@@ -226,8 +235,7 @@ def main():
         for field, old_value in before["state"].items():
             if after.get(field) != old_value:
                 raise SystemExit(f"FAIL: treasury/VTT state field changed during code upgrade: {field}")
-        if after.get("owner") != OWNER or after.get("agent_config", {}).get("agent_id") != AGENT:
-            raise SystemExit("FAIL: newly exposed owner or agent configuration does not match the expected initialized accounts.")
+        assert_owner_agent_config(after, "post-upgrade")
         print("PASS: new treasury WASM hash verified through both RPCs.")
         print("PASS: pre-existing financial position, pause state, commitments, pending transfers, token audit, VTT metadata, treasury token balance, and storage registration are unchanged.")
         print("PASS: newly exposed owner and agent configuration match the expected initialized accounts.")
