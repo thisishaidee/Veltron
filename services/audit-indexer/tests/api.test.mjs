@@ -56,3 +56,16 @@ test("does not expose an external endpoint that can seed or advance the audit cu
   assert.equal(response.status, 404);
   assert.equal(response.headers.get("access-control-allow-origin"), null);
 });
+
+
+test("manual indexer trigger is not exposed without its secret or as a GET route", async () => {
+  const protectedEnv = { ...env, INDEXER_TRIGGER_TOKEN: "test-only-secret" };
+  for (const request of [
+    new Request("https://audit.example/internal/run-indexer", { method: "POST" }),
+    new Request("https://audit.example/internal/run-indexer", { method: "POST", headers: { authorization: "Bearer wrong" } }),
+    new Request("https://audit.example/internal/run-indexer", { method: "GET", headers: { authorization: "Bearer test-only-secret" } })
+  ]) {
+    const response = await worker.fetch(request, protectedEnv);
+    assert.equal(response.status, 404);
+  }
+});
