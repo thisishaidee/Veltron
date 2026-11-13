@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101820"><title>VELTRON — Owner Controls</title>
+<style>
+:root{color-scheme:dark;font:16px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#101820;color:#edf2f4}
+*{box-sizing:border-box}body{width:min(100% - 32px,900px);margin:auto;padding:24px 0 max(40px,env(safe-area-inset-bottom))}
+h1{font-size:clamp(1.55rem,5vw,2rem);margin:.2rem 0}h2{font-size:1.12rem;margin:0 0 10px}p,li{color:#c5d0d6}
+nav{display:flex;flex-wrap:wrap;gap:12px;margin:14px 0 22px}a{color:#b8e1dd}
+.panel{border:1px solid #40515c;border-radius:12px;padding:clamp(14px,3vw,20px);margin:16px 0;min-width:0}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:12px}
+label{display:block;font-weight:650;margin:12px 0 5px}input{width:100%;min-width:0;padding:12px;background:#1b2932;border:1px solid #52636d;border-radius:8px;color:#edf2f4;font:inherit}
+button{width:100%;padding:13px 15px;margin:9px 0 2px;border:0;border-radius:8px;background:#b8e1dd;color:#101820;font:inherit;font-weight:750}
+button.secondary{background:#263640;color:#edf2f4;border:1px solid #60737e}button.danger{background:#e2a84b;color:#101820}button:disabled{opacity:.4}
+.status{padding:12px;border-radius:8px;background:#263640;white-space:pre-wrap;overflow-wrap:anywhere}.muted{font-size:.9rem;color:#9eafb8}.warn{border-left:4px solid #e2a84b;padding-left:12px}
+.value{font-size:1.2rem;font-weight:750;color:#b8e1dd;overflow-wrap:anywhere}.item{border-top:1px solid #40515c;padding:12px 0}.item:first-child{border-top:0}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+</style></head>
+<body>
+<header><p class="muted">VELTRON / TREASURY</p><h1>Owner controls</h1><p>Agent permissions, reserve protection, emergency controls and commitment settlement.</p></header>
+<nav><a href="./index.html">Overview / preflight</a><a href="./payment-queue.html">Payment queue</a><a href="./commitment-management.html">Commitments</a><a href="./audit.html">Balance audit</a></nav>
+<section class="panel warn"><strong>Owner-authorized Testnet operations only.</strong><p>Every state-changing action requires a fresh dual-provider finalized snapshot and a separate wallet approval. This page never signs automatically. Check the exact signer, receiver, method and arguments in Meteor before approving.</p></section>
+<section class="panel">
+<h2>1 · Connect owner wallet</h2><button id="connect">Connect NEAR Testnet wallet</button><p id="wallet-status" class="status">Not connected.</p>
+<p>Connected account: <strong id="wallet-account">Not connected</strong></p>
+<label><input id="network-confirm" type="checkbox" style="width:20px"> I checked Meteor itself and it currently displays NEAR Testnet.</label>
+<button id="refresh" class="secondary">Refresh verified treasury state</button><p id="read-status" class="status" role="status" aria-live="polite">State not yet verified.</p>
+</section>
+<section class="panel">
+<h2>2 · Verified treasury position</h2><div class="grid">
+<div><p class="muted">Treasury balance</p><p id="balance" class="value">—</p></div>
+<div><p class="muted">Active commitments</p><p id="committed" class="value">—</p></div>
+<div><p class="muted">Safety reserve</p><p id="reserve" class="value">—</p></div>
+<div><p class="muted">Pending discretionary</p><p id="pending-total" class="value">—</p></div>
+<div><p class="muted">Spendable</p><p id="spendable" class="value">—</p></div>
+<div><p class="muted">Treasury pause</p><p id="paused" class="value">—</p></div>
+<div><p class="muted">Authorized agent</p><p id="agent" class="value">—</p></div>
+<div><p class="muted">Per-transaction limit</p><p id="cap" class="value">—</p></div>
+</div></section>
+<section class="panel">
+<h2>3 · Agent management</h2><p>Only the treasury owner can change the configured agent and its per-payment cap. The contract rejects zero caps and reserved account conflicts.</p>
+<div class="grid"><div><label for="agent-id">Agent NEAR account ID</label><input id="agent-id" autocomplete="off" placeholder="veltron-agent.testnet"></div><div><label for="agent-cap">Maximum per transaction (VTT)</label><input id="agent-cap" inputmode="decimal" placeholder="50"></div></div>
+<button id="save-agent" disabled>Review agent configuration in Meteor</button><p id="agent-status" class="status" role="status" aria-live="polite">Connect owner and refresh verified state first.</p>
+</section>
+<section class="panel">
+<h2>4 · Safety reserve management</h2><p>Changing the reserve changes how much of the treasury remains protected from discretionary spending. The contract enforces solvency before accepting the new reserve.</p>
+<label for="reserve-amount">New safety reserve (VTT)</label><input id="reserve-amount" inputmode="decimal" placeholder="200">
+<button id="save-reserve" disabled>Review reserve change in Meteor</button><p id="reserve-status" class="status" role="status" aria-live="polite">Connect owner and refresh verified state first.</p>
+</section>
+<section class="panel">
+<h2>5 · Emergency payment controls</h2><p>Pausing blocks new outgoing treasury transfers, including agent requests and commitment settlements. Resuming removes that circuit breaker. Both operations require owner authorization.</p>
+<p>Current status: <strong id="pause-summary">Not verified</strong></p>
+<button id="pause" class="danger" disabled>Review emergency pause in Meteor</button>
+<button id="resume" class="secondary" disabled>Review resume in Meteor</button>
+<p id="pause-status" class="status" role="status" aria-live="polite">No action requested.</p>
+</section>
+<section class="panel">
+<h2>6 · Commitment settlement center</h2><p>Settlement sends the committed amount to the recipient already recorded in the commitment. On successful token callback, the contract removes the commitment. A failed transfer leaves the commitment available again.</p>
+<div id="commitments" class="status">Refresh verified state to load commitments.</div>
+<p id="settlement-status" class="status" role="status" aria-live="polite">No settlement requested.</p>
+</section>
+<section class="panel">
+<h2>7 · Financial audit and reconciliation</h2><p>Latest balance audit and live pending-transfer state. The audit observation is read-only until the owner separately approves reconciliation.</p>
+<div class="grid"><div><p class="muted">Audit pending</p><p id="audit-pending" class="value">—</p></div><div><p class="muted">Observed token balance</p><p id="audit-token" class="value">—</p></div><div><p class="muted">Ledger at observation</p><p id="audit-ledger" class="value">—</p></div><div><p class="muted">Observed at (ns)</p><p id="audit-time" class="value">—</p></div></div>
+<p id="surplus" class="status">Surplus not verified.</p>
+<label for="reconcile-amount">Surplus amount to credit to ledger (VTT)</label><input id="reconcile-amount" inputmode="decimal" placeholder="0">
+<button id="reconcile" disabled>Review surplus reconciliation in Meteor</button><p id="reconcile-status" class="status" role="status" aria-live="polite">Requires a successful, current audit with no pending transfers.</p>
+<h3>Current on-chain activity</h3><div id="activity" class="status">Refresh verified state to inspect current commitments and pending transfers.</div>
+<p class="muted warn">This is a verified current-state audit view, not a complete historical event log. The contract exposes current commitments, pending transfers and the latest balance audit, but it does not store a queryable historical event ledger. A complete historical audit trail requires an indexed event source; this page will not invent past activity.</p>
+</section>
+<script type="module" src="./dist/admin-controls.js"></script>
+</body></html>
