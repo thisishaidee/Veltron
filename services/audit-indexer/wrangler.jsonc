@@ -4,6 +4,10 @@
   "main": "src/index.js",
   "compatibility_date": "2026-11-13",
   "workers_dev": true,
+  "keep_vars": true,
+  "secrets": {
+    "required": ["INDEXER_TRIGGER_TOKEN"]
+  },
   "triggers": {
     "crons": [
       "* * * * *"
@@ -26,6 +30,6 @@
     "NETWORK": "testnet",
     "TREASURY_ACCOUNT": "veltron-treasury.testnet",
     "START_BLOCK_HEIGHT": "277136692",
-    "MAX_BLOCKS_PER_TICK": "10"
+    "MAX_BLOCKS_PER_TICK": "100"
   }
 }
