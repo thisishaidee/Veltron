@@ -78,3 +78,12 @@ Build and run the mobile dashboard tests with `npm run test:e2e -- --project=iph
 The commitment-management page reads finalized treasury position and all active commitments from two independent NEAR Testnet RPC providers at the same finalized block. It withholds state if providers disagree. Create, update, and cancel operations are owner-only and require an explicit NEAR Connect wallet approval. Amounts use exact six-decimal VTT base-unit conversion. The page does not settle commitments or initiate agent payments.
 
 Build the dashboard with `npm run build` and run commitment safety tests with `npm run test:commitments`.
+
+## Owner controls
+
+The owner-controls page exposes existing treasury methods for changing the authorized agent and per-transaction cap, adjusting the safety reserve, pausing/resuming outgoing transfers, settling a recorded commitment, and reconciling a token surplus supported by a successful balance audit. Each operation is owner-only, uses a fresh dual-provider finalized snapshot, and requires an explicit Meteor wallet approval. The page does not invent agent permission flags that the contract does not implement.
+
+The page also displays current pending transfers, active commitments, and the latest token-balance audit. This is a current-state view, not a complete historical event log: the current contract does not expose a queryable historical event ledger. A full historical audit trail requires a separately designed and independently verified event-indexing source.
+
+Build includes `src/admin-controls.js`. Run the owner-controls regression checks with `npm run test:admin-controls`; browser coverage is included in `npm run test:e2e`.
+
