@@ -19,6 +19,20 @@ const MAX_TRANSACTION_BATCH = 20;
 // are still discovered if their execution is finalized in a later block.
 const RECEIPT_LOOKBACK_BLOCKS = 10_000;
 
+function retryDelayMs(response, attempt) {
+  const retryAfter = response.headers?.get("retry-after");
+  if (retryAfter) {
+    const seconds = Number(retryAfter);
+    const requestedDelay = Number.isFinite(seconds)
+      ? seconds * 1000
+      : Date.parse(retryAfter) - Date.now();
+    if (Number.isFinite(requestedDelay) && requestedDelay > 0) {
+      return Math.min(5000, requestedDelay);
+    }
+  }
+  return Math.min(5000, 500 * (2 ** attempt));
+}
+
 async function fetchJsonWithRetry(url, init, fetchImpl, label, maxAttempts = 5) {
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const response = await fetchImpl(url, init);
@@ -26,7 +40,7 @@ async function fetchJsonWithRetry(url, init, fetchImpl, label, maxAttempts = 5) 
     if (!RETRYABLE_STATUSES.has(response.status) || attempt === maxAttempts - 1) {
       throw new Error(label + " returned HTTP " + response.status);
     }
-    await new Promise((resolve) => setTimeout(resolve, 500 * (2 ** attempt)));
+    await new Promise((resolve) => setTimeout(resolve, retryDelayMs(response, attempt)));
   }
   throw new Error(label + " failed after retries");
 }
