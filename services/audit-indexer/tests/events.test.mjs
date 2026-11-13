@@ -97,7 +97,7 @@ test("accepts empty finalized blocks so the indexing watermark can advance", asy
 
 test("rejects cursor gaps and conflicting hashes at the current height", async () => {
   await assert.rejects(
-    () => ingestBlock(fakeDb({ block_height: 120, block_hash: "block-hash" }), config, { ...block, block_height: 122 }),
+    () => ingestBlock(fakeDb({ block_height: 120, block_hash: "block-hash" }), config, { ...block, block_height: 122, finalized_head_height: 122 }),
     /Block gap detected/
   );
   await assert.rejects(
