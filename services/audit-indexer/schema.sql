@@ -6,6 +6,9 @@ CREATE TABLE IF NOT EXISTS indexer_cursors (
   block_height INTEGER NOT NULL,
   block_hash TEXT NOT NULL,
   block_timestamp_ns TEXT NOT NULL,
+  coverage_start_height INTEGER NOT NULL DEFAULT 0,
+  finalized_head_height INTEGER NOT NULL DEFAULT 0,
+  history_complete INTEGER NOT NULL DEFAULT 0 CHECK (history_complete IN (0, 1)),
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (network, contract_id)
 );
