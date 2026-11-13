@@ -23,7 +23,7 @@ Pending discretionary transfers are subtracted separately because NEAR cross-con
 ## Pending-transfer monitoring and limits
 
 - Each outgoing transfer is recorded with a monotonically increasing ID, amount, transfer kind, and creation timestamp before the NEP-141 call is scheduled.
-- `get_pending_transfers` exposes the current bounded in-flight list and timestamps. An old entry is an alert for investigation, not proof of failure: the token transfer may have succeeded even if the callback did not complete.
+- `get_pending_transfers` exposes the bounded pending list and timestamps. It can contain either a queued `DiscretionaryRequest` awaiting owner approval or an actual in-flight transfer. Only `Discretionary` and `CommitmentSettlement` entries represent token transfers already submitted to the NEP-141 contract. An old in-flight entry is an alert for investigation, not proof of failure: the token transfer may have succeeded even if the callback did not complete.
 - When an outgoing transfer is scheduled, the initiating treasury receipt emits a `VELTRON_TRANSFER_STARTED` log containing the internal transfer ID, amount, recipient, and transfer kind. The callback emits the existing `VELTRON_TRANSFER_SUCCESS:<id>` or `VELTRON_TRANSFER_FAILED:<id>` log when it completes.
 - Monitoring systems should retain the initiating transaction hash and correlate its receipt chain with the transfer ID in the start log. Inspect the configured token contract's `ft_transfer` receipt and the treasury callback receipt separately; a successful token transfer does not prove that the treasury callback completed.
 - If a pending entry remains unexpectedly old, inspect the finalized transaction and all downstream receipt outcomes and logs using a trusted NEAR RPC/indexer. If the token transfer receipt succeeded but the callback receipt failed, preserve the pending record and escalate for a separately reviewed recovery procedure. If receipts are still pending, continue monitoring rather than changing contract state.
@@ -54,8 +54,8 @@ Pending discretionary transfers are subtracted separately because NEAR cross-con
 - The audit is read-only: it never credits or debits the ledger and never changes spendable balance. A difference is evidence of a balance discrepancy, not permission to recover or spend the difference.
 - Only one audit can be pending at a time. A failed query clears the pending flag and preserves the previous successful observation.
 - A successful observation can be used once by the owner through `reconcile_token_surplus(amount)`. The amount must be positive and no greater than the observed token balance minus the ledger balance captured at that observation.
-- Reconciliation is rejected while transfers or an audit are pending, when there is no successful observation, when the ledger has changed since observation, or when no surplus was observed. A successful reconciliation consumes the observation; another reconciliation requires a fresh audit.
-- Incoming accepted deposits and the start of outgoing transfers invalidate the stored observation. Audits are blocked while outgoing transfers are pending, and accepted deposits are rejected while an audit is pending. Plain direct NEP-141 transfers do not call the treasury and therefore cannot be locked; a direct transfer arriving after an audit can only make the recorded surplus conservative for a standard non-rebasing NEP-141 token.
+- Reconciliation is rejected while an actual outgoing transfer or an audit is pending, when there is no successful observation, when the ledger has changed since observation, or when no surplus was observed. Queued approval requests do not change the token balance or ledger and therefore do not by themselves block an audit or reconciliation. A successful reconciliation consumes the observation; another reconciliation requires a fresh audit.
+- Incoming accepted deposits and the start of actual outgoing transfers invalidate the stored observation. Audits and reconciliation wait for actual in-flight transfers, not merely queued owner-approval requests. Accepted deposits and new payment requests are rejected while an audit is pending. Plain direct NEP-141 transfers do not call the treasury and therefore cannot be locked; a direct transfer arriving after an audit can only make the recorded surplus conservative for a standard non-rebasing NEP-141 token.
 - The observation is a point-in-time diagnostic, not a continuously synchronized balance or a cryptographic proof of token solvency. The configured token contract remains trusted and could report dishonest balances or implement non-standard behavior.
 
 ## Commitment limits and retrieval
@@ -66,21 +66,24 @@ Pending discretionary transfers are subtracted separately because NEAR cross-con
 - Commitment IDs are limited to 64 UTF-8 bytes. Commitment descriptions and optional discretionary-payment memos are each limited to 256 UTF-8 bytes. These limits constrain user-supplied strings passed through contract calls; an omitted memo is allowed.
 - Recipient and configuration account IDs use NEAR `AccountId` deserialization, so malformed account IDs are rejected before contract logic executes. The treasury rejects itself and the configured token contract as payment or commitment recipients; the token contract is infrastructure, not a vendor destination.
 
-## Payment lifecycle
+## Discretionary payment lifecycle
 
-1. The authorized agent requests a discretionary payment, or the owner starts settlement of an existing commitment.
-2. VELTRON records a pending transfer before scheduling the NEP-141 `ft_transfer`.
-3. The contract calls the configured token contract with the required 1 yoctoNEAR security deposit.
-4. A private callback receives the promise result.
-5. On success, the internal treasury ledger is reduced. A successfully settled commitment is removed.
-6. On failure, the pending reservation is removed and the commitment remains active.
+1. The configured agent submits a discretionary payment request with a recipient, amount, and optional memo.
+2. VELTRON validates the agent, pause state, per-transaction cap, recipient, memo length, and current spendable balance.
+3. The request is stored in the existing bounded pending collection as an approval request. Its full amount is immediately reserved, so another request cannot reuse those funds or cross active commitments and the safety reserve.
+4. The agent cannot approve or reject requests. Only the treasury owner can approve or reject them.
+5. Owner approval atomically replaces the approval request with an in-flight discretionary transfer and schedules the NEP-141 `ft_transfer`. The contract calls the configured token contract with the required 1 yoctoNEAR security deposit.
+6. A private callback receives the promise result. On success, the internal treasury ledger is reduced. On failure, the pending reservation is removed and the ledger remains unchanged.
+7. Owner rejection removes the approval request and releases its reservation without calling the token contract.
 
-This ordering prevents two requests from spending the same internally accounted balance while a transfer is in flight.
+Commitment settlement remains a separate owner-only action: the owner starts settlement to the recipient already fixed in the commitment. The transfer callback removes a commitment only after successful token settlement.
+
+This two-stage flow separates agent intent from financial execution. A queued request is not a transfer; funds move only after an explicit owner approval. Requests and in-flight transfers share the existing bounded pending collection and are both included in pending discretionary accounting.
 
 ## Authority model
 
-- Owner: creates, updates, cancels, and settles commitments; changes the safety reserve and agent.
-- Agent: requests discretionary payments only.
+- Owner: creates, updates, cancels, and settles commitments; changes the safety reserve and agent; approves or rejects agent payment requests.
+- Agent: submits discretionary payment requests only. It cannot approve, reject, or directly execute a payment.
 - Token contract: may credit deposits only through the configured NEP-141 receiver call.
 - Callback: private to the contract account.
 

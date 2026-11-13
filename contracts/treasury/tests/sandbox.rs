@@ -94,7 +94,7 @@ async fn sandbox_deposit_and_agent_payment_use_real_nep141_calls() -> anyhow::Re
 
     // Give the complete cross-contract payment flow the maximum transaction gas
     // while diagnosing the prepaid-gas failure in Sandbox.
-    let payment_result = agent
+    let request_result = agent
         .call(treasury.id(), "request_payment")
         .args_json(json!({
             "recipient_id": vendor.id(),
@@ -104,11 +104,23 @@ async fn sandbox_deposit_and_agent_payment_use_real_nep141_calls() -> anyhow::Re
         .max_gas()
         .transact()
         .await?;
-    println!("Agent payment transaction outcome: {:#?}", payment_result);
+    request_result.into_result()?;
+    let vendor_before_approval = view_json(&token, "ft_balance_of", json!({ "account_id": vendor.id() })).await?;
+    assert_eq!(vendor_before_approval, "0", "agent request must not transfer funds");
+    let queued_position = view_json(&treasury, "get_financial_position", json!({})).await?;
+    assert_eq!(queued_position["pending_discretionary"], "200");
+    let unauthorized_approval = agent.call(treasury.id(), "approve_payment")
+        .args_json(json!({ "request_id": "0" }))
+        .max_gas().transact().await?;
+    assert!(unauthorized_approval.into_result().is_err(), "agent cannot approve its own request");
+    let payment_result = owner.call(treasury.id(), "approve_payment")
+        .args_json(json!({ "request_id": "0" }))
+        .max_gas().transact().await?;
+    println!("Owner approval transaction outcome: {:#?}", payment_result);
     payment_result.clone().into_result()?;
     let callback_receipt = payment_result.receipt_outcomes().iter()
-        .find(|receipt| receipt.logs.iter().any(|log| log == "VELTRON_TRANSFER_SUCCESS:0"))
-        .expect("successful discretionary callback receipt must be present");
+        .find(|receipt| receipt.logs.iter().any(|log| log == "VELTRON_TRANSFER_SUCCESS:1"))
+        .expect("successful owner-approved discretionary callback receipt must be present");
     let callback_gas = callback_receipt.gas_burnt.as_gas();
     println!("Discretionary success callback gas: {} Tgas", callback_gas as f64 / 1_000_000_000_000.0);
     assert!(callback_gas < 5_000_000_000_000, "callback consumed more than 5 Tgas: {}", callback_gas);
@@ -124,6 +136,29 @@ async fn sandbox_deposit_and_agent_payment_use_real_nep141_calls() -> anyhow::Re
     assert_eq!(final_position["treasury_balance"], "800");
     assert_eq!(final_position["spendable_balance"], "700");
     assert_eq!(vendor_balance, "200");
+
+    // A rejected request releases its reservation and never invokes NEP-141.
+    agent.call(treasury.id(), "request_payment")
+        .args_json(json!({
+            "recipient_id": vendor.id(),
+            "amount": "100",
+            "memo": "This request will be rejected"
+        }))
+        .max_gas().transact().await?.into_result()?;
+    let reserved = view_json(&treasury, "get_financial_position", json!({})).await?;
+    assert_eq!(reserved["pending_discretionary"], "100");
+    let agent_reject = agent.call(treasury.id(), "reject_payment")
+        .args_json(json!({ "request_id": "2" }))
+        .max_gas().transact().await?;
+    assert!(agent_reject.into_result().is_err(), "agent cannot reject requests");
+    owner.call(treasury.id(), "reject_payment")
+        .args_json(json!({ "request_id": "2" }))
+        .max_gas().transact().await?.into_result()?;
+    let after_rejection = view_json(&treasury, "get_financial_position", json!({})).await?;
+    let vendor_after_rejection = view_json(&token, "ft_balance_of", json!({ "account_id": vendor.id() })).await?;
+    assert_eq!(after_rejection["treasury_balance"], "800");
+    assert_eq!(after_rejection["pending_discretionary"], "0");
+    assert_eq!(vendor_after_rejection, "200");
 
     Ok(())
 }
@@ -609,13 +644,22 @@ async fn sandbox_failed_nep141_transfer_clears_pending_and_preserves_treasury() 
 
     // The NEP-141 token rejects transfers to accounts that have not registered.
     // The treasury callback must handle that failed cross-contract receipt.
-    let failed_payment_result = agent
+    let request_result = agent
         .call(treasury.id(), "request_payment")
         .args_json(json!({
             "recipient_id": unregistered_recipient.id(),
             "amount": "200",
             "memo": "Expected failed transfer"
         }))
+        .max_gas()
+        .transact()
+        .await?;
+    request_result.into_result()?;
+
+    // The queued request does not transfer tokens; owner approval starts the NEP-141 call.
+    let failed_payment_result = owner
+        .call(treasury.id(), "approve_payment")
+        .args_json(json!({ "request_id": "0" }))
         .max_gas()
         .transact()
         .await?;
@@ -794,6 +838,10 @@ async fn sandbox_balance_audit_matches_ledger_after_deposit_and_payment() -> any
         .transact()
         .await?
         .into_result()?;
+
+    owner.call(treasury.id(), "approve_payment")
+        .args_json(json!({ "request_id": "0" }))
+        .max_gas().transact().await?.into_result()?;
 
     owner
         .call(treasury.id(), "refresh_token_balance_audit")
@@ -1785,22 +1833,25 @@ async fn sandbox_agent_cannot_spend_commitment_reserved_funds() -> anyhow::Resul
 
     // The exact spendable amount is permitted; the commitment and reserve
     // remain fully covered after the real NEP-141 transfer callback completes.
-    let boundary_payment = agent
-        .call(treasury.id(), "request_payment")
+    agent.call(treasury.id(), "request_payment")
         .args_json(json!({
             "recipient_id": vendor.id(),
             "amount": "600",
             "memo": "Spend only the uncommitted balance"
         }))
-        .max_gas()
-        .transact()
-        .await?;
+        .max_gas().transact().await?.into_result()?;
+    let queued = view_json(&treasury, "get_financial_position", json!({})).await?;
+    assert_eq!(queued["pending_discretionary"], "600");
+    assert_eq!(queued["spendable_balance"], "0");
+    let boundary_payment = owner.call(treasury.id(), "approve_payment")
+        .args_json(json!({ "request_id": "0" }))
+        .max_gas().transact().await?;
     boundary_payment.clone().into_result()?;
     let success_callback_receipt = boundary_payment
         .receipt_outcomes()
         .iter()
-        .find(|receipt| receipt.logs.iter().any(|log| log == "VELTRON_TRANSFER_SUCCESS:0"))
-        .expect("successful discretionary payment callback must be present");
+        .find(|receipt| receipt.logs.iter().any(|log| log == "VELTRON_TRANSFER_SUCCESS:1"))
+        .expect("successful owner-approved discretionary payment callback must be present");
     assert!(
         success_callback_receipt.gas_burnt.as_gas() < 5_000_000_000_000,
         "discretionary callback exceeded 5 Tgas"

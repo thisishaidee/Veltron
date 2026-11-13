@@ -30,6 +30,9 @@ pub struct Commitment {
 pub enum PendingKind {
     Discretionary { recipient_id: AccountId, memo: Option<String> },
     CommitmentSettlement { commitment_id: String },
+    /// Agent-submitted request awaiting explicit owner approval. This variant is
+    /// appended to preserve the Borsh discriminants of existing stored variants.
+    DiscretionaryRequest { recipient_id: AccountId, memo: Option<String> },
 }
 
 #[near(serializers = [borsh, json])]
@@ -304,15 +307,17 @@ impl Veltron {
         self.max_per_transaction = max_per_transaction.0;
     }
 
-    /// Agent-controlled discretionary payment. Pending amounts remain reserved until callback.
+    /// The agent can propose a discretionary payment, but cannot move funds.
+    /// The requested amount is reserved immediately until the owner approves or rejects it.
     pub fn request_payment(
         &mut self,
         recipient_id: AccountId,
         amount: U128,
         memo: Option<String>,
-    ) -> Promise {
+    ) -> U64 {
         require!(env::predecessor_account_id() == self.agent_id, "Only the authorized agent");
         require!(!self.paused, "Treasury is paused");
+        require!(!self.balance_audit_pending, "Token balance audit in progress");
         require!(amount.0 > 0, "Payment amount must be positive");
         require!(amount.0 <= self.max_per_transaction, "Per-transaction limit exceeded");
         require!(recipient_id != env::current_account_id(), "Cannot pay treasury to itself");
@@ -320,7 +325,44 @@ impl Veltron {
         require!(memo.as_ref().map_or(true, |value| value.len() <= MAX_PAYMENT_MEMO_LENGTH), "Payment memo is too long");
         let position = self.calculate_position();
         require!(amount.0 <= position.spendable_balance.0, "Insufficient spendable balance");
-        self.start_transfer(amount.0, PendingKind::Discretionary { recipient_id, memo })
+        require!(self.pending.len() < MAX_PENDING_TRANSFERS as u64, "Maximum pending transfers reached");
+        let id = self.next_transfer_id;
+        self.next_transfer_id = self.next_transfer_id.checked_add(1)
+            .unwrap_or_else(|| env::panic_str("Payment request ID overflow"));
+        self.pending.insert(&id, &PendingTransfer {
+            id,
+            amount: amount.0,
+            kind: PendingKind::DiscretionaryRequest { recipient_id: recipient_id.clone(), memo },
+            created_at_ns: env::block_timestamp(),
+        });
+        env::log_str(&format!("VELTRON_PAYMENT_REQUESTED id={} amount={} recipient={}", id, amount.0, recipient_id));
+        U64(id)
+    }
+
+    /// Only the owner can turn an agent request into an actual NEP-141 transfer.
+    pub fn approve_payment(&mut self, request_id: U64) -> Promise {
+        self.assert_owner();
+        require!(!self.paused, "Treasury is paused");
+        let request = self.pending.get(&request_id.0)
+            .unwrap_or_else(|| env::panic_str("Payment request not found"));
+        let (recipient_id, memo) = match request.kind {
+            PendingKind::DiscretionaryRequest { recipient_id, memo } => (recipient_id, memo),
+            _ => env::panic_str("Pending item is not an approval request"),
+        };
+        self.pending.remove(&request_id.0);
+        env::log_str(&format!("VELTRON_PAYMENT_APPROVED id={}", request_id.0));
+        self.start_transfer(request.amount, PendingKind::Discretionary { recipient_id, memo })
+    }
+
+    /// Rejecting a request releases its reserved amount without sending tokens.
+    pub fn reject_payment(&mut self, request_id: U64) {
+        self.assert_owner();
+        let request = self.pending.get(&request_id.0)
+            .unwrap_or_else(|| env::panic_str("Payment request not found"));
+        require!(matches!(request.kind, PendingKind::DiscretionaryRequest { .. }),
+            "Pending item is not an approval request");
+        self.pending.remove(&request_id.0);
+        env::log_str(&format!("VELTRON_PAYMENT_REJECTED id={}", request_id.0));
     }
 
     /// Owner settles an existing obligation to its pre-committed recipient.
@@ -349,7 +391,7 @@ impl Veltron {
     pub fn refresh_token_balance_audit(&mut self) -> Promise {
         self.assert_owner();
         require!(!self.balance_audit_pending, "A token balance audit is already pending");
-        require!(self.pending.is_empty(), "Cannot audit while transfers are pending");
+        require!(!self.has_in_flight_transfers(), "Cannot audit while transfers are pending");
         self.balance_audit_pending = true;
         ext_ft::ext(self.token_id.clone())
             .with_static_gas(BALANCE_QUERY_GAS)
@@ -375,7 +417,7 @@ impl Veltron {
     pub fn reconcile_token_surplus(&mut self, amount: U128) {
         self.assert_owner();
         require!(!self.balance_audit_pending, "Token balance audit in progress");
-        require!(self.pending.is_empty(), "Cannot reconcile while transfers are pending");
+        require!(!self.has_in_flight_transfers(), "Cannot reconcile while transfers are pending");
         require!(amount.0 > 0, "Reconciliation amount must be positive");
 
         let observed_balance = self.observed_token_balance
@@ -522,9 +564,18 @@ impl Veltron {
         self.balance_observed_at_ns = None;
     }
 
+    /// Queued approval requests reserve ledger funds but do not create token promises.
+    /// Audits and reconciliation only need to wait for actual outgoing transfers.
+    fn has_in_flight_transfers(&self) -> bool {
+        self.pending.iter().any(|(_, pending)| matches!(
+            &pending.kind,
+            PendingKind::Discretionary { .. } | PendingKind::CommitmentSettlement { .. }
+        ))
+    }
+
     fn pending_discretionary_total(&self) -> u128 {
         self.pending.iter().fold(0u128, |sum, (_, p)| {
-            if matches!(p.kind, PendingKind::Discretionary { .. }) {
+            if matches!(p.kind, PendingKind::Discretionary { .. } | PendingKind::DiscretionaryRequest { .. }) {
                 sum.checked_add(p.amount).unwrap_or_else(|| env::panic_str("Pending total overflow"))
             } else {
                 sum
@@ -569,7 +620,8 @@ impl Veltron {
         self.next_transfer_id = self.next_transfer_id.checked_add(1)
             .unwrap_or_else(|| env::panic_str("Transfer ID overflow"));
         let (recipient_id, memo) = match &kind {
-            PendingKind::Discretionary { recipient_id, memo } => (recipient_id.clone(), memo.clone()),
+            PendingKind::Discretionary { recipient_id, memo }
+            | PendingKind::DiscretionaryRequest { recipient_id, memo } => (recipient_id.clone(), memo.clone()),
             PendingKind::CommitmentSettlement { commitment_id } => {
                 let c = self.commitments.get(commitment_id)
                     .unwrap_or_else(|| env::panic_str("Commitment not found"));
@@ -578,6 +630,7 @@ impl Veltron {
         };
         let transfer_kind = match &kind {
             PendingKind::Discretionary { .. } => "discretionary",
+            PendingKind::DiscretionaryRequest { .. } => env::panic_str("Approval requests cannot be transferred directly"),
             PendingKind::CommitmentSettlement { .. } => "commitment_settlement",
         };
         self.pending.insert(&id, &PendingTransfer {
@@ -1637,13 +1690,13 @@ mod tests {
     #[test]
     #[should_panic(expected = "Cannot audit while transfers are pending")]
     fn rejects_balance_audit_while_outgoing_transfer_is_pending() {
-        let mut contract = setup("agent.near");
+        let mut contract = setup("owner.near");
         contract.treasury_balance = 1_000;
-        contract.request_payment(account("vendor.near"), U128(10), None);
+        contract.start_transfer(10, PendingKind::Discretionary {
+            recipient_id: account("vendor.near"),
+            memo: None,
+        });
 
-        let mut builder = VMContextBuilder::new();
-        builder.predecessor_account_id(account("owner.near"));
-        testing_env!(builder.build());
         contract.refresh_token_balance_audit();
     }
 
@@ -1757,16 +1810,38 @@ mod tests {
     }
 
     #[test]
-    fn outgoing_transfer_invalidates_previous_balance_audit() {
+    fn queued_payment_request_preserves_balance_audit_and_does_not_block_audit() {
         let mut contract = setup("agent.near");
         contract.treasury_balance = 1_000;
         contract.observed_token_balance = Some(1_000);
         contract.ledger_balance_at_observation = Some(1_000);
         contract.balance_observed_at_ns = Some(123);
+
         contract.request_payment(account("vendor.near"), U128(100), None);
+
+        assert_eq!(contract.observed_token_balance, Some(1_000));
+        assert_eq!(contract.ledger_balance_at_observation, Some(1_000));
+        assert_eq!(contract.balance_observed_at_ns, Some(123));
+        assert!(!contract.has_in_flight_transfers());
+    }
+
+    #[test]
+    fn starting_actual_transfer_invalidates_previous_balance_audit() {
+        let mut contract = setup("owner.near");
+        contract.treasury_balance = 1_000;
+        contract.observed_token_balance = Some(1_000);
+        contract.ledger_balance_at_observation = Some(1_000);
+        contract.balance_observed_at_ns = Some(123);
+
+        contract.start_transfer(100, PendingKind::Discretionary {
+            recipient_id: account("vendor.near"),
+            memo: None,
+        });
+
         assert_eq!(contract.observed_token_balance, None);
         assert_eq!(contract.ledger_balance_at_observation, None);
         assert_eq!(contract.balance_observed_at_ns, None);
+        assert!(contract.has_in_flight_transfers());
     }
 
 
@@ -1920,8 +1995,12 @@ mod tests {
         assert_eq!(pending[0].created_at_ns, U64(123_456));
         assert_eq!(pending[0].amount, U128(100));
         assert!(get_logs().iter().any(|log| {
-            log == "VELTRON_TRANSFER_STARTED id=0 amount=100 recipient=vendor.near kind=discretionary"
+            log == "VELTRON_PAYMENT_REQUESTED id=0 amount=100 recipient=vendor.near"
         }));
+        assert!(matches!(
+            pending[0].kind,
+            PendingKind::DiscretionaryRequest { .. }
+        ));
     }
 
     #[test]
