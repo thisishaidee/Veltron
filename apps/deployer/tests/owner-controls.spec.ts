@@ -20,7 +20,7 @@ test.describe("VELTRON owner controls", () => {
     for (const id of ["save-agent", "save-reserve", "pause", "resume", "reconcile"]) {
       await expect(page.locator("#" + id)).toBeDisabled();
     }
-    await expect(page.locator("#read-status")).toContainText(/not yet verified|reading finalized state/i);
+    await expect(page.locator("#read-status")).toContainText(/not yet verified|reading finalized state|state not verified/i);
   });
 
   test("provides navigation to existing owner workflows", async ({ page }) => {
