@@ -1,9 +1,34 @@
 import { ingestBlock } from "./storage.js";
 
 const NETWORKS = {
-  testnet: "https://testnet.neardata.xyz",
-  mainnet: "https://mainnet.neardata.xyz"
+  testnet: { data: "https://testnet.neardata.xyz", rpc: "https://rpc.testnet.near.org" },
+  mainnet: { data: "https://mainnet.neardata.xyz", rpc: "https://rpc.mainnet.near.org" }
 };
+const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
+
+async function fetchJsonWithRetry(url, init, fetchImpl, label) {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const response = await fetchImpl(url, init);
+    if (response.ok) return await response.json();
+    if (!RETRYABLE_STATUSES.has(response.status) || attempt === 3) {
+      throw new Error(label + " returned HTTP " + response.status);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250 * (2 ** attempt)));
+  }
+  throw new Error(label + " failed after retries");
+}
+
+async function getRpcBlockHeader(rpcUrl, params, fetchImpl) {
+  const document = await fetchJsonWithRetry(rpcUrl, {
+    method: "POST",
+    headers: { accept: "application/json", "content-type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: "veltron-audit-indexer", method: "block", params })
+  }, fetchImpl, "NEAR RPC block request");
+  if (document?.error || !document?.result?.header) {
+    throw new Error("NEAR RPC block response is missing its finalized header");
+  }
+  return document.result.header;
+}
 
 function outcomeStatus(status) {
   if (typeof status === "string") {
@@ -56,8 +81,8 @@ export function extractContractEvents(block, contractId) {
 }
 
 export async function runFinalizedIndexer(env, fetchImpl = fetch) {
-  const baseUrl = NETWORKS[env.NETWORK];
-  if (!baseUrl) throw new Error("NETWORK must be testnet or mainnet");
+  const network = NETWORKS[env.NETWORK];
+  if (!network) throw new Error("NETWORK must be testnet or mainnet");
   const contractId = env.TREASURY_ACCOUNT;
   if (!contractId) throw new Error("TREASURY_ACCOUNT is required");
   const maxBlocks = Math.max(1, Math.min(30, Number(env.MAX_BLOCKS_PER_TICK || 10)));
@@ -69,28 +94,28 @@ export async function runFinalizedIndexer(env, fetchImpl = fetch) {
   const startHeight = cursor ? cursor.block_height + 1 : Number(env.START_BLOCK_HEIGHT);
   if (!Number.isSafeInteger(startHeight) || startHeight < 0) throw new Error("Set START_BLOCK_HEIGHT to the first finalized block at or before treasury deployment");
 
-  const headResponse = await fetchImpl(baseUrl + "/v0/last_block/final", { headers: { accept: "application/json" } });
-  if (!headResponse.ok) throw new Error("NEAR Data finalized-head request returned HTTP " + headResponse.status);
-  const headDocument = await headResponse.json();
-  const headHeight = headDocument?.block?.header?.height;
-  if (!Number.isSafeInteger(headHeight)) throw new Error("NEAR Data finalized head response is invalid");
+  // Use canonical NEAR RPC for the finalized head and start anchor. The NEAR Data
+  // endpoint is retained for full receipt/log payloads and is retried on 429/5xx.
+  const headHeader = await getRpcBlockHeader(network.rpc, { finality: "final" }, fetchImpl);
+  const headHeight = headHeader.height;
+  if (!Number.isSafeInteger(headHeight)) throw new Error("NEAR RPC finalized head response is invalid");
 
   let indexedBlocks = 0, indexedEvents = 0, lastHeight = cursor?.block_height ?? null;
   let expectedPreviousHash = cursor?.block_hash ?? null;
   if (!cursor && startHeight > 0 && startHeight <= headHeight) {
-    const anchorResponse = await fetchImpl(baseUrl + "/v0/block/" + (startHeight - 1), { headers: { accept: "application/json" } });
-    if (!anchorResponse.ok) throw new Error("NEAR Data start-anchor request returned HTTP " + anchorResponse.status);
-    const anchorDocument = await anchorResponse.json();
-    const anchorHeader = anchorDocument?.block?.header;
-    if (!anchorHeader || anchorHeader.height !== startHeight - 1 || typeof anchorHeader.hash !== "string" || !anchorHeader.hash) {
-      throw new Error("NEAR Data start-anchor block is unavailable or mismatched; refusing to begin an unanchored history");
+    const anchorHeader = await getRpcBlockHeader(network.rpc, { block_id: startHeight - 1 }, fetchImpl);
+    if (anchorHeader.height !== startHeight - 1 || typeof anchorHeader.hash !== "string" || !anchorHeader.hash) {
+      throw new Error("NEAR RPC start-anchor block is unavailable or mismatched; refusing to begin an unanchored history");
     }
     expectedPreviousHash = anchorHeader.hash;
   }
   for (let height = startHeight; height <= headHeight && indexedBlocks < maxBlocks; height++) {
-    const response = await fetchImpl(baseUrl + "/v0/block/" + height, { headers: { accept: "application/json" } });
-    if (!response.ok) throw new Error("NEAR Data returned HTTP " + response.status);
-    const document = await response.json();
+    const document = await fetchJsonWithRetry(
+      network.data + "/v0/block/" + height,
+      { headers: { accept: "application/json" } },
+      fetchImpl,
+      "NEAR Data block " + height
+    );
     if (!document || !document.block?.header || document.block.header.height !== height) throw new Error("Finalized block " + height + " is unavailable or mismatched; cursor was not advanced");
     const header = document.block.header;
     if (expectedPreviousHash && header.prev_hash !== expectedPreviousHash) {
