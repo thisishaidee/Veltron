@@ -24,7 +24,7 @@ test.describe("VELTRON owner controls", () => {
   });
 
   test("provides navigation to existing owner workflows", async ({ page }) => {
-    await expect(page.getByRole("link", { name: "Overview / preflight" })).toHaveAttribute("href", "./index.html");
+    await expect(page.getByRole("link", { name: "Overview", exact: true })).toHaveAttribute("href", "./index.html");
     await expect(page.getByRole("link", { name: "Payment queue" })).toHaveAttribute("href", "./payment-queue.html");
     await expect(page.getByRole("link", { name: "Commitments" })).toHaveAttribute("href", "./commitment-management.html");
     await expect(page.getByRole("link", { name: "Balance audit" })).toHaveAttribute("href", "./audit.html");
