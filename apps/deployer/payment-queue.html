@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b1430">
+<title>VELTRON — Owner Payment Queue</title>
+<style>
+:root{color-scheme:dark;font:16px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#0b1430;color:#f3f5f7}
+*{box-sizing:border-box}body{width:min(100% - 32px,760px);margin:auto;padding:24px 0 max(40px,env(safe-area-inset-bottom))}
+h1{font-size:1.7rem;line-height:1.2}h2{font-size:1.1rem}p{color:#cbd3e3}
+.panel{border:1px solid #35415e;border-radius:12px;padding:16px;margin:16px 0;overflow-wrap:anywhere}
+button{width:100%;padding:13px;margin:8px 0;border:0;border-radius:8px;background:#17cbbb;color:#07152d;font:inherit;font-weight:750}
+button.secondary{background:#253653;color:#f3f5f7;border:1px solid #53627d}button.danger{background:#542d3b;color:#fff;border:1px solid #9a5265}button:disabled{opacity:.38}
+label{display:block;margin:12px 0;color:#cbd3e3}.status{padding:12px;background:#1a294a;border-radius:8px;white-space:pre-wrap;overflow-wrap:anywhere}
+.muted{font-size:.9rem;color:#9eabc2}.warn{border-left:4px solid #e6b45e;padding-left:12px}
+.item{border-top:1px solid #35415e;padding:14px 0}.item:first-child{border-top:0}
+.actions{display:flex;gap:8px;flex-wrap:wrap}.actions button{flex:1;min-width:110px}
+.metric{display:grid;grid-template-columns:1fr 1fr;gap:8px}.metric div{background:#111d3b;border-radius:8px;padding:10px}.metric strong{display:block;overflow-wrap:anywhere}
+a{color:#45e2d2}
+</style>
+</head>
+<body>
+<h1>VELTRON Owner Payment Queue</h1>
+<p>Review agent-submitted payment requests before any token transfer is started.</p>
+<section class="panel warn">
+<strong>OWNER CONTROL · NEAR TESTNET</strong>
+<p>A queued request is only a reservation. It is not a token transfer. Approving starts an on-chain transfer; rejecting releases the reservation. Every action requires a separate Meteor wallet approval.</p>
+</section>
+<section class="panel">
+<h2>1. Connect owner wallet</h2>
+<button id="connect">Connect NEAR Testnet wallet</button>
+<p id="wallet-account" class="status">Not connected</p>
+<label><input id="network-confirm" type="checkbox" style="width:auto"> I checked Meteor itself and it displays NEAR Testnet.</label>
+<p class="muted">The checkbox records your explicit confirmation; it does not independently inspect Meteor's active network.</p>
+</section>
+<section class="panel">
+<h2>2. Finalized treasury position</h2>
+<button id="refresh" class="secondary">Refresh verified state</button>
+<p id="read-status" class="status" role="status" aria-live="polite">Not checked. Two independent RPC providers must agree on the same finalized block.</p>
+<div class="metric">
+<div>Ledger balance<strong id="balance">—</strong></div>
+<div>Active commitments<strong id="commitments">—</strong></div>
+<div>Safety reserve<strong id="reserve">—</strong></div>
+<div>Pending discretionary<strong id="pending">—</strong></div>
+<div>Spendable balance<strong id="spendable">—</strong></div>
+<div>Outgoing payments paused<strong id="paused">—</strong></div>
+</div>
+</section>
+<section class="panel">
+<h2>3. Requests awaiting your decision</h2>
+<p class="muted">Only DiscretionaryRequest records appear here. These have not started a token transfer.</p>
+<div id="queue"><p class="muted">Refresh verified state to load queued requests.</p></div>
+</section>
+<section class="panel">
+<h2>4. Transfers already in progress</h2>
+<p class="muted">These are actual outgoing transfers or commitment settlements. They are shown separately and cannot be approved again here.</p>
+<div id="transfers"><p class="muted">Refresh verified state to load in-flight transfers.</p></div>
+</section>
+<p class="muted">If a wallet outcome is uncertain, do not retry. Refresh both providers and confirm the request is still queued before preparing another action.</p>
+<p><a href="./index.html">Back to VELTRON dashboard</a> · <a href="./commitment-management.html">Commitment management</a></p>
+<script type="module" src="./dist/payment-queue.js"></script>
+</body>
+</html>
