@@ -10,6 +10,10 @@ test("owner controls reads the same finalized block from two independent Testnet
   assert.match(source, /rpc\.testnet\.fastnear\.com/);
   assert.match(source, /chain_id !== "testnet"/);
   assert.match(source, /stable\(a\) !== stable\(b\)/);
+  assert.match(source, /request_type: "view_account"/);
+  assert.match(source, /supportsCheckedSettlement/);
+  assert.match(source, /EVENT_AWARE_CONTRACT_CODE_HASH/);
+  assert.match(source, /Upgrade required for checked settlement/);
   assert.match(source, /SNAPSHOT_TTL_MS = 30000/);
   assert.match(source, /checkedAtMonotonic: performance\.now\(\)/);
   assert.match(source, /performance\.now\(\) - snapshot\.checkedAtMonotonic >= 0/);

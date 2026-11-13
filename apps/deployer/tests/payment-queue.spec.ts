@@ -10,7 +10,7 @@ const transfer = {
   kind: { Discretionary: { recipient_id: "supplier.testnet", memo: null } }
 };
 
-async function mockRpc(page, disagree = false) {
+async function mockRpc(page, disagree = false, legacyContract = false) {
   const handler = async (route, provider) => {
     const body = route.request().postDataJSON();
     let result;
@@ -18,6 +18,11 @@ async function mockRpc(page, disagree = false) {
       result = { chain_id: "testnet" };
     } else if (body.method === "block") {
       result = { header: { hash: provider === "fast" && disagree ? "different-block" : "shared-finalized-block", height: 12345 } };
+    } else if (body.method === "query" && body.params.request_type === "view_account") {
+      result = {
+        block_hash: body.params.block_id,
+        code_hash: legacyContract ? "CF74dvxu77P84Xzh8heyCM5xUgDgmM93oRYroWiHkAgR" : "qNrDinLxStGuvUQQKj6NZDWKmj3vSccU6rnfVUrseAn"
+      };
     } else if (body.method === "query") {
       const method = body.params.method_name;
       const values = {
@@ -48,6 +53,15 @@ test("shows queued requests separately from in-flight transfers and keeps owner 
   await expect(page.locator("#queue")).toContainText("125.5 VTT");
   await expect(page.locator("#queue")).toContainText("vendor.testnet");
   await expect(page.locator("#transfers")).toContainText("TRANSFER #18");
+  await expect(page.getByRole("button", { name: "Approve payment" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Reject request" })).toBeDisabled();
+});
+
+test("keeps payment requests visible but disables decisions on the legacy deployed contract", async ({ page }) => {
+  await mockRpc(page, false, true);
+  await page.goto("/payment-queue.html");
+  await expect(page.locator("#read-status")).toContainText("does not expose approve_payment/reject_payment");
+  await expect(page.locator("#queue")).toContainText("REQUEST #17");
   await expect(page.getByRole("button", { name: "Approve payment" })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Reject request" })).toBeDisabled();
 });
