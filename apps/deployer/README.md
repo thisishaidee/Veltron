@@ -83,7 +83,7 @@ Build the dashboard with `npm run build` and run commitment safety tests with `n
 
 The owner-controls page exposes existing treasury methods for changing the authorized agent and per-transaction cap, adjusting the safety reserve, pausing/resuming outgoing transfers, settling a recorded commitment, and reconciling a token surplus supported by a successful balance audit no older than 30 seconds. Each operation is owner-only, uses a fresh dual-provider finalized snapshot, and requires an explicit Meteor wallet approval. The page does not invent agent permission flags that the contract does not implement.
 
-The page also displays current pending transfers, active commitments, and the latest token-balance audit. This is a current-state view, not a complete historical event log: the current contract does not expose a queryable historical event ledger. A full historical audit trail requires a separately designed and independently verified event-indexing source.
+The page also displays current pending transfers, active commitments, and the latest token-balance audit. The 30-second age check is a browser-side safeguard only; the contract does not enforce an audit-age limit or synchronously re-query the token balance. The owner must not reconcile if direct token movement may have occurred since the observation. This is a current-state view, not a complete historical event log: the current contract does not expose a queryable historical event ledger. A full historical audit trail requires a separately designed and independently verified event-indexing source.
 
 Build includes `src/admin-controls.js`. Run the owner-controls regression checks with `npm run test:admin-controls`; browser coverage is included in `npm run test:e2e`.
 
