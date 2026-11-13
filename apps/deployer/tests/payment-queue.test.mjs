@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { actionReadiness, formatVtt, normalizePending, paymentCall, uncertainOutcomeMessage, OWNER, TREASURY } from "../src/payment-queue-core.js";
+import { actionReadiness, formatVtt, normalizePending, paymentCall, uncertainOutcomeMessage, OWNER, TREASURY } from "../src/payment-queue-core.mjs";
 
 const request = (id="7", kind="discretionary_request") => ({
   id, amount:"125500000", created_at_ns:"1730000000000000000",
