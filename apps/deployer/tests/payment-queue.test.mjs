@@ -44,11 +44,18 @@ test("stale snapshot, wrong wallet, and missing Testnet confirmation disable con
   assert.equal(actionReadiness({snapshot,accountId:OWNER,networkConfirmed:false,now:1001}).canApprove,false);
 });
 
-test("pause disables approval but does not disable rejection", () => {
-  const snapshot={verified:true,providersAgree:true,checkedAt:1000,paused:true};
+test("pause disables approval but does not disable rejection when the deployed contract supports both methods", () => {
+  const snapshot={verified:true,providersAgree:true,supportsApproval:true,checkedAt:1000,paused:true};
   const ready=actionReadiness({snapshot,accountId:OWNER,networkConfirmed:true,now:1001});
   assert.equal(ready.canApprove,false);
   assert.equal(ready.canReject,true);
+});
+
+test("unsupported deployed contract version disables both payment decisions", () => {
+  const snapshot={verified:true,providersAgree:true,supportsApproval:false,checkedAt:1000,paused:false};
+  const ready=actionReadiness({snapshot,accountId:OWNER,networkConfirmed:true,now:1001});
+  assert.equal(ready.canApprove,false);
+  assert.equal(ready.canReject,false);
 });
 
 test("approve and reject construct exact owner wallet FunctionCalls", () => {
