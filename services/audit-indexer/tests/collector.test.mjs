@@ -168,14 +168,14 @@ test("paginates account history and deduplicates transaction hashes before batch
   assert.equal(result.indexed_events, 0);
 });
 
-test("ingests 200 contiguous block headers with one D1 batch per tick", async () => {
+test("ingests 500 contiguous block headers with one D1 batch per tick", async () => {
   const db = fakeDb();
   const rangeRequests = [];
   const fetchImpl = async (url, init = {}) => {
     if (url === "https://rpc.testnet.fastnear.com") {
       const body = JSON.parse(init.body);
       const header = body.params.finality === "final"
-        ? { height: 299, hash: "h299" }
+        ? { height: 599, hash: "h599" }
         : { height: 99, hash: "h99" };
       return Response.json({ result: { header } });
     }
@@ -200,16 +200,16 @@ test("ingests 200 contiguous block headers with one D1 batch per tick", async ()
     NETWORK: "testnet",
     TREASURY_ACCOUNT: contractId,
     START_BLOCK_HEIGHT: "100",
-    MAX_BLOCKS_PER_TICK: "200",
+    MAX_BLOCKS_PER_TICK: "500",
     AUDIT_DB: db
   }, fetchImpl);
-  assert.equal(result.indexed_blocks, 200);
-  assert.equal(result.indexed_through, 299);
+  assert.equal(result.indexed_blocks, 500);
+  assert.equal(result.indexed_through, 599);
   assert.equal(result.history_complete, true);
-  assert.equal(rangeRequests.length, 2);
-  assert.deepEqual(rangeRequests.map((request) => [request.from_block_height, request.to_block_height]), [[100, 200], [200, 300]]);
+  assert.equal(rangeRequests.length, 5);
+  assert.deepEqual(rangeRequests.map((request) => [request.from_block_height, request.to_block_height]), [[100, 200], [200, 300], [300, 400], [400, 500], [500, 600]]);
   assert.equal(db.batchCalls, 1);
-  assert.equal(db.cursor.block_height, 299);
+  assert.equal(db.cursor.block_height, 599);
 });
 
 test("rejects an incomplete bulk block range without advancing the cursor", async () => {
