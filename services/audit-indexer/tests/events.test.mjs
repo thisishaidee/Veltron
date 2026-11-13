@@ -183,7 +183,7 @@ test("scheduled collector ingests finalized blocks in order from configured star
   const requested = [];
   const fetchMock = async (url, init = {}) => {
     requested.push(url);
-    if (url === "https://rpc.testnet.near.org") {
+    if (url === "https://rpc.testnet.fastnear.com") {
       const params = JSON.parse(init.body).params;
       const header = params.finality === "final"
         ? { height: 100, hash: "block-100" }
@@ -201,8 +201,8 @@ test("scheduled collector ingests finalized blocks in order from configured star
   }, fetchMock);
   assert.deepEqual(result, { indexed_blocks: 1, indexed_events: 1, indexed_through: 100, finalized_head: 100 });
   assert.equal(requested.length, 3);
-  assert.equal(requested[0], "https://rpc.testnet.near.org");
-  assert.equal(requested[1], "https://rpc.testnet.near.org");
+  assert.equal(requested[0], "https://rpc.testnet.fastnear.com");
+  assert.equal(requested[1], "https://rpc.testnet.fastnear.com");
   assert.equal(requested[2], "https://testnet.neardata.xyz/v0/block/100");
   assert.match(db.statements[0].sql, /INSERT OR IGNORE INTO audit_events/);
 });
@@ -222,7 +222,7 @@ test("rejects a failed finalized-head HTTP response before parsing JSON", async 
 test("refuses to start history when the first block does not link to its anchor", async () => {
   const db = fakeDb();
   const fetchMock = async (url, init = {}) => {
-    if (url === "https://rpc.testnet.near.org") {
+    if (url === "https://rpc.testnet.fastnear.com") {
       const params = JSON.parse(init.body).params;
       const header = params.finality === "final"
         ? { height: 100, hash: "block-100" }
