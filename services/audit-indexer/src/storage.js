@@ -99,6 +99,9 @@ export async function ingestBlocks(db, config, blocks) {
   let expectedHeight = existing ? existing.block_height + 1 : blocks[0].block_height;
   let expectedPreviousHash = existing?.block_hash ?? null;
   const coverageStartHeight = existing?.coverage_start_height ?? blocks[0].coverage_start_height;
+  if (!existing && blocks[0].block_height !== coverageStartHeight) {
+    throw new Error("First ingested block must equal the configured coverage start height");
+  }
   const eventStatements = [];
   let accepted = 0;
 
