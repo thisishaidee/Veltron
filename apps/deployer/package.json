@@ -4,14 +4,15 @@
   "version": "0.1.0",
   "scripts": {
     "test:e2e": "npm run build && playwright test",
-    "build": "esbuild src/wallet.js --bundle --format=esm --outfile=dist/wallet.js && esbuild src/treasury-config.js --bundle --format=esm --outfile=dist/treasury-config.js && esbuild src/commitments.js --bundle --format=esm --outfile=dist/commitments.js",
+    "build": "esbuild src/wallet.js --bundle --format=esm --outfile=dist/wallet.js && esbuild src/treasury-config.js --bundle --format=esm --outfile=dist/treasury-config.js && esbuild src/commitments.js --bundle --format=esm --outfile=dist/commitments.js && esbuild src/payment-queue.js --bundle --format=esm --outfile=dist/payment-queue.js",
     "test:executor": "node --test tests/meteor-executor.test.mjs",
     "test:deployment": "node --test scripts/deployment-checks.mjs",
-    "test:all": "npm run test:executor && npm run test:deployment && npm run test:transfer && npm run test:audit && npm run test:e2e && npm run test:commitments",
+    "test:all": "npm run test:executor && npm run test:deployment && npm run test:transfer && npm run test:audit && npm run test:e2e && npm run test:commitments && npm run test:payment-queue",
     "build:transfer": "esbuild src/transfer.js --bundle --format=esm --outfile=dist/transfer.js && esbuild src/audit.js --bundle --format=esm --outfile=dist/audit.js",
     "test:transfer": "node --test tests/treasury-transfer.test.mjs",
     "test:audit": "node --test tests/treasury-audit.test.mjs",
-    "test:commitments": "node --test tests/commitments.test.mjs"
+    "test:commitments": "node --test tests/commitments.test.mjs",
+    "test:payment-queue": "node --test tests/payment-queue.test.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.56.1",
