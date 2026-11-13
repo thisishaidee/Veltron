@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { actionReadiness, formatVtt, normalizePending, paymentCall, uncertainOutcomeMessage, OWNER, TREASURY } from "../src/payment-queue-core.mjs";
 
-const request = (id="7", kind="discretionary_request") => ({
+const request = (id="7", kind="DiscretionaryRequest") => ({
   id, amount:"125500000", created_at_ns:"1730000000000000000",
   kind: { [kind]: { recipient_id:"vendor.testnet", memo:"Invoice 42" } }
 });
@@ -14,9 +14,9 @@ test("formats six-decimal VTT amounts with BigInt", () => {
 });
 
 test("separates queued requests from actual in-flight transfers", () => {
-  const result = normalizePending([request("7"), request("8","discretionary"), {
+  const result = normalizePending([request("7"), request("8","Discretionary"), {
     id:"9",amount:"1000000",created_at_ns:"1730000000000000000",
-    kind:{commitment_settlement:{commitment_id:"rent"}}
+    kind:{CommitmentSettlement:{commitment_id:"rent"}}
   }]);
   assert.deepEqual(result.queued.map(x=>x.id),["7"]);
   assert.deepEqual(result.transfers.map(x=>x.id),["8","9"]);
@@ -28,8 +28,8 @@ test("rejects malformed and duplicate pending records", () => {
   assert.throws(() => normalizePending([{...request(),kind:{unknown:{}}}]),/Unknown/);
   assert.throws(() => normalizePending([{...request(),id:9007199254740993}]),/invalid ID/);
   assert.throws(() => normalizePending([{...request(),id:"18446744073709551616"}]),/invalid ID/);
-  assert.throws(() => normalizePending([{id:"10",amount:"1",created_at_ns:"1",kind:{discretionary:{recipient_id:"bad account",memo:null}}}]),/recipient or memo/);
-  assert.throws(() => normalizePending([{id:"11",amount:"1",created_at_ns:"1",kind:{commitment_settlement:{commitment_id:""}}}]),/settlement record/);
+  assert.throws(() => normalizePending([{id:"10",amount:"1",created_at_ns:"1",kind:{Discretionary:{recipient_id:"bad account",memo:null}}}]),/recipient or memo/);
+  assert.throws(() => normalizePending([{id:"11",amount:"1",created_at_ns:"1",kind:{CommitmentSettlement:{commitment_id:""}}}]),/settlement record/);
 });
 
 test("provider disagreement or an unverified snapshot disables controls", () => {
