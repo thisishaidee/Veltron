@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { ingestBlock } from "../src/index.js";
-import { extractContractEvents } from "../src/collector.js";
+import { extractContractEvents, runFinalizedIndexer } from "../src/collector.js";
 
 const config = { network: "testnet", contractId: "veltron-treasury.testnet" };
 const block = {
@@ -159,4 +159,42 @@ test("requires the previous finalized block hash to chain to the cursor", async 
     () => ingestBlock(fakeDb({ block_height: 119, block_hash: "expected-prev-hash" }), config, block),
     /Previous block hash does not match/
   );
+});
+
+test("scheduled collector ingests finalized blocks in order from configured start height", async () => {
+  const db = fakeDb();
+  const eventLog = "EVENT_JSON:" + JSON.stringify({
+    standard: "veltron",
+    version: "1.0.0",
+    event: "treasury_initialized",
+    data: [{ actor_id: "deployer.testnet", timestamp_ns: "1000000000" }]
+  });
+  const head = { block: { header: { height: 100 } } };
+  const blockDoc = {
+    block: { header: { height: 100, hash: "block-100", prev_hash: "block-99", timestamp_nanosec: "1000000000" } },
+    shards: [{ shard_id: 0, receipt_execution_outcomes: [{
+      tx_hash: "tx-init",
+      execution_outcome: { id: "receipt-init", outcome: {
+        executor_id: "veltron-treasury.testnet",
+        logs: [eventLog],
+        status: { SuccessValue: "" }
+      } }
+    }] }]
+  };
+  const requested = [];
+  const fetchMock = async (url) => {
+    requested.push(url);
+    return { ok: true, json: async () => url.endsWith("/v0/last_block/final") ? head : blockDoc };
+  };
+  const result = await runFinalizedIndexer({
+    NETWORK: "testnet",
+    TREASURY_ACCOUNT: "veltron-treasury.testnet",
+    START_BLOCK_HEIGHT: "100",
+    MAX_BLOCKS_PER_TICK: "10",
+    AUDIT_DB: db
+  }, fetchMock);
+  assert.deepEqual(result, { indexed_blocks: 1, indexed_events: 1, indexed_through: 100, finalized_head: 100 });
+  assert.equal(requested.length, 2);
+  assert.ok(requested[0].startsWith("https://testnet.neardata.xyz/"));
+  assert.match(db.statements[0].sql, /INSERT OR IGNORE INTO audit_events/);
 });
