@@ -23,7 +23,7 @@ const block = {
       data: [{ actor_id: "veltron-agent.testnet", timestamp_ns: "123456789", request_id: "1", amount: "9007199254740993" }]
     }
   }]
-}};
+};
 
 function fakeDb(existing = null) {
   const statements = [];
