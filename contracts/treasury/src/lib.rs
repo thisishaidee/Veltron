@@ -4,6 +4,7 @@ use near_sdk::{
 };
 use near_sdk::json_types::{U128, U64};
 use near_sdk::collections::{LookupMap, TreeMap, UnorderedSet};
+use serde_json::{json, Value};
 
 const FT_TRANSFER_GAS: Gas = Gas::from_tgas(10);
 const CALLBACK_GAS: Gas = Gas::from_tgas(10);
@@ -15,6 +16,24 @@ const MAX_COMMITMENTS: usize = 256;
 const MAX_PENDING_TRANSFERS: usize = 64;
 const DEFAULT_COMMITMENT_PAGE_SIZE: u32 = 25;
 const MAX_COMMITMENT_PAGE_SIZE: u32 = 50;
+const EVENT_STANDARD: &str = "veltron";
+const EVENT_VERSION: &str = "1.0.0";
+
+/// Emit a NEP-297-compatible event. Indexers should identify an event by
+/// (transaction hash, receipt ID, log index), not by this payload alone.
+fn emit_event(event: &str, mut data: Value) {
+    if let Some(fields) = data.as_object_mut() {
+        fields.insert("timestamp_ns".to_string(), json!(env::block_timestamp().to_string()));
+        fields.insert("actor_id".to_string(), json!(env::predecessor_account_id().as_str()));
+    }
+    let envelope = json!({
+        "standard": EVENT_STANDARD,
+        "version": EVENT_VERSION,
+        "event": event,
+        "data": [data],
+    });
+    env::log_str(&format!("EVENT_JSON:{}", envelope));
+}
 
 #[near(serializers = [borsh, json])]
 #[derive(Clone)]
@@ -149,7 +168,7 @@ impl Veltron {
         require!(agent_id != token_id, "Agent and token contract must differ");
         require!(owner_id != agent_id, "Owner and agent must differ");
         require!(max_per_transaction.0 > 0, "Transaction limit must be positive");
-        Self {
+        let contract = Self {
             owner_id,
             token_id,
             agent_id,
@@ -167,7 +186,18 @@ impl Veltron {
             observed_token_balance: None,
             ledger_balance_at_observation: None,
             balance_observed_at_ns: None,
-        }
+        };
+        emit_event("treasury_initialized", json!({
+            "treasury_id": treasury_id.as_str(),
+            "owner_id": contract.owner_id.as_str(),
+            "token_id": contract.token_id.as_str(),
+            "agent_id": contract.agent_id.as_str(),
+            "max_per_transaction": contract.max_per_transaction.to_string(),
+            "safety_reserve": contract.safety_reserve.to_string(),
+            "treasury_balance": "0",
+            "paused": false
+        }));
+        contract
     }
 
     /// NEP-141 receiver. Only the configured token contract can credit the ledger.
@@ -197,6 +227,12 @@ impl Veltron {
         self.treasury_balance = self.treasury_balance.checked_add(amount.0)
             .unwrap_or_else(|| env::panic_str("Treasury balance overflow"));
         env::log_str(&format!("VELTRON_DEPOSIT: balance_after={}", self.treasury_balance));
+        emit_event("deposit_credited", json!({
+            "sender_id": sender_id.as_str(),
+            "token_id": self.token_id.as_str(),
+            "amount": amount.0.to_string(),
+            "ledger_balance": self.treasury_balance.to_string()
+        }));
         PromiseOrValue::Value(U128(0))
     }
 
@@ -227,6 +263,13 @@ impl Veltron {
         require!(self.commitment_ids.insert(&id), "Commitment index already exists");
         self.active_commitments_total = new_total;
         self.assert_solvent();
+        let created = self.commitments.get(&id).expect("new commitment exists");
+        emit_event("commitment_created", json!({
+            "commitment_id": id,
+            "recipient_id": created.recipient_id.as_str(),
+            "amount": created.amount.to_string(),
+            "description": created.description
+        }));
     }
 
     pub fn update_commitment(
@@ -245,6 +288,8 @@ impl Veltron {
             "Cannot update a commitment while settlement is pending");
         let mut commitment = self.commitments.get(&id)
             .unwrap_or_else(|| env::panic_str("Commitment not found"));
+        let previous_recipient = commitment.recipient_id.clone();
+        let previous_amount = commitment.amount;
         let new_total = self.active_commitments_total
             .checked_sub(commitment.amount)
             .and_then(|total| total.checked_add(amount.0))
@@ -255,6 +300,14 @@ impl Veltron {
         self.commitments.insert(&id, &commitment);
         self.active_commitments_total = new_total;
         self.assert_solvent();
+        emit_event("commitment_updated", json!({
+            "commitment_id": id,
+            "previous_recipient_id": previous_recipient.as_str(),
+            "recipient_id": commitment.recipient_id.as_str(),
+            "previous_amount": previous_amount.to_string(),
+            "amount": commitment.amount.to_string(),
+            "description": commitment.description
+        }));
     }
 
     pub fn cancel_commitment(&mut self, id: String) {
@@ -265,13 +318,24 @@ impl Veltron {
         require!(self.commitment_ids.remove(&id), "Commitment index entry not found");
         self.active_commitments_total = self.active_commitments_total.checked_sub(removed.amount)
             .unwrap_or_else(|| env::panic_str("Commitment total underflow"));
+        emit_event("commitment_cancelled", json!({
+            "commitment_id": removed.id,
+            "recipient_id": removed.recipient_id.as_str(),
+            "amount": removed.amount.to_string(),
+            "description": removed.description
+        }));
     }
 
     /// Emergency circuit breaker for new outgoing treasury transfers.
     pub fn set_paused(&mut self, paused: bool) {
         self.assert_owner();
+        let previous = self.paused;
         self.paused = paused;
         env::log_str(if paused { "VELTRON_PAUSED" } else { "VELTRON_UNPAUSED" });
+        emit_event("pause_status_changed", json!({
+            "previous_paused": previous,
+            "paused": paused
+        }));
     }
 
     pub fn get_pause_status(&self) -> bool {
@@ -293,18 +357,31 @@ impl Veltron {
 
     pub fn set_safety_reserve(&mut self, amount: U128) {
         self.assert_owner();
+        let previous = self.safety_reserve;
         self.safety_reserve = amount.0;
         self.assert_solvent();
+        emit_event("safety_reserve_updated", json!({
+            "previous_amount": previous.to_string(),
+            "amount": amount.0.to_string()
+        }));
     }
 
     pub fn set_agent(&mut self, agent_id: AccountId, max_per_transaction: U128) {
         self.assert_owner();
+        let previous_agent_id = self.agent_id.clone();
+        let previous_cap = self.max_per_transaction;
         require!(agent_id != self.owner_id, "Agent and owner must differ");
         require!(agent_id != env::current_account_id(), "Agent cannot be treasury contract");
         require!(agent_id != self.token_id, "Agent cannot be the token contract");
         require!(max_per_transaction.0 > 0, "Transaction limit must be positive");
         self.agent_id = agent_id;
         self.max_per_transaction = max_per_transaction.0;
+        emit_event("agent_configuration_updated", json!({
+            "previous_agent_id": previous_agent_id.as_str(),
+            "agent_id": self.agent_id.as_str(),
+            "previous_max_per_transaction": previous_cap.to_string(),
+            "max_per_transaction": self.max_per_transaction.to_string()
+        }));
     }
 
     /// The agent can propose a discretionary payment, but cannot move funds.
@@ -332,10 +409,17 @@ impl Veltron {
         self.pending.insert(&id, &PendingTransfer {
             id,
             amount: amount.0,
-            kind: PendingKind::DiscretionaryRequest { recipient_id: recipient_id.clone(), memo },
+            kind: PendingKind::DiscretionaryRequest { recipient_id: recipient_id.clone(), memo: memo.clone() },
             created_at_ns: env::block_timestamp(),
         });
         env::log_str(&format!("VELTRON_PAYMENT_REQUESTED id={} amount={} recipient={}", id, amount.0, recipient_id));
+        emit_event("payment_requested", json!({
+            "request_id": id.to_string(),
+            "recipient_id": recipient_id.as_str(),
+            "amount": amount.0.to_string(),
+            "memo": memo,
+            "created_at_ns": env::block_timestamp().to_string()
+        }));
         U64(id)
     }
 
@@ -351,6 +435,13 @@ impl Veltron {
         };
         self.pending.remove(&request_id.0);
         env::log_str(&format!("VELTRON_PAYMENT_APPROVED id={}", request_id.0));
+        let transfer_id = self.next_transfer_id;
+        emit_event("payment_approved", json!({
+            "request_id": request_id.0.to_string(),
+            "transfer_id": transfer_id.to_string(),
+            "recipient_id": recipient_id.as_str(),
+            "amount": request.amount.to_string()
+        }));
         self.start_transfer(request.amount, PendingKind::Discretionary { recipient_id, memo })
     }
 
@@ -359,10 +450,20 @@ impl Veltron {
         self.assert_owner();
         let request = self.pending.get(&request_id.0)
             .unwrap_or_else(|| env::panic_str("Payment request not found"));
-        require!(matches!(request.kind, PendingKind::DiscretionaryRequest { .. }),
+        require!(matches!(&request.kind, PendingKind::DiscretionaryRequest { .. }),
             "Pending item is not an approval request");
         self.pending.remove(&request_id.0);
         env::log_str(&format!("VELTRON_PAYMENT_REJECTED id={}", request_id.0));
+        let (recipient_id, memo) = match &request.kind {
+            PendingKind::DiscretionaryRequest { recipient_id, memo } => (recipient_id, memo),
+            _ => unreachable!("request kind was validated above"),
+        };
+        emit_event("payment_rejected", json!({
+            "request_id": request_id.0.to_string(),
+            "recipient_id": recipient_id.as_str(),
+            "amount": request.amount.to_string(),
+            "memo": memo
+        }));
     }
 
     /// Owner settles an existing obligation to its pre-committed recipient.
@@ -425,6 +526,9 @@ impl Veltron {
         require!(!self.balance_audit_pending, "A token balance audit is already pending");
         require!(!self.has_in_flight_transfers(), "Cannot audit while transfers are pending");
         self.balance_audit_pending = true;
+        emit_event("balance_audit_requested", json!({
+            "token_id": self.token_id.as_str()
+        }));
         ext_ft::ext(self.token_id.clone())
             .with_static_gas(BALANCE_QUERY_GAS)
             .ft_balance_of(env::current_account_id())
@@ -467,6 +571,12 @@ impl Veltron {
         self.invalidate_balance_audit();
         self.assert_solvent();
         env::log_str(&format!("VELTRON_SURPLUS_RECONCILED:{}", amount.0));
+        emit_event("surplus_reconciled", json!({
+            "amount": amount.0.to_string(),
+            "observed_token_balance": observed_balance.to_string(),
+            "ledger_balance_before": observed_ledger.to_string(),
+            "ledger_balance_after": self.treasury_balance.to_string()
+        }));
     }
 
     #[private]
@@ -481,9 +591,17 @@ impl Veltron {
                 self.ledger_balance_at_observation = Some(self.treasury_balance);
                 self.balance_observed_at_ns = Some(env::block_timestamp());
                 env::log_str("VELTRON_TOKEN_BALANCE_AUDIT: completed");
+                emit_event("balance_audit_completed", json!({
+                    "observed_token_balance": actual_balance.0.to_string(),
+                    "ledger_balance": self.treasury_balance.to_string(),
+                    "observed_at_ns": env::block_timestamp().to_string()
+                }));
             }
             Err(_) => {
                 env::log_str("VELTRON_TOKEN_BALANCE_AUDIT: failed");
+                emit_event("balance_audit_failed", json!({
+                    "ledger_balance": self.treasury_balance.to_string()
+                }));
             }
         }
     }
@@ -561,25 +679,51 @@ impl Veltron {
         let transfer = self.pending.remove(&transfer_id)
             .unwrap_or_else(|| env::panic_str("Pending transfer not found"));
 
+        let (recipient_id, transfer_kind, commitment_id) = match &transfer.kind {
+            PendingKind::Discretionary { recipient_id, .. } => (recipient_id.clone(), "discretionary", None),
+            PendingKind::CommitmentSettlement { commitment_id } => {
+                let recipient = self.commitments.get(commitment_id)
+                    .map(|commitment| commitment.recipient_id)
+                    .unwrap_or_else(|| env::panic_str("Commitment missing during settlement callback"));
+                (recipient, "commitment_settlement", Some(commitment_id.clone()))
+            }
+            PendingKind::DiscretionaryRequest { recipient_id, .. } => (recipient_id.clone(), "discretionary_request", None),
+        };
         match result {
             Ok(()) => {
                 require!(self.treasury_balance >= transfer.amount, "Treasury accounting underflow");
                 self.treasury_balance -= transfer.amount;
-                if let PendingKind::CommitmentSettlement { commitment_id } = transfer.kind {
-                    let settled = self.commitments.remove(&commitment_id)
+                if let PendingKind::CommitmentSettlement { commitment_id } = &transfer.kind {
+                    let settled = self.commitments.remove(commitment_id)
                         .unwrap_or_else(|| env::panic_str("Commitment not found during settlement callback"));
-                    require!(self.commitment_ids.remove(&commitment_id), "Commitment index entry not found during settlement");
+                    require!(self.commitment_ids.remove(commitment_id), "Commitment index entry not found during settlement");
                     self.active_commitments_total = self.active_commitments_total.checked_sub(settled.amount)
                         .unwrap_or_else(|| env::panic_str("Commitment total underflow"));
-                    self.settlement_pending.remove(&commitment_id);
+                    self.settlement_pending.remove(commitment_id);
                 }
                 env::log_str(&format!("VELTRON_TRANSFER_SUCCESS:{}", transfer_id));
+                emit_event("transfer_succeeded", json!({
+                    "transfer_id": transfer_id.to_string(),
+                    "recipient_id": recipient_id.as_str(),
+                    "amount": transfer.amount.to_string(),
+                    "kind": transfer_kind,
+                    "commitment_id": commitment_id,
+                    "ledger_balance_after": self.treasury_balance.to_string()
+                }));
             }
             Err(_) => {
-                if let PendingKind::CommitmentSettlement { commitment_id } = transfer.kind {
-                    self.settlement_pending.remove(&commitment_id);
+                if let PendingKind::CommitmentSettlement { commitment_id } = &transfer.kind {
+                    self.settlement_pending.remove(commitment_id);
                 }
                 env::log_str(&format!("VELTRON_TRANSFER_FAILED:{}", transfer_id));
+                emit_event("transfer_failed", json!({
+                    "transfer_id": transfer_id.to_string(),
+                    "recipient_id": recipient_id.as_str(),
+                    "amount": transfer.amount.to_string(),
+                    "kind": transfer_kind,
+                    "commitment_id": commitment_id,
+                    "ledger_balance": self.treasury_balance.to_string()
+                }));
             }
         }
     }
@@ -675,6 +819,17 @@ impl Veltron {
             "VELTRON_TRANSFER_STARTED id={} amount={} recipient={} kind={}",
             id, amount, recipient_id, transfer_kind
         ));
+        let commitment_id = match &self.pending.get(&id).expect("new pending transfer exists").kind {
+            PendingKind::CommitmentSettlement { commitment_id } => Some(commitment_id.clone()),
+            _ => None,
+        };
+        emit_event("transfer_started", json!({
+            "transfer_id": id.to_string(),
+            "amount": amount.to_string(),
+            "recipient_id": recipient_id.as_str(),
+            "kind": transfer_kind,
+            "commitment_id": commitment_id
+        }));
         ext_ft::ext(self.token_id.clone())
             .with_attached_deposit(NearToken::from_yoctonear(1))
             .with_static_gas(FT_TRANSFER_GAS)
@@ -710,7 +865,49 @@ mod tests {
         )
     }
 
+    fn emitted_events() -> Vec<serde_json::Value> {
+        get_logs().into_iter()
+            .filter(|log| log.starts_with("EVENT_JSON:"))
+            .map(|log| serde_json::from_str(&log["EVENT_JSON:".len()..]).expect("valid NEP-297 event JSON"))
+            .collect()
+    }
 
+    fn has_event(events: &[serde_json::Value], name: &str) -> bool {
+        events.iter().any(|event| event["standard"] == "veltron"
+            && event["version"] == "1.0.0"
+            && event["event"] == name
+            && event["data"].as_array().is_some_and(|data| data.len() == 1))
+    }
+
+
+
+    #[test]
+    fn initialization_emits_the_initial_treasury_configuration() {
+        let mut builder = VMContextBuilder::new();
+        builder.current_account_id(account("treasury.near"));
+        builder.predecessor_account_id(account("deployer.near"));
+        testing_env!(builder.build());
+        let _ = Veltron::new(
+            account("owner.near"),
+            account("token.near"),
+            account("agent.near"),
+            U128(500),
+            U128(100),
+        );
+        let events = emitted_events();
+        let event = events.iter().find(|event| event["event"] == "treasury_initialized")
+            .expect("initialization event should be emitted");
+        let data = &event["data"][0];
+        assert_eq!(data["treasury_id"], "treasury.near");
+        assert_eq!(data["owner_id"], "owner.near");
+        assert_eq!(data["token_id"], "token.near");
+        assert_eq!(data["agent_id"], "agent.near");
+        assert_eq!(data["max_per_transaction"], "500");
+        assert_eq!(data["safety_reserve"], "100");
+        assert_eq!(data["treasury_balance"], "0");
+        assert_eq!(data["paused"], false);
+        assert_eq!(data["actor_id"], "deployer.near");
+    }
 
     #[test]
     #[should_panic(expected = "Owner and agent must differ")]
@@ -985,15 +1182,21 @@ mod tests {
     fn rejects_commitments_beyond_active_limit() {
         let mut contract = setup("owner.near");
         contract.treasury_balance = 1_000_000;
+        // Seed the bounded collection directly: separate NEAR calls have
+        // separate receipt log budgets, while this unit test shares one mock
+        // receipt and would otherwise accumulate every emitted audit event.
         for index in 0..MAX_COMMITMENTS {
             let id = format!("commitment-{index:03}");
-            contract.create_commitment(
-                id,
-                account("vendor.near"),
-                U128(1),
-                "Bounded commitment".to_string(),
-            );
+            let commitment = Commitment {
+                id: id.clone(),
+                recipient_id: account("vendor.near"),
+                amount: 1,
+                description: "Bounded commitment".to_string(),
+            };
+            contract.commitments.insert(&id, &commitment);
+            contract.commitment_ids.insert(&id);
         }
+        contract.active_commitments_total = MAX_COMMITMENTS as u128;
         contract.create_commitment(
             "one-too-many".to_string(),
             account("vendor.near"),
@@ -2226,6 +2429,109 @@ mod tests {
         assert_eq!(final_position.spendable_balance.0, 200);
         assert!(contract.get_commitments(None, None).commitments.is_empty());
         assert!(contract.get_pending_transfers().is_empty());
+    }
+
+
+    #[test]
+    fn emits_structured_events_for_owner_configuration_and_commitment_changes() {
+        let mut contract = setup("owner.near");
+        contract.treasury_balance = 1_000;
+        contract.create_commitment(
+            "invoice-42".to_string(),
+            account("vendor.near"),
+            U128(100),
+            "Monthly hosting".to_string(),
+        );
+        contract.update_commitment(
+            "invoice-42".to_string(),
+            account("vendor-two.near"),
+            U128(150),
+            "Updated hosting invoice".to_string(),
+        );
+        contract.cancel_commitment("invoice-42".to_string());
+        contract.set_safety_reserve(U128(125));
+        contract.set_agent(account("replacement-agent.near"), U128(750));
+        contract.set_paused(true);
+
+        let events = emitted_events();
+        for name in [
+            "commitment_created",
+            "commitment_updated",
+            "commitment_cancelled",
+            "safety_reserve_updated",
+            "agent_configuration_updated",
+            "pause_status_changed",
+        ] {
+            assert!(has_event(&events, name), "missing structured event: {name}");
+        }
+        let created = events.iter().find(|event| event["event"] == "commitment_created").unwrap();
+        assert_eq!(created["data"][0]["commitment_id"], "invoice-42");
+        assert_eq!(created["data"][0]["amount"], "100");
+        assert_eq!(created["data"][0]["actor_id"], "owner.near");
+        assert!(created["data"][0]["timestamp_ns"].as_str().is_some());
+    }
+
+    #[test]
+    fn emits_structured_payment_request_and_rejection_events() {
+        let mut contract = setup("agent.near");
+        contract.treasury_balance = 1_000;
+        let request_id = contract.request_payment(
+            account("vendor.near"),
+            U128(100),
+            Some("Approved vendor invoice".to_string()),
+        );
+        let requested = emitted_events();
+        assert!(has_event(&requested, "payment_requested"));
+        let payment_requested = requested.iter().find(|event| event["event"] == "payment_requested").unwrap();
+        assert_eq!(payment_requested["data"][0]["request_id"], request_id.0.to_string());
+        assert_eq!(payment_requested["data"][0]["amount"], "100");
+
+        let mut owner_context = VMContextBuilder::new();
+        owner_context.predecessor_account_id(account("owner.near"));
+        testing_env!(owner_context.build());
+        contract.reject_payment(request_id);
+        let rejected = emitted_events();
+        assert!(has_event(&rejected, "payment_rejected"));
+        let payment_rejected = rejected.iter().find(|event| event["event"] == "payment_rejected").unwrap();
+        assert_eq!(payment_rejected["data"][0]["request_id"], request_id.0.to_string());
+    }
+
+    #[test]
+    fn emits_transfer_started_and_failed_events_without_losing_failed_obligation() {
+        let mut contract = setup("owner.near");
+        contract.treasury_balance = 1_000;
+        contract.create_commitment(
+            "failed-invoice".to_string(),
+            account("vendor.near"),
+            U128(200),
+            "Retryable invoice".to_string(),
+        );
+        let _ = contract.settle_commitment("failed-invoice".to_string());
+        let started = emitted_events();
+        assert!(has_event(&started, "transfer_started"));
+        assert_eq!(started.last().unwrap()["data"][0]["kind"], "commitment_settlement");
+
+        callback_context();
+        contract.on_transfer_complete(0, Err(PromiseError::Failed));
+        let failed = emitted_events();
+        assert!(has_event(&failed, "transfer_failed"));
+        assert_eq!(failed.last().unwrap()["data"][0]["transfer_id"], "0");
+        assert_eq!(failed.last().unwrap()["data"][0]["amount"], "200");
+        assert_eq!(contract.get_commitments(None, None).commitments.len(), 1);
+    }
+
+    #[test]
+    fn emits_deposit_credit_event_with_token_and_sender_provenance() {
+        let mut contract = setup("owner.near");
+        let mut token_context = VMContextBuilder::new();
+        token_context.predecessor_account_id(account("token.near"));
+        testing_env!(token_context.build());
+        let _ = contract.ft_on_transfer(account("depositor.near"), U128(75), String::new());
+        let events = emitted_events();
+        assert!(has_event(&events, "deposit_credited"));
+        assert_eq!(events[0]["data"][0]["sender_id"], "depositor.near");
+        assert_eq!(events[0]["data"][0]["token_id"], "token.near");
+        assert_eq!(events[0]["data"][0]["amount"], "75");
     }
 
 }
