@@ -344,6 +344,8 @@ export async function runFinalizedIndexer(env, fetchImpl = fetch) {
     indexed_through: lastHeight,
     finalized_head: headHeight,
     coverage_start_height: coverageStartHeight,
+    configured_start_height: Number(env.START_BLOCK_HEIGHT),
+    coverage_start_matches_config: coverageStartHeight === Number(env.START_BLOCK_HEIGHT),
     history_complete: historyComplete,
     account_transactions: accountRows.length
   };
