@@ -96,6 +96,10 @@ async function getEvents(request, env) {
         block_timestamp_ns: watermark.block_timestamp_ns
       } : null,
       coverage_start_height: watermark && watermark.coverage_start_height > 0 ? watermark.coverage_start_height : null,
+      configured_start_height: Number.isSafeInteger(Number(env.START_BLOCK_HEIGHT)) ? Number(env.START_BLOCK_HEIGHT) : null,
+      coverage_start_matches_config: Boolean(watermark && watermark.coverage_start_height > 0 &&
+        Number.isSafeInteger(Number(env.START_BLOCK_HEIGHT)) &&
+        watermark.coverage_start_height === Number(env.START_BLOCK_HEIGHT)),
       finalized_head_height: watermark && watermark.finalized_head_height > 0 ? watermark.finalized_head_height : null,
       history_complete: Boolean(watermark && watermark.history_complete === 1 && watermark.coverage_start_height > 0),
       coverage: watermark && watermark.history_complete === 1 && watermark.coverage_start_height > 0
@@ -104,9 +108,9 @@ async function getEvents(request, env) {
           ? "partial_or_unknown"
           : "awaiting_coverage_start",
       note: watermark && watermark.history_complete === 1 && watermark.coverage_start_height > 0
-        ? "All finalized blocks from the configured coverage start block through the recorded finalized head have been scanned. Earlier blocks are outside this coverage window."
+        ? "All finalized blocks from the recorded coverage start block through the recorded finalized head have been scanned. Earlier blocks are outside this coverage window."
         : watermark && watermark.coverage_start_height > 0
-          ? "Backfill is in progress from the configured coverage start block through the recorded finalized head."
+          ? "Backfill is in progress from the recorded coverage start block through the recorded finalized head."
           : "Awaiting the event-emitting treasury release block. The scheduled scan remains paused until its exact finalized block is configured."
     }
   }, 200, PUBLIC_CORS_HEADERS);

@@ -272,6 +272,8 @@ test("scheduled collector ingests indexed receipt events and bulk finalized head
     indexed_through: 100,
     finalized_head: 100,
     coverage_start_height: 100,
+    configured_start_height: 100,
+    coverage_start_matches_config: true,
     history_complete: true,
     account_transactions: 1
   });
