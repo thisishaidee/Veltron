@@ -102,6 +102,20 @@ async function getEvents(request, env) {
   }, 200, PUBLIC_CORS_HEADERS);
 }
 
+async function triggerIndexer(request, env) {
+  const token = env.INDEXER_TRIGGER_TOKEN;
+  if (request.method !== "POST" || !token || request.headers.get("authorization") !== "Bearer " + token) {
+    return jsonResponse({ error: "Not found" }, 404);
+  }
+  try {
+    const result = await runFinalizedIndexer(env);
+    return jsonResponse({ ok: true, ...result }, 200);
+  } catch (error) {
+    console.error(JSON.stringify({ event: "audit_indexer_manual_run_failed", message: String(error.message || error) }));
+    return jsonResponse({ error: "Indexer run failed" }, 502);
+  }
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -115,6 +129,7 @@ export default {
       try { return await getEvents(request, env); }
       catch { return jsonResponse({ error: "Unable to query audit history" }, 500, PUBLIC_CORS_HEADERS); }
     }
+    if (url.pathname === "/internal/run-indexer") return await triggerIndexer(request, env);
     return jsonResponse({ error: "Not found" }, 404);
   },
   async scheduled(_controller, env, ctx) {
