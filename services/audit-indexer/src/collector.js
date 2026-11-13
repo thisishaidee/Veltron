@@ -1,3 +1,5 @@
+import { ingestBlock } from "./storage.js";
+
 const NETWORKS = {
   testnet: "https://testnet.neardata.xyz",
   mainnet: "https://mainnet.neardata.xyz"
