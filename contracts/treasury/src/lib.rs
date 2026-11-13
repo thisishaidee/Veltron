@@ -568,7 +568,7 @@ impl Veltron {
     /// Audits and reconciliation only need to wait for actual outgoing transfers.
     fn has_in_flight_transfers(&self) -> bool {
         self.pending.iter().any(|(_, pending)| matches!(
-            pending.kind,
+            &pending.kind,
             PendingKind::Discretionary { .. } | PendingKind::CommitmentSettlement { .. }
         ))
     }
@@ -1810,16 +1810,38 @@ mod tests {
     }
 
     #[test]
-    fn outgoing_transfer_invalidates_previous_balance_audit() {
+    fn queued_payment_request_preserves_balance_audit_and_does_not_block_audit() {
         let mut contract = setup("agent.near");
         contract.treasury_balance = 1_000;
         contract.observed_token_balance = Some(1_000);
         contract.ledger_balance_at_observation = Some(1_000);
         contract.balance_observed_at_ns = Some(123);
+
         contract.request_payment(account("vendor.near"), U128(100), None);
+
+        assert_eq!(contract.observed_token_balance, Some(1_000));
+        assert_eq!(contract.ledger_balance_at_observation, Some(1_000));
+        assert_eq!(contract.balance_observed_at_ns, Some(123));
+        assert!(!contract.has_in_flight_transfers());
+    }
+
+    #[test]
+    fn starting_actual_transfer_invalidates_previous_balance_audit() {
+        let mut contract = setup("owner.near");
+        contract.treasury_balance = 1_000;
+        contract.observed_token_balance = Some(1_000);
+        contract.ledger_balance_at_observation = Some(1_000);
+        contract.balance_observed_at_ns = Some(123);
+
+        contract.start_transfer(100, PendingKind::Discretionary {
+            recipient_id: account("vendor.near"),
+            memo: None,
+        });
+
         assert_eq!(contract.observed_token_balance, None);
         assert_eq!(contract.ledger_balance_at_observation, None);
         assert_eq!(contract.balance_observed_at_ns, None);
+        assert!(contract.has_in_flight_transfers());
     }
 
 
