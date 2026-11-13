@@ -8,55 +8,20 @@ const PUBLIC_CORS_HEADERS = {
   "access-control-max-age": "86400"
 };
 
+function jsonResponse(body, status = 200, headers = {}) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...headers }
+  });
+}
+
 function isSafeInteger(value) {
   return Number.isSafeInteger(value) && value >= 0;
 }
 
-function requiredString(value, name, max = 512) {
-  if (typeof value !== "string" || value.length === 0 || value.length > max) {
-    throw new Error(name + " must be a non-empty string of at most " + max + " characters");
-  }
-  return value;
-}
-
-function validateEvent(input, block, expectedContract) {
-  if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error("Each event must be an object");
-  if (!isSafeInteger(input.log_index)) throw new Error("log_index must be a non-negative safe integer");
-  const receiptId = requiredString(input.receipt_id, "receipt_id");
-  const transactionHash = requiredString(input.transaction_hash, "transaction_hash");
-  if (!isSafeInteger(input.receipt_index)) throw new Error("receipt_index must be a non-negative safe integer");
-  if (!["SUCCESS_VALUE", "SUCCESS_RECEIPT_ID", "FAILURE", "UNKNOWN"].includes(input.receipt_status)) {
-    throw new Error("receipt_status must preserve the normalized NEAR execution outcome status");
-  }
-  if (!input.envelope || input.envelope.standard !== "veltron" || input.envelope.version !== "1.0.0") {
-    throw new Error("Unsupported VELTRON event standard or version");
-  }
-  if (!EVENT_NAMES.has(input.envelope.event)) throw new Error("Unknown VELTRON event type");
-  if (!Array.isArray(input.envelope.data) || input.envelope.data.length !== 1) {
-    throw new Error("Event data must contain exactly one object");
-  }
-  const data = input.envelope.data[0];
-  if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("Event data item must be an object");
-  const actorId = requiredString(data.actor_id, "actor_id", 128);
-  const eventTimestamp = requiredString(data.timestamp_ns, "timestamp_ns", 40);
-  if (!/^\d+$/.test(eventTimestamp)) throw new Error("timestamp_ns must be a decimal integer string");
-  if (block.contract_id !== expectedContract) throw new Error("Unexpected contract_id");
-  return {
-    receiptId, transactionHash, actorId, eventTimestamp,
-    eventType: input.envelope.event,
-    eventVersion: input.envelope.version,
-    transferId: data.transfer_id == null ? null : String(data.transfer_id),
-    commitmentId: data.commitment_id == null ? null : String(data.commitment_id),
-    payload: JSON.stringify(input.envelope),
-    receiptIndex: input.receipt_index,
-    logIndex: input.log_index,
-    receiptStatus: input.receipt_status
-  };
-}
-
 function encodeCursor(row) {
   const raw = JSON.stringify([row.block_height, row.receipt_index, row.log_index]);
-  return btoa(raw).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+  return btoa(raw).replace(/\\+/g, "-").replace(/\\//g, "_").replace(/=+$/g, "");
 }
 
 function decodeCursor(value) {
