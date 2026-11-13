@@ -1,16 +1,16 @@
 import { ingestBlock } from "./storage.js";
 
 const NETWORKS = {
-  testnet: { data: "https://testnet.neardata.xyz", rpc: "https://rpc.testnet.near.org" },
-  mainnet: { data: "https://mainnet.neardata.xyz", rpc: "https://rpc.mainnet.near.org" }
+  testnet: { data: "https://testnet.neardata.xyz", rpc: ["https://rpc.testnet.fastnear.com", "https://near-testnet.drpc.org", "https://rpc.testnet.near.org"] },
+  mainnet: { data: "https://mainnet.neardata.xyz", rpc: ["https://rpc.mainnet.fastnear.com", "https://near.drpc.org", "https://rpc.mainnet.near.org"] }
 };
 const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
 
-async function fetchJsonWithRetry(url, init, fetchImpl, label) {
-  for (let attempt = 0; attempt < 4; attempt++) {
+async function fetchJsonWithRetry(url, init, fetchImpl, label, maxAttempts = 4) {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const response = await fetchImpl(url, init);
     if (response.ok) return await response.json();
-    if (!RETRYABLE_STATUSES.has(response.status) || attempt === 3) {
+    if (!RETRYABLE_STATUSES.has(response.status) || attempt === maxAttempts - 1) {
       throw new Error(label + " returned HTTP " + response.status);
     }
     await new Promise((resolve) => setTimeout(resolve, 250 * (2 ** attempt)));
