@@ -34,7 +34,7 @@ The ingestion body has this shape:
     "transaction_hash": "transaction hash",
     "receipt_index": 0,
     "log_index": 0,
-    "receipt_status": "SUCCESSFUL",
+    "receipt_status": "SUCCESS_VALUE",
     "envelope": {
       "standard": "veltron",
       "version": "1.0.0",
@@ -45,7 +45,7 @@ The ingestion body has this shape:
 }
 ```
 
-The upstream collector must only mark a block finalized after the chosen NEAR archival source's finality guarantees are satisfied. It must include all receipts and event logs for the configured treasury, including NEP-141 transfer-call receipts that invoke `ft_on_transfer`. Preserve transaction hash, receipt ID, receipt index, log index, outcome status, block hash and block timestamp exactly as returned by the source.
+The upstream collector must normalize NEAR execution statuses to `SUCCESS_VALUE`, `SUCCESS_RECEIPT_ID`, `FAILURE` or `UNKNOWN`, and only mark a block finalized after the chosen NEAR archival source's finality guarantees are satisfied. It must include all receipts and event logs for the configured treasury, including NEP-141 transfer-call receipts that invoke `ft_on_transfer`. Preserve transaction hash, receipt ID, receipt index, log index, outcome status, block hash and block timestamp exactly as returned by the source.
 
 ## Local validation
 
