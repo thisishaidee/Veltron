@@ -30,5 +30,5 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ce0ffaff7491ff502fa23f17606a138a
-          workingDirectory: services/audit-indexer
-          command: deploy
+          wranglerVersion: "4.161.0"
+          command: deploy --config services/audit-indexer/wrangler.jsonc
