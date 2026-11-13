@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ingestBlock } from "../src/storage.js";
+import { ingestBlock, ingestBlocks } from "../src/storage.js";
 import { extractContractEvents, runFinalizedIndexer } from "../src/collector.js";
 
 const config = { network: "testnet", contractId: "veltron-treasury.testnet" };
@@ -57,6 +57,37 @@ test("stores a finalized VELTRON event and advances the cursor atomically", asyn
   assert.match(db.statements[0].sql, /INSERT OR IGNORE INTO audit_events/);
   assert.match(db.statements[1].sql, /INSERT INTO indexer_cursors/);
   assert.equal(db.statements[0].args[15], null);
+});
+
+test("ingests a contiguous finalized block range with one durable cursor update", async () => {
+  const db = fakeDb();
+  const second = {
+    ...block,
+    block_height: 121,
+    block_hash: "block-hash-121",
+    prev_block_hash: block.block_hash,
+    block_timestamp_ns: "123456790",
+    finalized_head_height: 121,
+    events: []
+  };
+  const result = await ingestBlocks(db, config, [block, second]);
+  assert.deepEqual(result, { accepted: 1, block_height: 121, history_complete: true });
+  assert.equal(db.statements.filter((statement) => /INSERT OR IGNORE INTO audit_events/.test(statement.sql)).length, 1);
+  assert.equal(db.statements.filter((statement) => /INSERT INTO indexer_cursors/.test(statement.sql)).length, 1);
+  assert.equal(db.statements.at(-1).args[2], 121);
+});
+
+test("rejects a gap in a finalized block batch before writing any rows", async () => {
+  const db = fakeDb();
+  const gap = {
+    ...block,
+    block_height: 122,
+    block_hash: "block-hash-122",
+    prev_block_hash: block.block_hash,
+    events: []
+  };
+  await assert.rejects(() => ingestBlocks(db, config, [block, gap]), /Block gap or unexpected height/);
+  assert.equal(db.statements.length, 0);
 });
 
 test("rejects unfinalized blocks", async () => {
