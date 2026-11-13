@@ -9,10 +9,10 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 near-sdk = { version = "5.30.0", features = ["legacy"] }
+serde_json = "1"
 
 [dev-dependencies]
 near-sdk = { version = "5.30.0", features = ["legacy", "unit-testing"] }
 near-workspaces = "0.24.0"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
-serde_json = "1"
 anyhow = "1"
