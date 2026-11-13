@@ -141,7 +141,10 @@ test("paginates account history and deduplicates transaction hashes before batch
     }
     if (url.endsWith("/v0/transactions")) {
       requestedHashes = JSON.parse(init.body).tx_hashes;
-      return Response.json({ transactions: [] });
+      return Response.json({ transactions: [
+        { transaction: { hash: "tx-a" }, receipts: [] },
+        { transaction: { hash: "tx-b" }, receipts: [] }
+      ] });
     }
     if (url.endsWith("/v0/blocks")) {
       return Response.json({ blocks: [{
