@@ -139,6 +139,9 @@ function setActionButtons() {
   $("pause").disabled = !ready || snapshot?.paused === true;
   $("resume").disabled = !ready || snapshot?.paused !== true;
   $("reconcile").disabled = !ready || !reconciliationReady();
+  for (const button of $("commitments").querySelectorAll("button[data-settlement]")) {
+    button.disabled = !ready || button.dataset.settlementPending === "true" || snapshot?.paused === true;
+  }
 }
 function reconciliationReady() {
   if (!snapshot || snapshot.audit.audit_pending || snapshot.pending.length !== 0) return false;
@@ -190,6 +193,8 @@ function renderCommitments(items) {
     details.textContent = formatVtt(raw(item.amount, "commitment amount")) + " · " + item.recipient_id + (item.settlement_pending ? " · SETTLEMENT PENDING" : "");
     const action = document.createElement("button"); action.className = "secondary";
     action.textContent = item.settlement_pending ? "Settlement pending" : "Review settlement";
+    action.dataset.settlement = "true";
+    action.dataset.settlementPending = String(item.settlement_pending === true);
     action.disabled = !readiness() || item.settlement_pending || snapshot.paused;
     action.addEventListener("click", () => settle(item));
     row.append(title, details, action); root.append(row);
