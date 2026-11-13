@@ -382,6 +382,38 @@ impl Veltron {
         )
     }
 
+    /// Owner settles only if the commitment still matches the exact values
+    /// reviewed by the caller. This prevents a stale dashboard confirmation
+    /// from silently paying a changed amount or recipient.
+    pub fn settle_commitment_checked(
+        &mut self,
+        id: String,
+        expected_recipient_id: AccountId,
+        expected_amount: U128,
+    ) -> Promise {
+        self.assert_owner();
+        require!(!self.paused, "Treasury is paused");
+        require!(!self.settlement_pending.get(&id).unwrap_or(false),
+            "Settlement already pending");
+        let commitment = self.commitments.get(&id)
+            .unwrap_or_else(|| env::panic_str("Commitment not found"))
+            .clone();
+        require!(
+            commitment.recipient_id == expected_recipient_id,
+            "Commitment recipient changed; refresh before settlement"
+        );
+        require!(
+            commitment.amount == expected_amount.0,
+            "Commitment amount changed; refresh before settlement"
+        );
+        require!(commitment.amount <= self.treasury_balance, "Treasury balance is insufficient");
+        self.settlement_pending.insert(&id, &true);
+        self.start_transfer(
+            commitment.amount,
+            PendingKind::CommitmentSettlement { commitment_id: id },
+        )
+    }
+
     pub fn get_financial_position(&self) -> FinancialPosition {
         self.calculate_position()
     }
@@ -1467,6 +1499,42 @@ mod tests {
         assert_eq!(contract.get_financial_position().treasury_balance.0, 800);
         assert_eq!(contract.get_financial_position().active_commitments.0, 0);
         assert!(contract.get_pending_transfers().is_empty());
+    }
+
+    #[test]
+    #[should_panic(expected = "Commitment amount changed; refresh before settlement")]
+    fn guarded_commitment_settlement_rejects_a_stale_amount() {
+        let mut contract = setup("owner.near");
+        contract.treasury_balance = 1_000;
+        contract.create_commitment(
+            "guarded-invoice".to_string(),
+            account("vendor.near"),
+            U128(200),
+            "Vendor invoice".to_string(),
+        );
+        let _ = contract.settle_commitment_checked(
+            "guarded-invoice".to_string(),
+            account("vendor.near"),
+            U128(201),
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "Commitment recipient changed; refresh before settlement")]
+    fn guarded_commitment_settlement_rejects_a_stale_recipient() {
+        let mut contract = setup("owner.near");
+        contract.treasury_balance = 1_000;
+        contract.create_commitment(
+            "guarded-invoice".to_string(),
+            account("vendor.near"),
+            U128(200),
+            "Vendor invoice".to_string(),
+        );
+        let _ = contract.settle_commitment_checked(
+            "guarded-invoice".to_string(),
+            account("attacker.near"),
+            U128(200),
+        );
     }
 
     #[test]

@@ -76,7 +76,7 @@ Pending discretionary transfers are subtracted separately because NEAR cross-con
 6. A private callback receives the promise result. On success, the internal treasury ledger is reduced. On failure, the pending reservation is removed and the ledger remains unchanged.
 7. Owner rejection removes the approval request and releases its reservation without calling the token contract.
 
-Commitment settlement remains a separate owner-only action: the owner starts settlement to the recipient already fixed in the commitment. The transfer callback removes a commitment only after successful token settlement.
+Commitment settlement remains a separate owner-only action. Dashboard-driven settlement must call `settle_commitment_checked` with the exact recipient and amount shown in the owner's confirmation; the contract rejects the request if either value has changed since the snapshot. The legacy `settle_commitment` entry point remains available for compatibility, but owner interfaces must not use it for a reviewed UI flow. The transfer callback removes a commitment only after successful token settlement.
 
 This two-stage flow separates agent intent from financial execution. A queued request is not a transfer; funds move only after an explicit owner approval. Requests and in-flight transfers share the existing bounded pending collection and are both included in pending discretionary accounting.
 
