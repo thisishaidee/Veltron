@@ -15,6 +15,7 @@ let snapshot;
 let busy = false;
 let generation = 0;
 const SNAPSHOT_TTL_MS = 30000;
+const AUDIT_MAX_AGE_NS = 300000000000n;
 const TIMEOUT_MS = 12000;
 
 async function rpc(endpoint, method, params) {
@@ -150,6 +151,8 @@ function reconciliationReady() {
   const observedAt = snapshot.audit.observed_at_ns;
   if (observed === null || ledgerAtObservation === null || observedAt === null) return false;
   if (ledgerAtObservation !== snapshot.position.treasury_balance) return false;
+  const auditAge = BigInt(snapshot.blockTimestampNs) - BigInt(observedAt);
+  if (auditAge < 0n || auditAge > AUDIT_MAX_AGE_NS) return false;
   return BigInt(observed) > BigInt(ledgerAtObservation);
 }
 function render(s) {
@@ -171,8 +174,9 @@ function render(s) {
   $("audit-time").textContent = s.audit.observed_at_ns ?? "—";
   if (s.audit.observed_token_balance !== null && s.audit.ledger_balance_at_observation !== null) {
     const surplus = BigInt(s.audit.observed_token_balance) - BigInt(s.audit.ledger_balance_at_observation);
+    const auditAge = s.blockTimestampNs ? BigInt(s.blockTimestampNs) - BigInt(s.audit.observed_at_ns || "0") : AUDIT_MAX_AGE_NS + 1n;
     $("surplus").textContent = surplus > 0n
-      ? "Observed surplus: " + formatVtt(surplus.toString()) + (s.audit.ledger_balance_at_observation === s.position.treasury_balance ? ". Audit ledger still matches current ledger." : ". STALE: ledger has changed since observation; refresh the balance audit.")
+      ? "Observed surplus: " + formatVtt(surplus.toString()) + (s.audit.ledger_balance_at_observation === s.position.treasury_balance && auditAge >= 0n && auditAge <= AUDIT_MAX_AGE_NS ? ". Audit ledger matches current ledger and observation is under five minutes old." : ". STALE: ledger changed or audit is older than five minutes; refresh the balance audit.")
       : "No positive token surplus was observed.";
   } else $("surplus").textContent = "No completed balance audit is available. Use the separate Balance Audit page first.";
   renderCommitments(s.commitments);
@@ -236,10 +240,11 @@ async function refresh() {
     const block = await rpc(RPCS[0], "block", { finality: "final" });
     const hash = block?.header?.hash;
     if (typeof hash !== "string" || !hash) throw new Error("Could not obtain a finalized block hash.");
+    const blockTimestampNs = raw(block?.header?.timestamp_nanosec, "finalized block timestamp");
     const [a,b] = await Promise.all(RPCS.map(endpoint => readProvider(endpoint, hash)));
     if (current !== generation) return;
     if (stable(a) !== stable(b)) throw new Error("RPC providers disagree at the same finalized block. State is withheld.");
-    snapshot = { ...a, verified: true, checkedAt: Date.now() };
+    snapshot = { ...a, blockTimestampNs, verified: true, checkedAt: Date.now() };
     render(snapshot);
     $("read-status").textContent = "VERIFIED — both providers agree at finalized block " + hash + ". Snapshot expires after 30 seconds. No transaction was sent.";
     setActionButtons();
