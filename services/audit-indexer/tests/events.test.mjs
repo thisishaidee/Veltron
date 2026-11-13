@@ -15,7 +15,7 @@ const block = {
     transaction_hash: "transaction-1",
     receipt_index: 0,
     log_index: 0,
-    receipt_status: "SUCCESSFUL",
+    receipt_status: "SUCCESS_VALUE",
     envelope: {
       standard: "veltron",
       version: "1.0.0",
@@ -89,4 +89,15 @@ test("accepts empty finalized blocks so the indexing watermark can advance", asy
   const result = await ingestBlock(db, config, { ...block, events: [], block_height: 121 });
   assert.deepEqual(result, { accepted: 0, block_height: 121 });
   assert.equal(db.statements.length, 1);
+});
+
+test("rejects cursor gaps and conflicting hashes at the current height", async () => {
+  await assert.rejects(
+    () => ingestBlock(fakeDb({ block_height: 120, block_hash: "block-hash" }), config, { ...block, block_height: 122 }),
+    /Block gap detected/
+  );
+  await assert.rejects(
+    () => ingestBlock(fakeDb({ block_height: 120, block_hash: "different-hash" }), config, block),
+    /Block hash changed/
+  );
 });
