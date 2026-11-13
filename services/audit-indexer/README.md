@@ -30,18 +30,25 @@ cd services/audit-indexer
 npm test
 ```
 
-## Provisioning (not performed by this PR)
+## Dedicated Cloudflare resources
 
-1. Create a Cloudflare D1 database named `veltron-audit-index`.
-2. Replace the placeholder `database_id` in `wrangler.jsonc` with the provisioned ID.
-3. Apply `schema.sql` using the Cloudflare D1 migration workflow.
-4. Set `START_BLOCK_HEIGHT` to a verified finalized block at or before the treasury contract deployment; never guess this value. On first run, the collector verifies the immediately preceding finalized block hash as the start anchor.
-5. Deploy the Worker and verify health, scheduled ingestion and pagination endpoints.
-6. Allow the bounded scheduled collector to catch up from `START_BLOCK_HEIGHT`; confirm sequential block hashes, receipt counts and provenance.
-7. Verify finalized block continuity, event counts and provenance before setting any UI completeness indicator.
+- D1 database: `veltron-audit-index`
+- D1 database ID: `1a2c1f9c-d6a0-48c0-829c-a8e840c9913b`
+- D1 region: `WEUR` (Amsterdam)
+- Worker: `veltron-audit-indexer`
+- Worker API: `https://veltron-audit-indexer.haideecoded-e0f.workers.dev`
+- D1 binding: `AUDIT_DB`
+- Network and contract: `testnet` / `veltron-treasury.testnet`
 
-No contract deployment, wallet signing, treasury transaction or Worker deployment is performed by this repository change.
+The existing D1 schema is created from `schema.sql`; migration `migrations/0002_coverage_metadata.sql` adds the coverage start, finalized-head and completion columns. Before enabling the cron after the treasury upgrade:
 
+1. Read the finalized block height of the code-only treasury upgrade transaction.
+2. Set `START_BLOCK_HEIGHT` to that exact block height.
+3. Delete only the old `indexer_cursors` row for `testnet / veltron-treasury.testnet` (retain all `audit_events`).
+4. Re-enable the one-minute cron and verify the cursor reaches the finalized head.
+5. Confirm the API reports `history_complete: true` and the exact coverage start height.
+
+The scheduled scan is intentionally paused until this release boundary is established. The dashboard and history page must not label coverage complete before the cursor reaches the finalized head.
 
 ## Protected manual recovery trigger
 
