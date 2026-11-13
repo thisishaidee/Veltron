@@ -1,0 +1,25 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "veltron-audit-indexer",
+  "main": "src/index.js",
+  "compatibility_date": "2026-11-13",
+  "workers_dev": true,
+  "triggers": { "crons": ["* * * * *"] },
+  "observability": {
+    "enabled": true,
+    "traces": { "enabled": true }
+  },
+  "d1_databases": [
+    {
+      "binding": "AUDIT_DB",
+      "database_name": "veltron-audit-index",
+      "database_id": "REPLACE_WITH_PROVISIONED_D1_DATABASE_ID"
+    }
+  ],
+  "vars": {
+    "NETWORK": "testnet",
+    "TREASURY_ACCOUNT": "veltron-treasury.testnet",
+    "START_BLOCK_HEIGHT": "REQUIRED_AFTER_CONTRACT_DEPLOYMENT",
+    "MAX_BLOCKS_PER_TICK": "10"
+  }
+}
