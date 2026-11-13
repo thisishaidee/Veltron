@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#10151d">
+  <title>VELTRON Treasury</title>
+  <style>
+    :root{color-scheme:dark;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#10151d;color:#edf2f7}
+    *{box-sizing:border-box}
+    body{margin:0;background:radial-gradient(circle at 85% 0%,#1b2b3b 0,transparent 34rem),#10151d;min-height:100vh}
+    main{width:min(1120px,100%);margin:auto;padding:28px 18px 56px}
+    header{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:26px}
+    .brand{font-size:13px;letter-spacing:.2em;font-weight:800;color:#8fe3c0}
+    h1{font-size:clamp(27px,5vw,42px);letter-spacing:-.04em;margin:8px 0}
+    p{color:#aab7c5;line-height:1.55}
+    .status{border:1px solid #334455;border-radius:999px;padding:8px 12px;font-size:12px;color:#b7c7d8}
+    .notice{border:1px solid #38536a;background:#172432;border-radius:14px;padding:14px 16px;margin:18px 0;color:#c8d7e5;font-size:13px;line-height:1.55}
+    .notice strong{color:#fff}
+    .grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin:22px 0}
+    .panel,.metric{background:#171f2a;border:1px solid #2a3949;border-radius:16px;padding:16px;min-width:0}
+    .metric span{display:block;color:#9aabba;font-size:12px;margin-bottom:10px}
+    .metric strong{font-size:clamp(18px,2.5vw,25px);overflow-wrap:anywhere}
+    .section-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+    h2{font-size:17px;margin:0}
+    .panel{margin-top:14px}
+    .muted{color:#93a3b4;font-size:12px}
+    .table-wrap{overflow-x:auto}
+    table{width:100%;border-collapse:collapse;font-size:13px;min-width:560px}
+    th,td{text-align:left;padding:11px 9px;border-bottom:1px solid #2b3745;vertical-align:top}
+    th{color:#9aabba;font-weight:600}
+    td{color:#e1e8ef}
+    button{border:1px solid #46657a;background:#203647;color:#eaf6ff;padding:10px 14px;border-radius:10px;font-weight:650;cursor:pointer}
+    button:disabled{opacity:.55;cursor:wait}
+    .empty{padding:20px 8px;color:#aab7c5;text-align:center;font-size:13px}
+    .good{color:#8fe3c0}.warn{color:#ffd18a}.bad{color:#ff9b9b}
+    code{color:#b8d7ed;overflow-wrap:anywhere}
+    .quick-links{display:flex;gap:10px;flex-wrap:wrap;margin:-8px 0 18px}
+    .quick-links a,.panel-link{display:inline-block;color:#b8d7ed;text-decoration:none;border:1px solid #38536a;border-radius:10px;padding:9px 12px;font-size:12px}
+    .quick-links a:hover,.panel-link:hover{text-decoration:underline}
+    .audit-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:12px 0}
+    .audit-metric{background:#121a24;border:1px solid #2a3949;border-radius:12px;padding:12px;min-width:0}
+    .audit-metric span{display:block;color:#9aabba;font-size:11px;margin-bottom:8px}
+    .audit-metric strong{display:block;font-size:15px;overflow-wrap:anywhere}
+    @media(max-width:520px){.audit-grid{grid-template-columns:1fr}}
+    @media(max-width:900px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.metric:last-child{grid-column:span 2}}
+    @media(max-width:520px){main{padding:22px 14px 40px}.grid{gap:9px}.metric{padding:13px}.panel{padding:13px}header{align-items:flex-start}.status{font-size:11px}}
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <div class="brand">VELTRON / TREASURY</div>
+      <h1>Financial control, on-chain.</h1>
+      <p>Commitment-aware treasury monitoring on NEAR Testnet.</p>
+    </div>
+    <div id="connection-status" class="status" role="status">Checking NEAR Testnet…</div>
+  </header>
+
+  <nav class="quick-links" aria-label="VELTRON sections">
+    <a href="https://veltron-deployer.pages.dev/">Owner control center</a>
+    <a href="https://veltron-deployer.pages.dev/audit-history.html">Full financial audit history</a>
+  </nav>
+
+  <div class="notice">
+    <strong>Read-only monitor.</strong> This dashboard reads finalized Testnet state only.
+    It does not connect a wallet, request signatures, submit transactions, or move tokens.
+    Amounts are shown in raw token units until token decimals are independently verified.
+  </div>
+
+  <div id="message" class="notice" role="status" aria-live="polite">Loading treasury state…</div>
+
+  <section class="grid" aria-label="Treasury financial position">
+    <div class="metric"><span>Treasury balance</span><strong id="balance">—</strong></div>
+    <div class="metric"><span>Committed balance</span><strong id="commitments-total">—</strong></div>
+    <div class="metric"><span>Safety reserve</span><strong id="reserve">—</strong></div>
+    <div class="metric"><span>Pending discretionary</span><strong id="pending-total">—</strong></div>
+    <div class="metric"><span>Spendable balance</span><strong id="spendable" class="good">—</strong></div>
+  </section>
+
+  <section class="panel">
+    <div class="section-head"><h2>Commitments</h2><div><span id="commitment-count" class="muted">—</span> <button id="load-more" type="button" hidden>Load more</button></div></div>
+    <div id="commitments-table" class="empty">Waiting for contract data.</div>
+  </section>
+
+  <section class="panel">
+    <div class="section-head"><h2>Pending transfers</h2><span id="pending-count" class="muted">—</span></div>
+    <div id="pending-table" class="empty">Waiting for contract data.</div>
+  </section>
+
+  <section class="panel">
+    <div class="section-head"><h2>Safety and token audit</h2><span id="pause-state" class="muted">—</span></div>
+    <p><strong id="audit-status" class="muted">Audit status: —</strong></p>
+    <p id="audit-state" class="muted">Waiting for contract data.</p>
+  </section>
+
+  <section class="panel" aria-label="Financial audit history status">
+    <div class="section-head"><h2>Financial audit history</h2><span id="indexer-status" class="muted">Checking indexer…</span></div>
+    <div class="audit-grid">
+      <div class="audit-metric"><span>Coverage</span><strong id="indexer-coverage">—</strong></div>
+      <div class="audit-metric"><span>Indexed through block</span><strong id="indexer-watermark">—</strong></div>
+      <div class="audit-metric"><span>Recent events loaded</span><strong id="indexer-event-count">—</strong></div>
+    </div>
+    <p id="indexer-note" class="muted">Checking the independent audit indexer…</p>
+    <div id="indexer-events" class="empty">Waiting for audit history.</div>
+    <p><a class="panel-link" href="https://veltron-deployer.pages.dev/audit-history.html">Open full financial audit history</a></p>
+  </section>
+
+  <section class="panel">
+    <div class="section-head"><h2>Network and account</h2><button id="refresh" type="button">Refresh</button></div>
+    <p class="muted">Network: <strong id="network">NEAR Testnet</strong></p>
+    <p class="muted">Treasury account: <code>veltron-treasury.testnet</code></p>
+    <p class="muted">Contract code hash: <code id="code-hash">—</code></p>
+    <p class="muted">Account storage: <span id="storage">—</span></p>
+  </section>
+</main>
+
+<script type="module">
+  import { readTreasurySnapshot, callView, isCurrentSnapshotRequest, classifyTokenAudit } from "./src/dashboard.mjs";
+  import { readAuditStatus } from "./src/audit.mjs";
+  let nextCommitmentCursor = null;
+  let commitmentRows = [];
+  let activeSnapshot = null;
+  let snapshotGeneration = 0;
+  let loadingCommitmentPage = false;
+
+  const byId = id => document.getElementById(id);
+  const raw = value => value == null ? "—" : String(value);
+  const amount = value => raw(value);
+  const safe = value => String(value ?? "—");
+  const table = (headers, rows) => {
+    if (!rows.length) return '<div class="empty">Nothing to display yet.</div>';
+    const head = headers.map(h => '<th>' + h + '</th>').join("");
+    const body = rows.map(row => '<tr>' + row.map(cell => '<td>' + safe(cell).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;") + '</td>').join("") + '</tr>').join("");
+    return '<div class="table-wrap"><table><thead><tr>' + head + '</tr></thead><tbody>' + body + '</tbody></table></div>';
+  };
+
+  function renderCommitments() {
+    byId("commitment-count").textContent = commitmentRows.length + " shown";
+    byId("commitments-table").innerHTML = table(
+      ["ID","Recipient","Amount","Status"],
+      commitmentRows.map(c => [c.id,c.recipient_id,amount(c.amount),c.settlement_pending ? "Settlement pending" : "Active"])
+    );
+    byId("load-more").hidden = !nextCommitmentCursor;
+  }
+
+  async function refreshAudit() {
+    byId("indexer-status").textContent = "Checking indexer…";
+    try {
+      const audit = await readAuditStatus();
+      byId("indexer-status").textContent = "Connected · " + audit.network;
+      byId("indexer-coverage").textContent = audit.history_complete ? "Complete" : "Partial / unknown";
+      byId("indexer-watermark").textContent = audit.indexed_through?.block_height == null ? "Not indexed yet" : String(audit.indexed_through.block_height);
+      byId("indexer-event-count").textContent = String(audit.events.length);
+      byId("indexer-note").textContent = audit.note || "The indexer watermark is not proof of complete historical coverage.";
+      if (!audit.events.length) {
+        byId("indexer-events").textContent = "No VELTRON audit events have been indexed yet. The historical backfill is still in progress.";
+      } else {
+        byId("indexer-events").innerHTML = table(
+          ["Block", "Event", "Actor", "Receipt status"],
+          audit.events.map(event => [
+            event.provenance?.block_height,
+            event.event,
+            event.data?.actor_id,
+            event.provenance?.receipt_status
+          ])
+        );
+      }
+    } catch (error) {
+      byId("indexer-status").textContent = "Unavailable";
+      byId("indexer-coverage").textContent = "Unknown";
+      byId("indexer-watermark").textContent = "—";
+      byId("indexer-event-count").textContent = "—";
+      byId("indexer-note").textContent = "Audit API unavailable: " + error.message;
+      byId("indexer-events").textContent = "No current audit status is available. Treasury monitoring remains separate.";
+    }
+  }
+
+  async function loadMoreCommitments() {
+    const button = byId("load-more");
+    if (loadingCommitmentPage || !activeSnapshot || !nextCommitmentCursor) return;
+    loadingCommitmentPage = true;
+    button.disabled = true;
+    const requestGeneration = snapshotGeneration;
+    const requestSnapshot = activeSnapshot;
+    const requestCursor = nextCommitmentCursor;
+    try {
+      const page = await callView("get_commitments", { from_id: requestCursor, limit: 50 }, fetch, requestSnapshot);
+      if (!isCurrentSnapshotRequest(requestGeneration, snapshotGeneration, requestSnapshot, activeSnapshot)) return;
+      commitmentRows = commitmentRows.concat(page.commitments);
+      nextCommitmentCursor = page.next_cursor;
+      renderCommitments();
+    } catch (error) {
+      if (isCurrentSnapshotRequest(requestGeneration, snapshotGeneration, requestSnapshot, activeSnapshot)) {
+        byId("message").textContent = "Could not load the next commitment page: " + error.message;
+      }
+    } finally {
+      if (isCurrentSnapshotRequest(requestGeneration, snapshotGeneration, requestSnapshot, activeSnapshot)) {
+        loadingCommitmentPage = false;
+        button.disabled = false;
+      }
+    }
+  }
+
+  async function refresh() {
+    const requestGeneration = ++snapshotGeneration;
+    loadingCommitmentPage = false;
+    const button = byId("refresh");
+    button.disabled = true;
+    byId("connection-status").textContent = "Reading finalized state…";
+    byId("message").textContent = "Checking network and treasury contract…";
+    activeSnapshot = null;
+    nextCommitmentCursor = null;
+    commitmentRows = [];
+    for (const id of ["balance","commitments-total","reserve","pending-total","spendable","code-hash","storage","commitment-count","pending-count","pause-state","audit-state"]) byId(id).textContent = "—";
+    byId("commitments-table").textContent = "Waiting for a fresh contract snapshot.";
+    byId("pending-table").textContent = "Waiting for a fresh contract snapshot.";
+    byId("load-more").hidden = true;
+    try {
+      const data = await readTreasurySnapshot();
+      if (requestGeneration !== snapshotGeneration) return;
+      activeSnapshot = data;
+      byId("network").textContent = data.network;
+      byId("code-hash").textContent = raw(data.account.code_hash);
+      byId("storage").textContent = raw(data.account.storage_usage) + " bytes";
+      if (!data.deployed) {
+        byId("connection-status").textContent = "Account found · no contract code";
+        byId("message").innerHTML = "<strong>Contract not deployed.</strong> The treasury account exists, but no contract code is installed. Dashboard monitoring will become available after the separately reviewed Testnet deployment and initialization.";
+        return;
+      }
+
+      const p = data.position;
+      byId("balance").textContent = amount(p.treasury_balance);
+      byId("commitments-total").textContent = amount(p.active_commitments);
+      byId("reserve").textContent = amount(p.safety_reserve);
+      byId("pending-total").textContent = amount(p.pending_discretionary);
+      byId("spendable").textContent = amount(p.spendable_balance);
+      commitmentRows = data.commitments.commitments;
+      nextCommitmentCursor = data.commitments.next_cursor;
+      renderCommitments();
+      byId("pending-count").textContent = data.pending.length + " in flight";
+      byId("pending-table").innerHTML = table(
+        ["Transfer","Amount","Type","Created (ns)"],
+        data.pending.map(t => [t.id,amount(t.amount),typeof t.kind === "object" ? Object.keys(t.kind)[0] : t.kind,t.created_at_ns])
+      );
+      byId("pause-state").innerHTML = data.paused ? '<span class="bad">Outgoing transfers paused</span>' : '<span class="good">Outgoing transfers enabled</span>';
+      const audit = data.audit;
+      const auditStatus = classifyTokenAudit(audit);
+      const auditLabels = {
+        matched: ["Matched", "good"],
+        mismatch: ["Mismatch · investigate before relying on this balance", "bad"],
+        pending: ["Pending · audit in progress", "warn"],
+        unknown: ["Unknown · no valid balance comparison", "warn"]
+      };
+      const [auditLabel, auditClass] = auditLabels[auditStatus];
+      byId("audit-status").textContent = "Audit status: " + auditLabel;
+      byId("audit-status").className = auditClass;
+      byId("audit-state").textContent = auditStatus === "pending"
+        ? "Token balance audit is currently pending."
+        : auditStatus === "unknown"
+          ? "No valid successful token-balance comparison is available."
+          : "Last observed token balance: " + amount(audit.observed_token_balance) + " · Ledger at observation: " + amount(audit.ledger_balance_at_observation) + " · Observed at (ns): " + raw(audit.observed_at_ns);
+      byId("connection-status").textContent = "Connected to NEAR Testnet · read-only";
+      byId("message").textContent = "Finalized treasury state loaded at block " + data.block_hash + ". No wallet is connected and no transaction has been requested.";
+    } catch (error) {
+      if (requestGeneration !== snapshotGeneration) return;
+      activeSnapshot = null;
+      byId("connection-status").textContent = "Read failed · no current snapshot";
+      byId("message").textContent = error.message + " No previous financial values are being presented as current. Retry when the Testnet RPC is available.";
+    } finally {
+      if (requestGeneration === snapshotGeneration) button.disabled = false;
+    }
+  }
+
+  byId("refresh").addEventListener("click", () => { refresh(); refreshAudit(); });
+  byId("load-more").addEventListener("click", loadMoreCommitments);
+  refresh();
+  refreshAudit();
+</script>
+</body>
+</html>
