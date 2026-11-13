@@ -6,6 +6,7 @@ const EVENT_NAMES = new Set([
   "balance_audit_requested", "balance_audit_completed", "balance_audit_failed", "surplus_reconciled"
 ]);
 const MAX_BATCH_EVENTS = 500;
+const MAX_D1_BATCH_STATEMENTS = 900;
 
 function isSafeInteger(value) {
   return Number.isSafeInteger(value) && value >= 0;
@@ -48,29 +49,8 @@ function validateEvent(input, block, expectedContract) {
   };
 }
 
-export async function ingestBlock(db, config, block) {
-  if (!block || block.finalized !== true) throw new Error("Only finalized blocks may be ingested");
-  if (block.network !== config.network) throw new Error("Network mismatch");
-  if (block.contract_id !== config.contractId) throw new Error("Contract mismatch");
-  if (!isSafeInteger(block.block_height)) throw new Error("Invalid block height");
-  requiredString(block.block_hash, "block_hash");
-  requiredString(block.prev_block_hash, "prev_block_hash");
-  requiredString(block.block_timestamp_ns, "block_timestamp_ns");
-  if (!isSafeInteger(block.coverage_start_height) || block.coverage_start_height > block.block_height) throw new Error("coverage_start_height must be a valid height no greater than the ingested block");
-  if (!isSafeInteger(block.finalized_head_height) || block.finalized_head_height < block.block_height) throw new Error("finalized_head_height must be at or above the ingested finalized block");
-  if (!/^\d+$/.test(block.block_timestamp_ns)) throw new Error("block_timestamp_ns must be a decimal integer string");
-  if (!Array.isArray(block.events) || block.events.length > MAX_BATCH_EVENTS) throw new Error("events must be an array containing at most " + MAX_BATCH_EVENTS + " entries");
-
-  const validated = block.events.map((event) => validateEvent(event, block, config.contractId));
-  const existing = await db.prepare(
-    "SELECT block_height, block_hash FROM indexer_cursors WHERE network = ? AND contract_id = ?"
-  ).bind(config.network, config.contractId).first();
-  if (existing && block.block_height < existing.block_height) throw new Error("Block height moved behind the durable cursor");
-  if (existing && block.block_height === existing.block_height && block.block_hash !== existing.block_hash) throw new Error("Block hash changed at the current finalized cursor");
-  if (existing && block.block_height > existing.block_height + 1) throw new Error("Block gap detected; refusing to advance the cursor past unindexed heights");
-  if (existing && block.block_height === existing.block_height + 1 && block.prev_block_hash !== existing.block_hash) throw new Error("Previous block hash does not match the durable finalized cursor");
-
-  const statements = validated.map((event) => db.prepare(`
+function eventInsertStatement(db, config, block, event) {
+  return db.prepare(`
     INSERT OR IGNORE INTO audit_events (
       network, contract_id, receipt_id, log_index, block_height, block_hash,
       block_timestamp_ns, transaction_hash, receipt_index, receipt_status,
@@ -83,8 +63,12 @@ export async function ingestBlock(db, config, block) {
     event.transactionHash, event.receiptIndex, event.receiptStatus,
     event.eventType, event.eventVersion, event.actorId, event.eventTimestamp,
     event.transferId, event.commitmentId, event.payload
-  ));
-  statements.push(db.prepare(`
+  );
+}
+
+function cursorUpsertStatement(db, config, block) {
+  const complete = block.coverage_start_height > 0 && block.block_height >= block.finalized_head_height;
+  return db.prepare(`
     INSERT INTO indexer_cursors (
       network, contract_id, block_height, block_hash, block_timestamp_ns,
       coverage_start_height, finalized_head_height, history_complete, updated_at
@@ -100,9 +84,75 @@ export async function ingestBlock(db, config, block) {
   `).bind(
     config.network, config.contractId, block.block_height, block.block_hash,
     block.block_timestamp_ns, block.coverage_start_height,
-    block.finalized_head_height,
-    block.coverage_start_height > 0 && block.block_height >= block.finalized_head_height ? 1 : 0
-  ));
-  await db.batch(statements);
-  return { accepted: validated.length, block_height: block.block_height, history_complete: block.coverage_start_height > 0 && block.block_height >= block.finalized_head_height };
+    block.finalized_head_height, complete ? 1 : 0
+  );
+}
+
+export async function ingestBlocks(db, config, blocks) {
+  if (!Array.isArray(blocks) || blocks.length === 0) throw new Error("At least one finalized block is required");
+  if (!config || !config.network || !config.contractId) throw new Error("Network and contract configuration are required");
+
+  const existing = await db.prepare(
+    "SELECT block_height, block_hash, coverage_start_height FROM indexer_cursors WHERE network = ? AND contract_id = ?"
+  ).bind(config.network, config.contractId).first();
+
+  let expectedHeight = existing ? existing.block_height + 1 : blocks[0].block_height;
+  let expectedPreviousHash = existing?.block_hash ?? null;
+  const coverageStartHeight = existing?.coverage_start_height ?? blocks[0].coverage_start_height;
+  const eventStatements = [];
+  let accepted = 0;
+
+  for (const block of blocks) {
+    if (!block || block.finalized !== true) throw new Error("Only finalized blocks may be ingested");
+    if (block.network !== config.network) throw new Error("Network mismatch");
+    if (block.contract_id !== config.contractId) throw new Error("Contract mismatch");
+    if (!isSafeInteger(block.block_height) || block.block_height !== expectedHeight) {
+      throw new Error("Block gap or unexpected height detected; refusing to advance the cursor");
+    }
+    requiredString(block.block_hash, "block_hash");
+    requiredString(block.prev_block_hash, "prev_block_hash");
+    requiredString(block.block_timestamp_ns, "block_timestamp_ns");
+    if (!/^\d+$/.test(block.block_timestamp_ns)) throw new Error("block_timestamp_ns must be a decimal integer string");
+    if (!isSafeInteger(block.coverage_start_height) || block.coverage_start_height !== coverageStartHeight ||
+        block.coverage_start_height > block.block_height) {
+      throw new Error("coverage_start_height changed or is invalid");
+    }
+    if (!isSafeInteger(block.finalized_head_height) || block.finalized_head_height < block.block_height) {
+      throw new Error("finalized_head_height must be at or above the ingested finalized block");
+    }
+    if (expectedPreviousHash && block.prev_block_hash !== expectedPreviousHash) {
+      throw new Error("Previous block hash does not match the durable finalized cursor");
+    }
+    if (!Array.isArray(block.events) || block.events.length > MAX_BATCH_EVENTS) {
+      throw new Error("events must be an array containing at most " + MAX_BATCH_EVENTS + " entries");
+    }
+
+    for (const input of block.events) {
+      eventStatements.push(eventInsertStatement(db, config, block, validateEvent(input, block, config.contractId)));
+      accepted++;
+    }
+    expectedPreviousHash = block.block_hash;
+    expectedHeight++;
+  }
+
+  const lastBlock = blocks[blocks.length - 1];
+  const complete = lastBlock.coverage_start_height > 0 && lastBlock.block_height >= lastBlock.finalized_head_height;
+
+  // Event rows are idempotent. If a large event batch must be split, the durable
+  // cursor is written only after every event batch succeeds; a retry safely
+  // replays any already-inserted rows through INSERT OR IGNORE.
+  for (let offset = 0; offset < eventStatements.length; offset += MAX_D1_BATCH_STATEMENTS) {
+    await db.batch(eventStatements.slice(offset, offset + MAX_D1_BATCH_STATEMENTS));
+  }
+  await db.batch([cursorUpsertStatement(db, config, lastBlock)]);
+
+  return {
+    accepted,
+    block_height: lastBlock.block_height,
+    history_complete: complete
+  };
+}
+
+export async function ingestBlock(db, config, block) {
+  return await ingestBlocks(db, config, [block]);
 }
