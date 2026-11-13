@@ -150,10 +150,10 @@
     try {
       const audit = await readAuditStatus();
       byId("indexer-status").textContent = "Connected · " + audit.network;
-      byId("indexer-coverage").textContent = audit.history_complete ? "Complete" : "Partial / unknown";
+      byId("indexer-coverage").textContent = audit.history_complete ? "Complete from block " + audit.coverage_start_height : "Backfill in progress";
       byId("indexer-watermark").textContent = audit.indexed_through?.block_height == null ? "Not indexed yet" : String(audit.indexed_through.block_height);
       byId("indexer-event-count").textContent = String(audit.events.length);
-      byId("indexer-note").textContent = audit.note || "The indexer watermark is not proof of complete historical coverage.";
+      byId("indexer-note").textContent = audit.note || "Coverage is not complete until the finalized head has been scanned from the configured start block.";
       if (!audit.events.length) {
         byId("indexer-events").textContent = "No VELTRON audit events are available yet. The currently deployed treasury contract version does not emit structured VELTRON audit logs, so the indexer cannot reconstruct earlier activity. New events can appear after the event-emitting contract release is safely installed.";
       } else {

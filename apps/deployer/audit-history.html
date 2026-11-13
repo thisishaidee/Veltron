@@ -24,15 +24,15 @@ button{background:#b8e1dd;color:#101820;font-weight:750;border:0}button:disabled
 <h1>VELTRON Financial Audit History</h1>
 <p><a href="./owner-controls.html">Owner controls</a> · <a href="./payment-queue.html">Payment queue</a> · <a href="./commitment-management.html">Commitments</a> · <a href="./audit.html">Balance audit</a></p>
 <section class="panel warn">
-<strong>Historical audit is partial; the currently deployed treasury contract does not emit structured VELTRON audit events.</strong>
-<p>The indexer can only record events emitted by contract receipts; it cannot reconstruct earlier activity from current balances. New audit events will appear after the event-emitting contract release is safely installed. The API reports its indexing watermark and coverage status, and this page never labels partial history as complete. This page is read-only and cannot sign transactions or control treasury funds.</p>
+<strong>Coverage starts at the first block of the event-emitting treasury release.</strong>
+<p>The previous treasury version did not emit structured VELTRON EVENT_JSON events. This indexer records finalized blocks from the configured release start block forward; it does not claim to reconstruct earlier activity from current balances. The API reports the exact coverage start, finalized head, and completion state. This page is read-only and cannot sign transactions or control treasury funds.</p>
 </section>
 <section class="panel">
 <h2>Indexing status</h2>
 <p id="service-status" class="status" role="status" aria-live="polite">Checking audit-history service configuration…</p>
 <p>Coverage: <strong id="coverage">Unknown</strong></p>
 <p>Indexed through block: <strong id="watermark">Unknown</strong></p>
-<p class="muted" id="coverage-note">A configured API and verified historical backfill are required before completeness can be claimed.</p>
+<p class="muted" id="coverage-note">The indexer reports its configured coverage start, finalized head, and completion state.</p>
 </section>
 <section class="panel">
 <h2>Filter events</h2>

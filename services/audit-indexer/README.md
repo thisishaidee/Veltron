@@ -4,14 +4,16 @@ This service is the durable storage and read-API layer for VELTRON's receipt aud
 
 ## Current scope
 
-- Scheduled finalized-block polling from FastNEAR NEAR Data (`testnet.neardata.xyz` or `mainnet.neardata.xyz`), with extraction of receipt execution outcomes and `EVENT_JSON:` logs for the configured treasury.
+- Scheduled finalized-block polling uses FastNEAR RPC first, then dRPC and official NEAR RPC fallbacks for finalized head and anchor checks; NEAR Data supplies full receipt execution outcomes and `EVENT_JSON:` logs.
 - Strict validation of network, treasury account, event standard/version, event names, event provenance and integer-string timestamps.
 - D1 persistence with idempotency key `(network, contract_id, receipt_id, log_index)`.
 - Atomic D1 batch of event inserts and block-watermark advancement.
 - Bounded cursor pagination and filters for event type, actor, transfer ID and commitment ID.
-- Explicitly reports `history_complete: false` and `coverage: partial_or_unknown` until a verified historical coverage procedure proves coverage.
+- Records `coverage_start_height`, `finalized_head_height`, and `history_complete`; coverage is complete only after every finalized block from the configured start height through the recorded finalized head has passed sequential hash-continuity checks.
 
-**Important:** the scheduled collector is implemented, but the service is not operational until its D1 database, verified `START_BLOCK_HEIGHT` and Worker deployment are configured. It polls finalized blocks in bounded batches and advances its cursor only after block continuity checks. On its first run it also fetches the preceding block and verifies that the configured start block links to that anchor. This does not itself certify complete historical coverage: confirm that NEAR Data serves the full required range, let indexing catch up, and verify continuity, event counts and receipt provenance. The API deliberately keeps `history_complete: false` until a separate, evidence-backed completeness procedure exists.
+**Current deployment:** the dedicated VELTRON D1 database and `veltron-audit-indexer` Worker are provisioned and deployed. The cron is temporarily paused until the event-emitting treasury release is installed and `START_BLOCK_HEIGHT` is reset to that release transaction block. The previous treasury release did not emit the `EVENT_JSON:` standard, so scanning its earlier blocks cannot produce structured VELTRON audit events and is not required for this event-history scope.
+
+On the first run, the collector fetches the block immediately before `START_BLOCK_HEIGHT` and verifies the start block links to that anchor. It advances the cursor only after sequential hash-continuity checks. `history_complete` becomes true only when the cursor reaches the finalized head; it means complete structured-event coverage from the configured start block forward, not a reconstruction of activity before that block.
 
 ## Endpoints
 
@@ -19,7 +21,7 @@ This service is the durable storage and read-API layer for VELTRON's receipt aud
 - `GET /v1/events?limit=50&cursor=...`: read-only event history. Optional filters: `type`, `actor`, `transfer_id`, `commitment_id`.
 The scheduled collector reads only finalized NEAR Data block endpoints, filters `receipt_execution_outcomes` by `executor_id === TREASURY_ACCOUNT`, parses logs beginning with `EVENT_JSON:`, and normalizes execution statuses to `SUCCESS_VALUE`, `SUCCESS_RECEIPT_ID`, `FAILURE` or `UNKNOWN`. It preserves the source transaction hash, receipt ID, receipt index, log index, outcome status, block hash and block timestamp. This includes NEP-141 transfer-call receipts that execute `ft_on_transfer` on the treasury. A deterministic shard/receipt ordering is used for pagination; it is not claimed to be a global execution-time ordering across parallel shards.
 
-Receipt logs are retained with their execution status, including failed or unknown outcomes. A log from a failed receipt is not proof that the corresponding state change committed; consumers must inspect `receipt_status` and transaction outcome before interpreting it as a successful financial action. The public read-only `GET /health` and `GET /v1/events` endpoints support browser CORS; no credentials are used for these public chain-derived records. The Worker exposes no external ingestion endpoint: only its scheduled collector can write to D1, preventing a caller from seeding an unanchored cursor or injecting fabricated event provenance.
+Receipt logs are retained with their execution status, including failed or unknown outcomes. A log from a failed receipt is not proof that the corresponding state change committed; consumers must inspect `receipt_status` and transaction outcome before interpreting it as a successful financial action. The public read-only `GET /health` and `GET /v1/events` endpoints support browser CORS; no credentials are used for these public chain-derived records. The Worker exposes no public ingestion endpoint: only its scheduled collector or protected manual trigger can write to D1, and neither accepts caller-supplied blocks or events.
 
 ## Local validation
 
@@ -28,18 +30,25 @@ cd services/audit-indexer
 npm test
 ```
 
-## Provisioning (not performed by this PR)
+## Dedicated Cloudflare resources
 
-1. Create a Cloudflare D1 database named `veltron-audit-index`.
-2. Replace the placeholder `database_id` in `wrangler.jsonc` with the provisioned ID.
-3. Apply `schema.sql` using the Cloudflare D1 migration workflow.
-4. Set `START_BLOCK_HEIGHT` to a verified finalized block at or before the treasury contract deployment; never guess this value. On first run, the collector verifies the immediately preceding finalized block hash as the start anchor.
-5. Deploy the Worker and verify health, scheduled ingestion and pagination endpoints.
-6. Allow the bounded scheduled collector to catch up from `START_BLOCK_HEIGHT`; confirm sequential block hashes, receipt counts and provenance.
-7. Verify finalized block continuity, event counts and provenance before setting any UI completeness indicator.
+- D1 database: `veltron-audit-index`
+- D1 database ID: `1a2c1f9c-d6a0-48c0-829c-a8e840c9913b`
+- D1 region: `WEUR` (Amsterdam)
+- Worker: `veltron-audit-indexer`
+- Worker API: `https://veltron-audit-indexer.haideecoded-e0f.workers.dev`
+- D1 binding: `AUDIT_DB`
+- Network and contract: `testnet` / `veltron-treasury.testnet`
 
-No contract deployment, wallet signing, treasury transaction or Worker deployment is performed by this repository change.
+The existing D1 schema is created from `schema.sql`; migration `migrations/0002_coverage_metadata.sql` adds the coverage start, finalized-head and completion columns. Before enabling the cron after the treasury upgrade:
 
+1. Read the finalized block height of the code-only treasury upgrade transaction.
+2. Set `START_BLOCK_HEIGHT` to that exact block height.
+3. Delete only the old `indexer_cursors` row for `testnet / veltron-treasury.testnet` (retain all `audit_events`).
+4. Re-enable the one-minute cron and verify the cursor reaches the finalized head.
+5. Confirm the API reports `history_complete: true` and the exact coverage start height.
+
+The scheduled scan is intentionally paused until this release boundary is established. The dashboard and history page must not label coverage complete before the cursor reaches the finalized head.
 
 ## Protected manual recovery trigger
 

@@ -17,6 +17,8 @@ export async function readAuditStatus(fetchImpl = fetch) {
     coverage: payload.indexing.coverage || "unknown",
     history_complete: payload.indexing.history_complete === true,
     indexed_through: payload.indexing.indexed_through || null,
+    coverage_start_height: payload.indexing.coverage_start_height ?? null,
+    finalized_head_height: payload.indexing.finalized_head_height ?? null,
     note: payload.indexing.note || "",
     events: payload.events.slice(0, 5)
   };

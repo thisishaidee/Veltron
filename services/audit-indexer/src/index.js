@@ -81,7 +81,7 @@ async function getEvents(request, env) {
   const hasMore = events.length > limit;
   if (hasMore) events.pop();
   const watermark = await env.AUDIT_DB.prepare(
-    "SELECT block_height, block_hash, block_timestamp_ns FROM indexer_cursors WHERE network = ? AND contract_id = ?"
+    "SELECT block_height, block_hash, block_timestamp_ns, coverage_start_height, finalized_head_height, history_complete FROM indexer_cursors WHERE network = ? AND contract_id = ?"
   ).bind(env.NETWORK, env.TREASURY_ACCOUNT).first();
   return jsonResponse({
     events: events.map(rowToEvent),
@@ -95,9 +95,15 @@ async function getEvents(request, env) {
         block_hash: watermark.block_hash,
         block_timestamp_ns: watermark.block_timestamp_ns
       } : null,
-      history_complete: false,
-      coverage: "partial_or_unknown",
-      note: "The watermark reports the last ingested finalized block, not proof that historical backfill is complete."
+      coverage_start_height: watermark && watermark.coverage_start_height > 0 ? watermark.coverage_start_height : null,
+      finalized_head_height: watermark ? watermark.finalized_head_height : null,
+      history_complete: Boolean(watermark && watermark.history_complete === 1 && watermark.coverage_start_height > 0),
+      coverage: watermark && watermark.history_complete === 1 && watermark.coverage_start_height > 0
+        ? "complete_from_start_height"
+        : "partial_or_unknown",
+      note: watermark && watermark.history_complete === 1 && watermark.coverage_start_height > 0
+        ? "All finalized blocks from the configured coverage start block through the recorded finalized head have been scanned. Earlier blocks are outside this coverage window."
+        : "Backfill is still in progress or has not been anchored to a configured coverage start block."
     }
   }, 200, PUBLIC_CORS_HEADERS);
 }

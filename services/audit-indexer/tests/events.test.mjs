@@ -12,6 +12,8 @@ const block = {
   block_hash: "block-hash",
   prev_block_hash: "previous-block-hash",
   block_timestamp_ns: "123456789",
+  coverage_start_height: 120,
+  finalized_head_height: 120,
   events: [{
     receipt_id: "receipt-1",
     transaction_hash: "transaction-1",
@@ -50,7 +52,7 @@ function fakeDb(existing = null) {
 test("stores a finalized VELTRON event and advances the cursor atomically", async () => {
   const db = fakeDb();
   const result = await ingestBlock(db, config, block);
-  assert.deepEqual(result, { accepted: 1, block_height: 120 });
+  assert.deepEqual(result, { accepted: 1, block_height: 120, history_complete: true });
   assert.equal(db.statements.length, 2);
   assert.match(db.statements[0].sql, /INSERT OR IGNORE INTO audit_events/);
   assert.match(db.statements[1].sql, /INSERT INTO indexer_cursors/);
@@ -88,14 +90,14 @@ test("rejects a block behind the durable cursor", async () => {
 
 test("accepts empty finalized blocks so the indexing watermark can advance", async () => {
   const db = fakeDb();
-  const result = await ingestBlock(db, config, { ...block, events: [], block_height: 121 });
-  assert.deepEqual(result, { accepted: 0, block_height: 121 });
+  const result = await ingestBlock(db, config, { ...block, events: [], block_height: 121, finalized_head_height: 121 });
+  assert.deepEqual(result, { accepted: 0, block_height: 121, history_complete: true });
   assert.equal(db.statements.length, 1);
 });
 
 test("rejects cursor gaps and conflicting hashes at the current height", async () => {
   await assert.rejects(
-    () => ingestBlock(fakeDb({ block_height: 120, block_hash: "block-hash" }), config, { ...block, block_height: 122 }),
+    () => ingestBlock(fakeDb({ block_height: 120, block_hash: "block-hash" }), config, { ...block, block_height: 122, finalized_head_height: 122 }),
     /Block gap detected/
   );
   await assert.rejects(
@@ -199,7 +201,7 @@ test("scheduled collector ingests finalized blocks in order from configured star
     MAX_BLOCKS_PER_TICK: "10",
     AUDIT_DB: db
   }, fetchMock);
-  assert.deepEqual(result, { indexed_blocks: 1, indexed_events: 1, indexed_through: 100, finalized_head: 100 });
+  assert.deepEqual(result, { indexed_blocks: 1, indexed_events: 1, indexed_through: 100, finalized_head: 100, coverage_start_height: 100, history_complete: true });
   assert.equal(requested.length, 3);
   assert.equal(requested[0], "https://rpc.testnet.fastnear.com");
   assert.equal(requested[1], "https://rpc.testnet.fastnear.com");

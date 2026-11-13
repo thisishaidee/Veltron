@@ -10,7 +10,7 @@ test("reads VELTRON Testnet audit coverage and recent events", async () => {
       network: "testnet",
       contract_id: "veltron-treasury.testnet",
       events: [{ event: "payment_requested", data: { actor_id: "agent.testnet" }, provenance: { block_height: 123, receipt_status: "SUCCESS_VALUE" } }],
-      indexing: { coverage: "partial_or_unknown", history_complete: false, indexed_through: { block_height: 123 }, note: "Watermark is not proof of completeness." }
+      indexing: { coverage: "partial_or_unknown", history_complete: false, coverage_start_height: 100, finalized_head_height: 150, indexed_through: { block_height: 123 }, note: "Backfill is in progress." }
     });
   };
   const status = await readAuditStatus(fetchImpl);
@@ -18,6 +18,8 @@ test("reads VELTRON Testnet audit coverage and recent events", async () => {
   assert.equal(status.coverage, "partial_or_unknown");
   assert.equal(status.history_complete, false);
   assert.equal(status.indexed_through.block_height, 123);
+  assert.equal(status.coverage_start_height, 100);
+  assert.equal(status.finalized_head_height, 150);
   assert.equal(status.events[0].event, "payment_requested");
 });
 

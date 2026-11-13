@@ -56,6 +56,8 @@ export async function ingestBlock(db, config, block) {
   requiredString(block.block_hash, "block_hash");
   requiredString(block.prev_block_hash, "prev_block_hash");
   requiredString(block.block_timestamp_ns, "block_timestamp_ns");
+  if (!isSafeInteger(block.coverage_start_height) || block.coverage_start_height > block.block_height) throw new Error("coverage_start_height must be a valid height no greater than the ingested block");
+  if (!isSafeInteger(block.finalized_head_height) || block.finalized_head_height < block.block_height) throw new Error("finalized_head_height must be at or above the ingested finalized block");
   if (!/^\d+$/.test(block.block_timestamp_ns)) throw new Error("block_timestamp_ns must be a decimal integer string");
   if (!Array.isArray(block.events) || block.events.length > MAX_BATCH_EVENTS) throw new Error("events must be an array containing at most " + MAX_BATCH_EVENTS + " entries");
 
@@ -83,15 +85,24 @@ export async function ingestBlock(db, config, block) {
     event.transferId, event.commitmentId, event.payload
   ));
   statements.push(db.prepare(`
-    INSERT INTO indexer_cursors (network, contract_id, block_height, block_hash, block_timestamp_ns, updated_at)
-    VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    INSERT INTO indexer_cursors (
+      network, contract_id, block_height, block_hash, block_timestamp_ns,
+      coverage_start_height, finalized_head_height, history_complete, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     ON CONFLICT(network, contract_id) DO UPDATE SET
       block_height = excluded.block_height,
       block_hash = excluded.block_hash,
       block_timestamp_ns = excluded.block_timestamp_ns,
+      finalized_head_height = excluded.finalized_head_height,
+      history_complete = excluded.history_complete,
       updated_at = CURRENT_TIMESTAMP
     WHERE excluded.block_height >= indexer_cursors.block_height
-  `).bind(config.network, config.contractId, block.block_height, block.block_hash, block.block_timestamp_ns));
+  `).bind(
+    config.network, config.contractId, block.block_height, block.block_hash,
+    block.block_timestamp_ns, block.coverage_start_height,
+    block.finalized_head_height,
+    block.coverage_start_height > 0 && block.block_height >= block.finalized_head_height ? 1 : 0
+  ));
   await db.batch(statements);
-  return { accepted: validated.length, block_height: block.block_height };
+  return { accepted: validated.length, block_height: block.block_height, history_complete: block.coverage_start_height > 0 && block.block_height >= block.finalized_head_height };
 }
