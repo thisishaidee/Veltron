@@ -169,6 +169,15 @@ async function fetchTransactionDetails(historyUrl, hashes, fetchImpl) {
     }
     transactions.push(...document.transactions);
   }
+  const returned = new Set();
+  for (const entry of transactions) {
+    const hash = entry?.transaction?.hash;
+    if (typeof hash !== "string" || !hash) throw new Error("FastNear transaction detail omitted transaction.hash");
+    returned.add(hash);
+  }
+  for (const hash of hashes) {
+    if (!returned.has(hash)) throw new Error("FastNear transaction detail missing requested hash " + hash);
+  }
   return transactions;
 }
 
@@ -236,7 +245,7 @@ export async function runFinalizedIndexer(env, fetchImpl = fetch) {
     }
     for (const header of blocks) {
       const height = header.block_height;
-      if (!Number.isSafeInteger(height) || height !== rangeStart + indexedBlocks - (rangeStart - startHeight)) {
+      if (!Number.isSafeInteger(height) || height !== startHeight + indexedBlocks) {
         throw new Error("FastNear block range returned an unexpected block height");
       }
       if (typeof header.block_hash !== "string" || !header.block_hash ||
