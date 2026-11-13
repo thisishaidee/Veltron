@@ -1,0 +1,46 @@
+name: Testnet preflight tooling checks
+
+on:
+  pull_request:
+    paths:
+      - "scripts/**"
+      - ".github/workflows/guarded-testnet-treasury-deploy.yml"
+      - ".github/workflows/testnet-preflight-tools.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/**"
+      - ".github/workflows/guarded-testnet-treasury-deploy.yml"
+      - ".github/workflows/testnet-preflight-tools.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  preflight-tools:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Test state guard fail-closed behavior
+        run: python3 -m unittest discover -s scripts -p 'test_treasury_upgrade_state_guard.py'
+      - name: Check out exact deployed contract source
+        uses: actions/checkout@v4
+        with:
+          ref: c03db083db5d7628419154474b4b456a14d60cfe
+          path: deployed-contract
+          persist-credentials: false
+      - name: Check out exact candidate contract source
+        uses: actions/checkout@v4
+        with:
+          ref: f156719af7dd0525e4ba1be735324774785cf5dd
+          path: candidate-contract
+          persist-credentials: false
+      - name: Verify Borsh storage layout compatibility
+        run: python3 scripts/check_treasury_storage_compat.py --deployed deployed-contract/contracts/treasury/src/lib.rs --candidate candidate-contract/contracts/treasury/src/lib.rs
+      - name: Compile all Python preflight scripts
+        run: python3 -m py_compile scripts/*.py
