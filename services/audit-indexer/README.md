@@ -39,3 +39,14 @@ npm test
 7. Verify finalized block continuity, event counts and provenance before setting any UI completeness indicator.
 
 No contract deployment, wallet signing, treasury transaction or Worker deployment is performed by this repository change.
+
+
+## Protected manual recovery trigger
+
+The scheduled collector is the normal indexing path. For operator-led recovery or an immediate one-off verification, an optional protected endpoint is available:
+
+1. Set a strong secret outside source control: `wrangler secret put INDEXER_TRIGGER_TOKEN`.
+2. Send `POST /internal/run-indexer` with `Authorization: Bearer <token>`.
+3. The handler accepts no caller-supplied block, event, or database payload. It invokes the same finalized-block collector and continuity checks used by the scheduled trigger.
+
+The endpoint returns 404 unless the request is a POST with the configured secret. Never place the token in repository files, URLs, browser code, or logs. This endpoint does not change treasury state or submit NEAR transactions.
