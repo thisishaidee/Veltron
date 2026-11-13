@@ -15,6 +15,9 @@ test("owner controls reads the same finalized block from two independent Testnet
 
 test("owner actions are restricted to the configured owner and explicit Testnet confirmation", () => {
   assert.match(source, /accountId === OWNER/);
+  assert.match(source, /typeof audit\?\.audit_pending !== "boolean"/);
+  assert.match(source, /The agent must be distinct from the owner, treasury, and token contract/);
+  assert.match(source, /active_commitments\) \+ BigInt\(snapshot\.position\.pending_discretionary/);
   assert.match(source, /\$\("network-confirm"\)\.checked/);
   for (const method of ["set_agent", "set_safety_reserve", "set_paused", "settle_commitment", "reconcile_token_surplus"]) {
     assert.ok(source.includes('send("' + method + '"') || source.includes('send(methodName'));
