@@ -24,12 +24,13 @@ Each log has the NEP-297 envelope:
 }
 ```
 
-All token quantities and nanosecond timestamps are decimal strings. Consumers must parse amounts as arbitrary-precision integers, never JavaScript floating-point numbers. The timestamp and actor are emitted by the contract at the point the event is logged. The `treasury_initialized` event captures the initial authorization and spending baseline at construction. For callback events, the actor is the treasury contract account because the callback is executed by the contract itself; transaction and receipt provenance remains the authoritative source for who initiated the original action.
+All token quantities and nanosecond timestamps are decimal strings. Consumers must parse amounts as arbitrary-precision integers, never JavaScript floating-point numbers. The timestamp and actor are emitted by the contract at the point the event is logged. For callback events, the actor is the treasury contract account because the callback is executed by the contract itself; transaction and receipt provenance remains the authoritative source for who initiated the original action.
 
 ## Event catalogue
 
 | Event | Meaning | Important fields |
 | --- | --- | --- |
+| `treasury_initialized` | Initial treasury authorization and spending baseline recorded at initialization | treasury, owner, token, agent, transaction cap, safety reserve, initial ledger balance, pause state |
 | `deposit_credited` | NEP-141 deposit credited to the internal ledger | sender, token, amount, resulting ledger balance |
 | `commitment_created` | New protected obligation created | commitment ID, recipient, amount, description |
 | `commitment_updated` | Existing obligation changed | ID, previous/new recipient, previous/new amount, description |
@@ -48,7 +49,7 @@ All token quantities and nanosecond timestamps are decimal strings. Consumers mu
 | `balance_audit_failed` | Token balance query failed | ledger balance |
 | `surplus_reconciled` | Owner credited a verified observed surplus | amount, observed token balance, ledger before/after |
 
-Events are emitted only after the corresponding state validation and state mutation has succeeded within the receipt. A transaction that panics rolls back its state changes and logs. A transfer start and its eventual callback result are separate events in separate receipts.
+Events are emitted after the corresponding state validation and mutation in the receipt. If a receipt later fails, its state changes are rolled back but its execution outcome may still retain logs emitted before the failure. Indexers must preserve `receipt_status`; a log from a failed or unknown receipt is not proof that the corresponding state change committed. A transfer start and its eventual callback result are separate events in separate receipts.
 
 ## Indexer requirements
 
