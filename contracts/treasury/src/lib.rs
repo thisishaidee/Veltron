@@ -483,6 +483,38 @@ impl Veltron {
         )
     }
 
+    /// Owner settles only if the commitment still matches the exact values
+    /// reviewed by the caller. This prevents a stale dashboard confirmation
+    /// from silently paying a changed amount or recipient.
+    pub fn settle_commitment_checked(
+        &mut self,
+        id: String,
+        expected_recipient_id: AccountId,
+        expected_amount: U128,
+    ) -> Promise {
+        self.assert_owner();
+        require!(!self.paused, "Treasury is paused");
+        require!(!self.settlement_pending.get(&id).unwrap_or(false),
+            "Settlement already pending");
+        let commitment = self.commitments.get(&id)
+            .unwrap_or_else(|| env::panic_str("Commitment not found"))
+            .clone();
+        require!(
+            commitment.recipient_id == expected_recipient_id,
+            "Commitment recipient changed; refresh before settlement"
+        );
+        require!(
+            commitment.amount == expected_amount.0,
+            "Commitment amount changed; refresh before settlement"
+        );
+        require!(commitment.amount <= self.treasury_balance, "Treasury balance is insufficient");
+        self.settlement_pending.insert(&id, &true);
+        self.start_transfer(
+            commitment.amount,
+            PendingKind::CommitmentSettlement { commitment_id: id },
+        )
+    }
+
     pub fn get_financial_position(&self) -> FinancialPosition {
         self.calculate_position()
     }
@@ -848,6 +880,34 @@ mod tests {
     }
 
 
+
+    #[test]
+    fn initialization_emits_the_initial_treasury_configuration() {
+        let mut builder = VMContextBuilder::new();
+        builder.current_account_id(account("treasury.near"));
+        builder.predecessor_account_id(account("deployer.near"));
+        testing_env!(builder.build());
+        let _ = Veltron::new(
+            account("owner.near"),
+            account("token.near"),
+            account("agent.near"),
+            U128(500),
+            U128(100),
+        );
+        let events = emitted_events();
+        let event = events.iter().find(|event| event["event"] == "treasury_initialized")
+            .expect("initialization event should be emitted");
+        let data = &event["data"][0];
+        assert_eq!(data["treasury_id"], "treasury.near");
+        assert_eq!(data["owner_id"], "owner.near");
+        assert_eq!(data["token_id"], "token.near");
+        assert_eq!(data["agent_id"], "agent.near");
+        assert_eq!(data["max_per_transaction"], "500");
+        assert_eq!(data["safety_reserve"], "100");
+        assert_eq!(data["treasury_balance"], "0");
+        assert_eq!(data["paused"], false);
+        assert_eq!(data["actor_id"], "deployer.near");
+    }
 
     #[test]
     #[should_panic(expected = "Owner and agent must differ")]
@@ -1645,6 +1705,42 @@ mod tests {
     }
 
     #[test]
+    #[should_panic(expected = "Commitment amount changed; refresh before settlement")]
+    fn guarded_commitment_settlement_rejects_a_stale_amount() {
+        let mut contract = setup("owner.near");
+        contract.treasury_balance = 1_000;
+        contract.create_commitment(
+            "guarded-invoice".to_string(),
+            account("vendor.near"),
+            U128(200),
+            "Vendor invoice".to_string(),
+        );
+        let _ = contract.settle_commitment_checked(
+            "guarded-invoice".to_string(),
+            account("vendor.near"),
+            U128(201),
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "Commitment recipient changed; refresh before settlement")]
+    fn guarded_commitment_settlement_rejects_a_stale_recipient() {
+        let mut contract = setup("owner.near");
+        contract.treasury_balance = 1_000;
+        contract.create_commitment(
+            "guarded-invoice".to_string(),
+            account("vendor.near"),
+            U128(200),
+            "Vendor invoice".to_string(),
+        );
+        let _ = contract.settle_commitment_checked(
+            "guarded-invoice".to_string(),
+            account("attacker.near"),
+            U128(200),
+        );
+    }
+
+    #[test]
     fn successful_commitment_settlement_reduces_balance_and_removes_commitment() {
         let mut contract = setup("owner.near");
         contract.treasury_balance = 1_000;
@@ -2410,7 +2506,7 @@ mod tests {
             U128(200),
             "Retryable invoice".to_string(),
         );
-        contract.settle_commitment("failed-invoice".to_string());
+        let _ = contract.settle_commitment("failed-invoice".to_string());
         let started = emitted_events();
         assert!(has_event(&started, "transfer_started"));
         assert_eq!(started.last().unwrap()["data"][0]["kind"], "commitment_settlement");
@@ -2430,7 +2526,7 @@ mod tests {
         let mut token_context = VMContextBuilder::new();
         token_context.predecessor_account_id(account("token.near"));
         testing_env!(token_context.build());
-        contract.ft_on_transfer(account("depositor.near"), U128(75), String::new());
+        let _ = contract.ft_on_transfer(account("depositor.near"), U128(75), String::new());
         let events = emitted_events();
         assert!(has_event(&events, "deposit_credited"));
         assert_eq!(events[0]["data"][0]["sender_id"], "depositor.near");
