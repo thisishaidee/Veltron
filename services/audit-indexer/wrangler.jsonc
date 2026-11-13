@@ -26,6 +26,6 @@
     "NETWORK": "testnet",
     "TREASURY_ACCOUNT": "veltron-treasury.testnet",
     "START_BLOCK_HEIGHT": "277136692",
-    "MAX_BLOCKS_PER_TICK": "10"
+    "MAX_BLOCKS_PER_TICK": "30"
   }
 }
