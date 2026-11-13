@@ -1,3 +1,4 @@
+import { ingestBlock } from "./storage.js";
 import { runFinalizedIndexer } from "./collector.js";
 
 const EVENT_NAMES = new Set([
@@ -124,64 +125,6 @@ function rowToEvent(row) {
       receipt_status: row.receipt_status
     }
   };
-}
-
-export async function ingestBlock(db, config, block) {
-  if (!block || block.finalized !== true) throw new Error("Only finalized blocks may be ingested");
-  if (block.network !== config.network) throw new Error("Network mismatch");
-  if (block.contract_id !== config.contractId) throw new Error("Contract mismatch");
-  if (!isSafeInteger(block.block_height)) throw new Error("Invalid block height");
-  requiredString(block.block_hash, "block_hash");
-  requiredString(block.prev_block_hash, "prev_block_hash");
-  requiredString(block.block_timestamp_ns, "block_timestamp_ns");
-  if (!/^\d+$/.test(block.block_timestamp_ns)) throw new Error("block_timestamp_ns must be a decimal integer string");
-  if (!Array.isArray(block.events) || block.events.length > MAX_BATCH_EVENTS) {
-    throw new Error("events must be an array containing at most " + MAX_BATCH_EVENTS + " entries");
-  }
-
-  const validated = block.events.map((event) => validateEvent(event, block, config.contractId));
-  const existing = await db.prepare(
-    "SELECT block_height FROM indexer_cursors WHERE network = ? AND contract_id = ?"
-  ).bind(config.network, config.contractId).first();
-  if (existing && block.block_height < existing.block_height) {
-    throw new Error("Block height moved behind the durable cursor");
-  }
-  if (existing && block.block_height === existing.block_height && block.block_hash !== existing.block_hash) {
-    throw new Error("Block hash changed at the current finalized cursor");
-  }
-  if (existing && block.block_height > existing.block_height + 1) {
-    throw new Error("Block gap detected; refusing to advance the cursor past unindexed heights");
-  }
-  if (existing && block.block_height === existing.block_height + 1 && block.prev_block_hash !== existing.block_hash) {
-    throw new Error("Previous block hash does not match the durable finalized cursor");
-  }
-
-  const statements = validated.map((event) => db.prepare(`
-    INSERT OR IGNORE INTO audit_events (
-      network, contract_id, receipt_id, log_index, block_height, block_hash,
-      block_timestamp_ns, transaction_hash, receipt_index, receipt_status,
-      event_type, event_version, actor_id, event_timestamp_ns, transfer_id,
-      commitment_id, payload_json
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(
-    config.network, config.contractId, event.receiptId, event.logIndex,
-    block.block_height, block.block_hash, block.block_timestamp_ns,
-    event.transactionHash, event.receiptIndex, event.receiptStatus,
-    event.eventType, event.eventVersion, event.actorId, event.eventTimestamp,
-    event.transferId, event.commitmentId, event.payload
-  ));
-  statements.push(db.prepare(`
-    INSERT INTO indexer_cursors (network, contract_id, block_height, block_hash, block_timestamp_ns, updated_at)
-    VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-    ON CONFLICT(network, contract_id) DO UPDATE SET
-      block_height = excluded.block_height,
-      block_hash = excluded.block_hash,
-      block_timestamp_ns = excluded.block_timestamp_ns,
-      updated_at = CURRENT_TIMESTAMP
-    WHERE excluded.block_height >= indexer_cursors.block_height
-  `).bind(config.network, config.contractId, block.block_height, block.block_hash, block.block_timestamp_ns));
-  await db.batch(statements);
-  return { accepted: validated.length, block_height: block.block_height };
 }
 
 async function getEvents(request, env) {
