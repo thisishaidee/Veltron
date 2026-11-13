@@ -168,7 +168,7 @@ impl Veltron {
         require!(agent_id != token_id, "Agent and token contract must differ");
         require!(owner_id != agent_id, "Owner and agent must differ");
         require!(max_per_transaction.0 > 0, "Transaction limit must be positive");
-        Self {
+        let contract = Self {
             owner_id,
             token_id,
             agent_id,
@@ -186,7 +186,18 @@ impl Veltron {
             observed_token_balance: None,
             ledger_balance_at_observation: None,
             balance_observed_at_ns: None,
-        }
+        };
+        emit_event("treasury_initialized", json!({
+            "treasury_id": treasury_id.as_str(),
+            "owner_id": contract.owner_id.as_str(),
+            "token_id": contract.token_id.as_str(),
+            "agent_id": contract.agent_id.as_str(),
+            "max_per_transaction": contract.max_per_transaction.to_string(),
+            "safety_reserve": contract.safety_reserve.to_string(),
+            "treasury_balance": "0",
+            "paused": false
+        }));
+        contract
     }
 
     /// NEP-141 receiver. Only the configured token contract can credit the ledger.
