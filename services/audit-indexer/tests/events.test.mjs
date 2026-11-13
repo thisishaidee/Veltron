@@ -90,6 +90,16 @@ test("rejects a gap in a finalized block batch before writing any rows", async (
   assert.equal(db.statements.length, 0);
 });
 
+test("rejects a first batch that skips the configured coverage start block", async () => {
+  const db = fakeDb();
+  const skipped = { ...block, block_height: 121, prev_block_hash: block.block_hash };
+  await assert.rejects(
+    () => ingestBlocks(db, config, [skipped]),
+    /First ingested block must equal the configured coverage start height/
+  );
+  assert.equal(db.statements.length, 0);
+});
+
 test("rejects unfinalized blocks", async () => {
   await assert.rejects(() => ingestBlock(fakeDb(), config, { ...block, finalized: false }), /Only finalized blocks/);
 });
