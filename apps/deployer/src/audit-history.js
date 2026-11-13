@@ -71,8 +71,11 @@ async function load(reset) {
     cursor = body.next_cursor || null;
     activeNetwork = body.network === "mainnet" ? "mainnet" : "testnet";
     const index = body.indexing || {};
-    $("coverage").textContent = index.history_complete && index.coverage_start_height ? "Complete from block " + index.coverage_start_height : index.coverage_start_height ? "Backfill in progress" : "Awaiting release start block";
-    $("watermark").textContent = index.indexed_through?.block_height ?? "No finalized block indexed";
+    const coverageStart = Number.isSafeInteger(index.coverage_start_height) ? index.coverage_start_height : null;
+    const finalizedHead = Number.isSafeInteger(index.finalized_head_height) ? index.finalized_head_height : null;
+    const indexedThrough = Number.isSafeInteger(index.indexed_through?.block_height) ? index.indexed_through.block_height : null;
+    $("coverage").textContent = index.history_complete && coverageStart !== null ? "Complete from block " + coverageStart : coverageStart !== null ? "Backfill in progress from block " + coverageStart : "Awaiting release start block";
+    $("watermark").textContent = indexedThrough === null ? "No finalized block indexed" : "Block " + indexedThrough + (finalizedHead === null ? "" : " of finalized head " + finalizedHead);
     $("coverage-note").textContent = index.note || "Coverage has not been verified.";
     $("service-status").textContent = "Connected · " + (body.network || "unknown network") + " · " + (body.contract_id || "unknown contract");
     const coverageStatus = index.history_complete ? "All finalized blocks from block " + index.coverage_start_height + " through block " + index.finalized_head_height + " are indexed." : index.coverage_start_height ? "Backfill is still in progress." : "Waiting for the event-emitting release block; historical coverage has not started.";
