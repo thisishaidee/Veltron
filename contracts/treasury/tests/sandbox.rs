@@ -262,10 +262,39 @@ async fn sandbox_commitment_settlement_success_failure_and_retry() -> anyhow::Re
             .into_result()?;
     }
 
-    // Registered recipient: the real NEP-141 transfer and callback should settle.
+    // Stale owner snapshots must not be able to redirect or resize a settlement.
+    let stale_recipient = owner
+        .call(treasury.id(), "settle_commitment_checked")
+        .args_json(json!({
+            "id": "paid-invoice",
+            "expected_recipient_id": initially_unregistered_vendor.id(),
+            "expected_amount": "200"
+        }))
+        .max_gas()
+        .transact()
+        .await?;
+    assert!(stale_recipient.into_result().is_err());
+
+    let stale_amount = owner
+        .call(treasury.id(), "settle_commitment_checked")
+        .args_json(json!({
+            "id": "paid-invoice",
+            "expected_recipient_id": paid_vendor.id(),
+            "expected_amount": "201"
+        }))
+        .max_gas()
+        .transact()
+        .await?;
+    assert!(stale_amount.into_result().is_err());
+
+    // Registered recipient: the guarded method pays only the reviewed values.
     let successful_settlement = owner
-        .call(treasury.id(), "settle_commitment")
-        .args_json(json!({ "id": "paid-invoice" }))
+        .call(treasury.id(), "settle_commitment_checked")
+        .args_json(json!({
+            "id": "paid-invoice",
+            "expected_recipient_id": paid_vendor.id(),
+            "expected_amount": "200"
+        }))
         .max_gas()
         .transact()
         .await?;
