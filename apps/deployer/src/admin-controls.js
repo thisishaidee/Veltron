@@ -107,7 +107,7 @@ async function readProvider(endpoint, blockHash) {
   ]);
   if (owner !== OWNER) throw new Error(endpoint.name + " reports an unexpected owner.");
   if (!agent || typeof agent.agent_id !== "string") throw new Error(endpoint.name + " returned invalid agent configuration.");
-  if (!position || typeof paused !== "boolean" || !Array.isArray(pending) || !Array.isArray(commitments)) {
+  if (!position || typeof paused !== "boolean" || typeof audit?.audit_pending !== "boolean" || !Array.isArray(pending) || !Array.isArray(commitments)) {
     throw new Error(endpoint.name + " returned incomplete treasury state.");
   }
   const normalizedPosition = {};
@@ -313,6 +313,7 @@ $("network-confirm").addEventListener("change", setActionButtons);
 $("save-agent").addEventListener("click", async () => {
   try {
     const agent_id = validAccount($("agent-id").value.trim());
+    if ([OWNER, TREASURY, "veltron-token.testnet"].includes(agent_id)) throw new Error("The agent must be distinct from the owner, treasury, and token contract.");
     const max_per_transaction = parseVtt($("agent-cap").value);
     await send("set_agent", { agent_id, max_per_transaction }, "agent-status", {
       confirmation: "Change the authorized agent to " + agent_id + " with a per-transaction cap of " + formatVtt(max_per_transaction) + "? Review this exact set_agent call in Meteor."
@@ -322,6 +323,9 @@ $("save-agent").addEventListener("click", async () => {
 $("save-reserve").addEventListener("click", async () => {
   try {
     const amount = parseVtt($("reserve-amount").value, true);
+    if (!snapshot || BigInt(snapshot.position.active_commitments) + BigInt(snapshot.position.pending_discretionary) + BigInt(amount) > BigInt(snapshot.position.treasury_balance)) {
+      throw new Error("The new reserve would make commitments, pending discretionary reservations, and the reserve exceed the treasury balance.");
+    }
     if (BigInt(amount) < BigInt(snapshot?.position.safety_reserve || "0") &&
         !window.confirm("You are reducing the safety reserve. This increases potential spendable funds. Continue to the exact wallet review?")) return;
     await send("set_safety_reserve", { amount }, "reserve-status", {
