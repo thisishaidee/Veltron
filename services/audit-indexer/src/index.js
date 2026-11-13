@@ -45,8 +45,8 @@ function validateEvent(input, block, expectedContract) {
   const receiptId = requiredString(input.receipt_id, "receipt_id");
   const transactionHash = requiredString(input.transaction_hash, "transaction_hash");
   if (!isSafeInteger(input.receipt_index)) throw new Error("receipt_index must be a non-negative safe integer");
-  if (!["SUCCESSFUL", "SUCCESSFUL_UNKNOWN", "FAILURE"].includes(input.receipt_status)) {
-    throw new Error("receipt_status is not a recognized finalized receipt outcome");
+  if (!["SUCCESS_VALUE", "SUCCESS_RECEIPT_ID", "FAILURE", "UNKNOWN"].includes(input.receipt_status)) {
+    throw new Error("receipt_status must preserve the normalized NEAR execution outcome status");
   }
   if (!input.envelope || input.envelope.standard !== "veltron" || input.envelope.version !== "1.0.0") {
     throw new Error("Unsupported VELTRON event standard or version");
@@ -142,6 +142,12 @@ export async function ingestBlock(db, config, block) {
   ).bind(config.network, config.contractId).first();
   if (existing && block.block_height < existing.block_height) {
     throw new Error("Block height moved behind the durable cursor");
+  }
+  if (existing && block.block_height === existing.block_height && block.block_hash !== existing.block_hash) {
+    throw new Error("Block hash changed at the current finalized cursor");
+  }
+  if (existing && block.block_height > existing.block_height + 1) {
+    throw new Error("Block gap detected; refusing to advance the cursor past unindexed heights");
   }
 
   const statements = validated.map((event) => db.prepare(`
