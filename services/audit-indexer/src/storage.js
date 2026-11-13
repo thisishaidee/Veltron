@@ -144,10 +144,15 @@ export async function ingestBlocks(db, config, blocks) {
   // Event rows are idempotent. If a large event batch must be split, the durable
   // cursor is written only after every event batch succeeds; a retry safely
   // replays any already-inserted rows through INSERT OR IGNORE.
-  for (let offset = 0; offset < eventStatements.length; offset += MAX_D1_BATCH_STATEMENTS) {
-    await db.batch(eventStatements.slice(offset, offset + MAX_D1_BATCH_STATEMENTS));
+  const cursorStatement = cursorUpsertStatement(db, config, lastBlock);
+  if (eventStatements.length <= MAX_D1_BATCH_STATEMENTS) {
+    await db.batch([...eventStatements, cursorStatement]);
+  } else {
+    for (let offset = 0; offset < eventStatements.length; offset += MAX_D1_BATCH_STATEMENTS) {
+      await db.batch(eventStatements.slice(offset, offset + MAX_D1_BATCH_STATEMENTS));
+    }
+    await db.batch([cursorStatement]);
   }
-  await db.batch([cursorUpsertStatement(db, config, lastBlock)]);
 
   return {
     accepted,
