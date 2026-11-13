@@ -1,6 +1,16 @@
 name: Guarded VELTRON Testnet treasury upgrade
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/testnet_treasury_state_preflight.py"
+      - "scripts/testnet_dual_rpc_preflight.py"
+      - "scripts/testnet_treasury_initialized_preflight.py"
+      - "scripts/testnet_treasury_fee_preflight.py"
+      - "scripts/treasury_upgrade_state_guard.py"
+      - "scripts/check_treasury_storage_compat.py"
+      - ".github/workflows/guarded-testnet-treasury-deploy.yml"
   workflow_dispatch:
     inputs:
       deployment_intent:
