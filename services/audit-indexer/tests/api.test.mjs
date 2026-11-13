@@ -45,3 +45,14 @@ test("health endpoint includes cross-origin access headers", async () => {
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("access-control-allow-origin"), "*");
 });
+
+
+test("does not expose an external endpoint that can seed or advance the audit cursor", async () => {
+  const response = await worker.fetch(new Request("https://audit.example/internal/v1/blocks", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ block_height: 1, finalized: true })
+  }), env);
+  assert.equal(response.status, 404);
+  assert.equal(response.headers.get("access-control-allow-origin"), null);
+});
