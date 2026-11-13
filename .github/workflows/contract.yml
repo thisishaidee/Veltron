@@ -15,15 +15,59 @@ on:
       - ".github/workflows/contract.yml"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: wasm32-unknown-unknown
-      - name: Build Sandbox contract WASM artifacts
-        run: cargo build --release --target wasm32-unknown-unknown -p veltron-treasury -p veltron-test-token
-      - name: Run treasury contract tests
-        run: cargo test -p veltron-treasury
+          persist-credentials: false
+
+      - name: Install pinned Rust toolchain
+        run: |
+          rustup toolchain install 1.99.1 --profile minimal --target wasm32-unknown-unknown
+          rustup default 1.99.1
+          rustc --version
+          cargo --version
+
+      - name: Build release contract WASM artifacts
+        run: cargo build --locked --release --target wasm32-unknown-unknown -p veltron-treasury -p veltron-test-token
+
+      - name: Run full workspace and NEAR Sandbox tests
+        run: cargo test --locked --workspace -- --nocapture
+
+      - name: Verify reviewed treasury and token artifact identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "0c6495486e476ace94698a844a23925b07b088c759e04848e68d1dbb94f3ed2b  target/wasm32-unknown-unknown/release/veltron_treasury.wasm" | sha256sum --check -
+          echo "5d5041336cc8fc92cc9ca11fff1f0b1f7ead33c4826c6d12013f957ba1e7c95b  target/wasm32-unknown-unknown/release/veltron_test_token.wasm" | sha256sum --check -
+
+      - name: Write exact release artifact manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          TREASURY=target/wasm32-unknown-unknown/release/veltron_treasury.wasm
+          TOKEN=target/wasm32-unknown-unknown/release/veltron_test_token.wasm
+          {
+            echo "source_commit=$(git rev-parse HEAD)"
+            echo "treasury_bytes=$(wc -c < "$TREASURY" | tr -d ' ')"
+            echo "treasury_sha256=$(sha256sum "$TREASURY" | cut -d ' ' -f 1)"
+            echo "token_bytes=$(wc -c < "$TOKEN" | tr -d ' ')"
+            echo "token_sha256=$(sha256sum "$TOKEN" | cut -d ' ' -f 1)"
+          } > target/veltron-wasm-manifest.txt
+          cat target/veltron-wasm-manifest.txt
+
+      - name: Upload verified contract artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: veltron-wasm-${{ github.sha }}
+          path: |
+            target/wasm32-unknown-unknown/release/veltron_treasury.wasm
+            target/wasm32-unknown-unknown/release/veltron_test_token.wasm
+            target/veltron-wasm-manifest.txt
+          if-no-files-found: error
+          retention-days: 14
