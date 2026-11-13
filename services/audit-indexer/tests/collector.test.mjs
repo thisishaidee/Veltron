@@ -4,6 +4,7 @@ import { runFinalizedIndexer } from "../src/collector.js";
 
 function fakeDb(initialCursor = null) {
   let cursor = initialCursor;
+  let batchCalls = 0;
   return {
     prepare(sql) {
       return {
@@ -15,6 +16,7 @@ function fakeDb(initialCursor = null) {
       };
     },
     async batch(statements) {
+      batchCalls++;
       const args = statements.at(-1).args;
       cursor = {
         block_height: args[2],
@@ -25,7 +27,8 @@ function fakeDb(initialCursor = null) {
       };
       return [];
     },
-    get cursor() { return cursor; }
+    get cursor() { return cursor; },
+    get batchCalls() { return batchCalls; }
   };
 }
 
@@ -163,6 +166,50 @@ test("paginates account history and deduplicates transaction hashes before batch
   assert.deepEqual(requestedHashes, ["tx-a", "tx-b"]);
   assert.equal(result.account_transactions, 2);
   assert.equal(result.indexed_events, 0);
+});
+
+test("ingests 200 contiguous block headers with one D1 batch per tick", async () => {
+  const db = fakeDb();
+  const rangeRequests = [];
+  const fetchImpl = async (url, init = {}) => {
+    if (url === "https://rpc.testnet.fastnear.com") {
+      const body = JSON.parse(init.body);
+      const header = body.params.finality === "final"
+        ? { height: 299, hash: "h299" }
+        : { height: 99, hash: "h99" };
+      return Response.json({ result: { header } });
+    }
+    if (url.endsWith("/v0/account")) return Response.json({ account_txs: [], txs_count: 0 });
+    if (url.endsWith("/v0/blocks")) {
+      const body = JSON.parse(init.body);
+      rangeRequests.push(body);
+      const blocks = [];
+      for (let height = body.from_block_height; height < body.to_block_height; height++) {
+        blocks.push({
+          block_height: height,
+          block_hash: "h" + height,
+          prev_block_hash: "h" + (height - 1),
+          block_timestamp: String(height)
+        });
+      }
+      return Response.json({ blocks });
+    }
+    throw new Error("Unexpected URL: " + url);
+  };
+  const result = await runFinalizedIndexer({
+    NETWORK: "testnet",
+    TREASURY_ACCOUNT: contractId,
+    START_BLOCK_HEIGHT: "100",
+    MAX_BLOCKS_PER_TICK: "200",
+    AUDIT_DB: db
+  }, fetchImpl);
+  assert.equal(result.indexed_blocks, 200);
+  assert.equal(result.indexed_through, 299);
+  assert.equal(result.history_complete, true);
+  assert.equal(rangeRequests.length, 2);
+  assert.deepEqual(rangeRequests.map((request) => [request.from_block_height, request.to_block_height]), [[100, 200], [200, 300]]);
+  assert.equal(db.batchCalls, 1);
+  assert.equal(db.cursor.block_height, 299);
 });
 
 test("rejects an incomplete bulk block range without advancing the cursor", async () => {
