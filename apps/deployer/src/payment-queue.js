@@ -1,6 +1,6 @@
 import { NearConnector } from "@hot-labs/near-connect";
 import {
-  OWNER, TREASURY, RPCS, GAS, stable, formatVtt, normalizePending,
+  OWNER, TREASURY, RPCS, stable, formatVtt, normalizePending,
   actionReadiness, paymentCall, uncertainOutcomeMessage
 } from "./payment-queue-core.mjs";
 
@@ -10,6 +10,7 @@ let accountId = "";
 let verifiedSnapshot;
 let busy = false;
 let generation = 0;
+let expiryTimer;
 const TIMEOUT_MS = 12000;
 
 async function rpc(endpoint, method, params) {
@@ -136,6 +137,10 @@ function renderList(containerId, records, isQueued) {
   }
 }
 
+function lockControls() {
+  for (const button of $("queue").querySelectorAll("button")) button.disabled = true;
+}
+
 function updateControls() {
   const readiness = actionReadiness({
     snapshot: verifiedSnapshot,
@@ -184,6 +189,14 @@ async function refresh() {
       checkedAt: Date.now(), blockHeight: heights[0]
     };
     render(verifiedSnapshot);
+    clearTimeout(expiryTimer);
+    const renderedSnapshot = verifiedSnapshot;
+    expiryTimer = setTimeout(() => {
+      if (verifiedSnapshot === renderedSnapshot) {
+        updateControls();
+        $("read-status").textContent = "SNAPSHOT EXPIRED — refresh finalized state from both providers before approving or rejecting.";
+      }
+    }, 30000);
     $("read-status").textContent = "VERIFIED — both providers agree at finalized block " + heights[0] + " (" + hashes[0] + "). Snapshot is actionable for 30 seconds. Last checked " + new Date(verifiedSnapshot.checkedAt).toLocaleTimeString() + ".";
   } catch (error) {
     if (current === generation) {
@@ -250,6 +263,7 @@ $("connect").addEventListener("click", async () => {
     connector = new NearConnector({ network: "testnet", features: { testnet: true }, footerBranding: null });
     connector.on("wallet:signIn", event => {
       accountId = event?.accounts?.[0]?.accountId || "";
+      lockControls();
       verifiedSnapshot = undefined;
       $("wallet-account").textContent = accountId ? "Connected: " + accountId : "Wallet did not return an account.";
       if (accountId !== OWNER) $("wallet-account").textContent += " — owner account required.";
@@ -257,6 +271,7 @@ $("connect").addEventListener("click", async () => {
     });
     connector.on("wallet:signOut", () => {
       accountId = "";
+      lockControls();
       verifiedSnapshot = undefined;
       $("wallet-account").textContent = "Disconnected";
       updateControls();
