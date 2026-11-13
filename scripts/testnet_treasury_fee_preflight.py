@@ -4,15 +4,21 @@
 Reads finalized Testnet protocol parameters, treasury account state, and VTT
 storage bounds. It never constructs, signs, or submits a transaction.
 """
+import base64
+import hashlib
 import json
 import urllib.request
+from pathlib import Path
 
 RPC = "https://rpc.testnet.near.org"
 TREASURY = "veltron-treasury.testnet"
 TOKEN = "veltron-token.testnet"
-TREASURY_WASM_BYTES = 338_088
-EXPECTED_TREASURY_SHA256 = "3ed0cf173950f319fce18fd6f286c899ea264c76d2e1f4fd1411b54ce3455d36"
+TREASURY_WASM_BYTES = 410_613
+EXPECTED_TREASURY_SHA256 = "0c6495486e476ace94698a844a23925b07b088c759e04848e68d1dbb94f3ed2b"
+EXPECTED_EXISTING_TREASURY_SHA256 = "a70d8aea3538fd177859fdb7e31b8c1c1e7a982de24d76dbdcf4d88b006d2aca"
+EXPECTED_EXISTING_TREASURY_BYTES = 339_256
 YOCTO = 10**24
+MIN_REMAINING_BALANCE = YOCTO // 10  # Keep at least 0.1 NEAR beyond projected reserves and the deploy fee.
 
 
 def rpc(method, params, request_id):
@@ -26,7 +32,6 @@ def rpc(method, params, request_id):
 
 
 def view(account_id, method, args=None):
-    import base64
     encoded = base64.b64encode(json.dumps(args or {}, separators=(",", ":")).encode()).decode()
     result = rpc("query", {
         "request_type": "call_function",
@@ -54,9 +59,17 @@ deploy_per_byte = action["deploy_contract_cost_per_byte"]
 deploy_send_gas = int(deploy_base["send_sir"]) + TREASURY_WASM_BYTES * int(deploy_per_byte["send_sir"])
 deploy_exec_gas = int(deploy_base["execution"]) + TREASURY_WASM_BYTES * int(deploy_per_byte["execution"])
 receipt = costs["action_receipt_creation_config"]
-receipt_gas = int(receipt["send_sir"]) + int(receipt["execution"])
-transaction_fee_gas = deploy_send_gas + deploy_exec_gas + receipt_gas
-transaction_fee_yocto = transaction_fee_gas * gas_price
+receipt_send_gas = int(receipt["send_sir"])
+receipt_exec_gas = int(receipt["execution"])
+send_gas = deploy_send_gas + receipt_send_gas
+execution_gas = deploy_exec_gas + receipt_exec_gas
+if "min_gas_purchase_price" not in runtime:
+    raise SystemExit("FAIL: runtime_config omitted min_gas_purchase_price; refusing to understate the execution fee.")
+min_gas_purchase_price = int(runtime["min_gas_purchase_price"])
+receipt_gas_price = max(gas_price, min_gas_purchase_price)
+send_fee_yocto = send_gas * gas_price
+execution_fee_yocto = execution_gas * receipt_gas_price
+transaction_fee_yocto = send_fee_yocto + execution_fee_yocto
 deploy_action_fee_yocto = deploy_send_gas * gas_price
 
 account = rpc("query", {
@@ -67,46 +80,53 @@ account = rpc("query", {
 balance = int(account["amount"])
 storage_per_byte = int(runtime["storage_amount_per_byte"])
 current_storage = int(account.get("storage_usage", 0))
-projected_storage = current_storage + TREASURY_WASM_BYTES
+if current_storage < EXPECTED_EXISTING_TREASURY_BYTES:
+    raise SystemExit("FAIL: deployed code size exceeds account storage usage; refusing storage projection.")
+projected_storage = current_storage - EXPECTED_EXISTING_TREASURY_BYTES + TREASURY_WASM_BYTES
 projected_storage_reserve = projected_storage * storage_per_byte
 vtt_bounds = view(TOKEN, "storage_balance_bounds")
 vtt_minimum = int(vtt_bounds["min"])
 
-try:
-    code = rpc("query", {
-        "request_type": "view_code",
-        "finality": "final",
-        "account_id": TREASURY,
-    }, "treasury-code")
-    deployed = bool(code.get("code_base64"))
-except RuntimeError as exc:
-    if "contract code" in str(exc).lower() or "code not found" in str(exc).lower():
-        deployed = False
-    else:
-        raise
+WASM = Path("candidate-contract/target/wasm32-unknown-unknown/release/veltron_treasury.wasm")
+if not WASM.is_file():
+    raise SystemExit(f"FAIL: expected treasury WASM artifact not found: {WASM}")
+local_wasm = WASM.read_bytes()
+local_hash = hashlib.sha256(local_wasm).hexdigest()
+if len(local_wasm) != TREASURY_WASM_BYTES or local_hash != EXPECTED_TREASURY_SHA256:
+    raise SystemExit(f"FAIL: local treasury WASM does not match recorded CI artifact (bytes={len(local_wasm)}, sha256={local_hash}).")
 
-if deployed:
-    print("VELTRON TREASURY DEPLOYMENT COST PREFLIGHT — READ ONLY")
-    print(f"Finalized Testnet block: {height} ({block['header']['hash']})")
-    print("Treasury account already has deployed contract code.")
-    print("Skipping the pre-deployment cost estimate; use the live deployment and storage verification steps instead.")
-    print("No transaction was constructed, signed, or submitted.")
-    raise SystemExit(0)
-if TREASURY_WASM_BYTES <= 0:
-    raise SystemExit("FAIL: invalid treasury WASM size.")
+code = rpc("query", {
+    "request_type": "view_code",
+    "finality": "final",
+    "account_id": TREASURY,
+}, "treasury-code")
+if not code.get("code_base64"):
+    raise SystemExit("FAIL: treasury contract code was not found; expected an existing initialized contract for this upgrade.")
+existing_hash = hashlib.sha256(base64.b64decode(code["code_base64"])).hexdigest()
+if existing_hash != EXPECTED_EXISTING_TREASURY_SHA256:
+    raise SystemExit(f"FAIL: on-chain treasury code differs from reviewed pre-upgrade version (actual={existing_hash}). Stop and investigate.")
+
 
 remaining_after_reserves = balance - projected_storage_reserve - vtt_minimum
 remaining_after_deploy_fee = remaining_after_reserves - transaction_fee_yocto
+if remaining_after_deploy_fee < MIN_REMAINING_BALANCE:
+    raise SystemExit(
+        "FAIL: treasury balance does not cover projected storage, VTT registration, "
+        "the one-action deployment fee, and the required 0.1 NEAR safety margin."
+    )
 
 print("VELTRON TREASURY DEPLOYMENT COST PREFLIGHT — READ ONLY")
 print(f"Finalized Testnet block: {height} ({block['header']['hash']})")
 print(f"Protocol version: {config.get('protocol_version', 'not returned')}")
 print(f"Gas price: {gas_price} yoctoNEAR/gas")
 print(f"Treasury WASM bytes (expected CI build): {TREASURY_WASM_BYTES}")
-print(f"Expected treasury WASM SHA-256: {EXPECTED_TREASURY_SHA256}")
+print(f"Expected new treasury WASM SHA-256: {EXPECTED_TREASURY_SHA256}")
+print(f"Verified existing on-chain treasury SHA-256: {existing_hash}")
+print(f"Minimum gas purchase price: {min_gas_purchase_price} yoctoNEAR/gas")
+print(f"Receipt gas price used for prepaid execution: {receipt_gas_price} yoctoNEAR/gas")
 print(f"DeployContract send gas: {deploy_send_gas}")
 print(f"DeployContract action send fee: {deploy_action_fee_yocto / YOCTO:.12f} NEAR")
-print(f"One-action transaction fee estimate (receipt + DeployContract send/execution): {transaction_fee_yocto / YOCTO:.12f} NEAR")
+print(f"One-action transaction fee estimate (send gas at current price + prepaid execution at receipt price): {transaction_fee_yocto / YOCTO:.12f} NEAR")
 print("Fee estimate excludes signature-verification gas, initialization, and later transactions.")
 print(f"Treasury balance: {balance / YOCTO:.12f} NEAR")
 print(f"Current storage usage: {current_storage} bytes")
@@ -115,5 +135,6 @@ print(f"Projected code + current storage reserve: {projected_storage_reserve / Y
 print(f"VTT storage registration minimum (separate future transaction): {vtt_minimum / YOCTO:.9f} NEAR")
 print(f"Balance after projected storage and VTT registration reserves: {remaining_after_reserves / YOCTO:.12f} NEAR")
 print(f"Balance after additionally subtracting one-action deploy fee estimate: {remaining_after_deploy_fee / YOCTO:.12f} NEAR")
+print(f"Required remaining safety margin: {MIN_REMAINING_BALANCE / YOCTO:.1f} NEAR")
 print("This is an estimate, not a deployment authorization or guarantee of sufficiency.")
 print("No transaction was constructed, signed, or submitted.")
