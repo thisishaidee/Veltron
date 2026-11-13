@@ -17,7 +17,7 @@ async function mockRpc(page, disagree = false, legacyContract = false) {
     if (body.method === "status") {
       result = { chain_id: "testnet" };
     } else if (body.method === "block") {
-      result = { header: { hash: provider === "fast" && disagree ? "different-block" : "shared-finalized-block", height: 12345 } };
+      result = { header: { hash: "shared-finalized-block", height: 12345 } };
     } else if (body.method === "query" && body.params.request_type === "view_account") {
       result = {
         block_hash: body.params.block_id,
@@ -28,7 +28,7 @@ async function mockRpc(page, disagree = false, legacyContract = false) {
       const values = {
         get_owner: OWNER,
         get_financial_position: {
-          treasury_balance: "5000000000", active_commitments: "1000000000",
+          treasury_balance: provider === "fast" && disagree ? "5000000001" : "5000000000", active_commitments: "1000000000",
           safety_reserve: "200000000", pending_discretionary: "125500000",
           spendable_balance: "3674500000"
         },
@@ -69,7 +69,7 @@ test("keeps payment requests visible but disables decisions on the legacy deploy
 test("withholds queue and all owner controls when finalized block providers disagree", async ({ page }) => {
   await mockRpc(page, true);
   await page.goto("/payment-queue.html");
-  await expect(page.locator("#read-status")).toContainText("do not agree on the same finalized block");
+  await expect(page.locator("#read-status")).toContainText("disagree on treasury state at the same finalized block");
   await expect(page.locator("#queue")).toContainText("Requests withheld");
   await expect(page.getByRole("button", { name: "Refresh verified state" })).toBeEnabled();
 });
