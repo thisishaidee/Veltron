@@ -326,7 +326,6 @@ impl Veltron {
         let position = self.calculate_position();
         require!(amount.0 <= position.spendable_balance.0, "Insufficient spendable balance");
         require!(self.pending.len() < MAX_PENDING_TRANSFERS as u64, "Maximum pending transfers reached");
-        self.invalidate_balance_audit();
         let id = self.next_transfer_id;
         self.next_transfer_id = self.next_transfer_id.checked_add(1)
             .unwrap_or_else(|| env::panic_str("Payment request ID overflow"));
@@ -392,7 +391,7 @@ impl Veltron {
     pub fn refresh_token_balance_audit(&mut self) -> Promise {
         self.assert_owner();
         require!(!self.balance_audit_pending, "A token balance audit is already pending");
-        require!(self.pending.is_empty(), "Cannot audit while transfers are pending");
+        require!(!self.has_in_flight_transfers(), "Cannot audit while transfers are pending");
         self.balance_audit_pending = true;
         ext_ft::ext(self.token_id.clone())
             .with_static_gas(BALANCE_QUERY_GAS)
@@ -418,7 +417,7 @@ impl Veltron {
     pub fn reconcile_token_surplus(&mut self, amount: U128) {
         self.assert_owner();
         require!(!self.balance_audit_pending, "Token balance audit in progress");
-        require!(self.pending.is_empty(), "Cannot reconcile while transfers are pending");
+        require!(!self.has_in_flight_transfers(), "Cannot reconcile while transfers are pending");
         require!(amount.0 > 0, "Reconciliation amount must be positive");
 
         let observed_balance = self.observed_token_balance
@@ -563,6 +562,15 @@ impl Veltron {
         self.observed_token_balance = None;
         self.ledger_balance_at_observation = None;
         self.balance_observed_at_ns = None;
+    }
+
+    /// Queued approval requests reserve ledger funds but do not create token promises.
+    /// Audits and reconciliation only need to wait for actual outgoing transfers.
+    fn has_in_flight_transfers(&self) -> bool {
+        self.pending.iter().any(|(_, pending)| matches!(
+            pending.kind,
+            PendingKind::Discretionary { .. } | PendingKind::CommitmentSettlement { .. }
+        ))
     }
 
     fn pending_discretionary_total(&self) -> u128 {
