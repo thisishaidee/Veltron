@@ -18,16 +18,24 @@ async function fetchJsonWithRetry(url, init, fetchImpl, label, maxAttempts = 4) 
   throw new Error(label + " failed after retries");
 }
 
-async function getRpcBlockHeader(rpcUrl, params, fetchImpl) {
-  const document = await fetchJsonWithRetry(rpcUrl, {
-    method: "POST",
-    headers: { accept: "application/json", "content-type": "application/json" },
-    body: JSON.stringify({ jsonrpc: "2.0", id: "veltron-audit-indexer", method: "block", params })
-  }, fetchImpl, "NEAR RPC block request");
-  if (document?.error || !document?.result?.header) {
-    throw new Error("NEAR RPC block response is missing its finalized header");
+async function getRpcBlockHeader(rpcUrls, params, fetchImpl) {
+  const failures = [];
+  for (const rpcUrl of rpcUrls) {
+    try {
+      const document = await fetchJsonWithRetry(rpcUrl, {
+        method: "POST",
+        headers: { accept: "application/json", "content-type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: "veltron-audit-indexer", method: "block", params })
+      }, fetchImpl, "NEAR RPC block request", 2);
+      if (document && document.error || !document || !document.result || !document.result.header) {
+        throw new Error("RPC response is missing its finalized block header");
+      }
+      return document.result.header;
+    } catch (error) {
+      failures.push(rpcUrl + ": " + String(error.message || error));
+    }
   }
-  return document.result.header;
+  throw new Error("All NEAR RPC block providers failed: " + failures.join("; "));
 }
 
 function outcomeStatus(status) {
