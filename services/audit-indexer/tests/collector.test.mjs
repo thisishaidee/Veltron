@@ -60,7 +60,7 @@ test("retries a rate-limited finalized-head RPC request", async () => {
       const header = body.params.finality === "final" ? { height: 50, hash: "h50" } : { height: 49, hash: "h49" };
       return Response.json({ jsonrpc: "2.0", id: body.id, result: { header } });
     }
-    return Response.json({ block: { header: { height: 50, hash: "h50", prev_hash: "h49", timestamp_nanosec: "50" }, shards: [] } });
+    return Response.json({ block: { header: { height: 50, hash: "h50", prev_hash: "h49", timestamp_nanosec: "50" } }, shards: [] });
   };
   const result = await runFinalizedIndexer({
     NETWORK: "testnet", TREASURY_ACCOUNT: "veltron-treasury.testnet",
