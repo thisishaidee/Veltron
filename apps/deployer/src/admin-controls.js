@@ -346,9 +346,15 @@ $("resume").addEventListener("click", async () => {
 async function settle(item) {
   try {
     if (item.settlement_pending) throw new Error("Settlement is already pending.");
-    await send("settle_commitment", { id: item.id }, "settlement-status", {
+    const expectedAmount = raw(item.amount, "commitment amount");
+    const expectedRecipient = item.recipient_id;
+    await send("settle_commitment_checked", {
+      id: item.id,
+      expected_recipient_id: expectedRecipient,
+      expected_amount: expectedAmount
+    }, "settlement-status", {
       requireUnpaused: true,
-      confirmation: "Settle commitment " + item.id + " for " + formatVtt(raw(item.amount, "commitment amount")) + " to " + item.recipient_id + "? The contract pays only the recorded recipient. Review settle_commitment in Meteor."
+      confirmation: "Settle commitment " + item.id + " for " + formatVtt(expectedAmount) + " to " + expectedRecipient + "? The contract will reject this if the commitment amount or recipient changed. Review settle_commitment_checked and its exact arguments in Meteor."
     });
   } catch (error) { $("settlement-status").textContent = "NOT SENT — " + String(error?.message || error); }
 }
