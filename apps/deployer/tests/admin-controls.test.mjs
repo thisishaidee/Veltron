@@ -25,7 +25,7 @@ test("owner actions are restricted to the configured owner and explicit Testnet 
 test("surplus reconciliation requires a completed current audit and no pending transfers", () => {
   assert.match(source, /snapshot\.audit\.audit_pending/);
   assert.match(source, /snapshot\.pending\.length !== 0/);
-  assert.match(source, /AUDIT_MAX_AGE_NS = 300000000000n/);
+  assert.match(source, /AUDIT_MAX_AGE_NS = 30000000000n/);
   assert.match(source, /auditAge > AUDIT_MAX_AGE_NS/);
   assert.match(source, /ledgerAtObservation !== snapshot\.position\.treasury_balance/);
   assert.match(source, /BigInt\(amount\) > surplus/);
