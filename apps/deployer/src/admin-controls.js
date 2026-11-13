@@ -15,7 +15,7 @@ let snapshot;
 let busy = false;
 let generation = 0;
 const SNAPSHOT_TTL_MS = 30000;
-const AUDIT_MAX_AGE_NS = 300000000000n;
+const AUDIT_MAX_AGE_NS = 30000000000n;
 const TIMEOUT_MS = 12000;
 
 async function rpc(endpoint, method, params) {
@@ -176,7 +176,7 @@ function render(s) {
     const surplus = BigInt(s.audit.observed_token_balance) - BigInt(s.audit.ledger_balance_at_observation);
     const auditAge = s.blockTimestampNs ? BigInt(s.blockTimestampNs) - BigInt(s.audit.observed_at_ns || "0") : AUDIT_MAX_AGE_NS + 1n;
     $("surplus").textContent = surplus > 0n
-      ? "Observed surplus: " + formatVtt(surplus.toString()) + (s.audit.ledger_balance_at_observation === s.position.treasury_balance && auditAge >= 0n && auditAge <= AUDIT_MAX_AGE_NS ? ". Audit ledger matches current ledger and observation is under five minutes old." : ". STALE: ledger changed or audit is older than five minutes; refresh the balance audit.")
+      ? "Observed surplus: " + formatVtt(surplus.toString()) + (s.audit.ledger_balance_at_observation === s.position.treasury_balance && auditAge >= 0n && auditAge <= AUDIT_MAX_AGE_NS ? ". Audit ledger matches current ledger and observation is under 30 seconds old." : ". STALE: ledger changed or audit is older than 30 seconds; refresh the balance audit.")
       : "No positive token surplus was observed.";
   } else $("surplus").textContent = "No completed balance audit is available. Use the separate Balance Audit page first.";
   renderCommitments(s.commitments);
