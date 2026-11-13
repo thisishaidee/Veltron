@@ -81,7 +81,7 @@ Build the dashboard with `npm run build` and run commitment safety tests with `n
 
 ## Owner controls
 
-The owner-controls page exposes existing treasury methods for changing the authorized agent and per-transaction cap, adjusting the safety reserve, pausing/resuming outgoing transfers, settling a recorded commitment, and reconciling a token surplus supported by a successful balance audit. Each operation is owner-only, uses a fresh dual-provider finalized snapshot, and requires an explicit Meteor wallet approval. The page does not invent agent permission flags that the contract does not implement.
+The owner-controls page exposes existing treasury methods for changing the authorized agent and per-transaction cap, adjusting the safety reserve, pausing/resuming outgoing transfers, settling a recorded commitment, and reconciling a token surplus supported by a successful balance audit no older than five minutes. Each operation is owner-only, uses a fresh dual-provider finalized snapshot, and requires an explicit Meteor wallet approval. The page does not invent agent permission flags that the contract does not implement.
 
 The page also displays current pending transfers, active commitments, and the latest token-balance audit. This is a current-state view, not a complete historical event log: the current contract does not expose a queryable historical event ledger. A full historical audit trail requires a separately designed and independently verified event-indexing source.
 
