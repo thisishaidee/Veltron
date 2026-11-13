@@ -52,7 +52,7 @@ test("uses indexed account history, batched transaction receipts, and bulk final
     if (url === "https://rpc.testnet.fastnear.com") return rpcResponse(JSON.parse(init.body));
     if (url === "https://tx.test.fastnear.com/v0/account") {
       return Response.json({
-        account_txs: [{ transaction_hash: "tx-before-coverage", tx_block_height: 99 }],
+        account_txs: [{ transaction_hash: "tx-before-coverage", tx_block_height: 99, tx_index: 4 }],
         txs_count: 1
       });
     }
@@ -126,7 +126,7 @@ test("paginates account history and deduplicates transaction hashes before batch
       if (accountPage === 1) {
         assert.equal(body.resume_token, undefined);
         return Response.json({
-          account_txs: [{ transaction_hash: "tx-a", tx_block_height: 99 }],
+          account_txs: [{ transaction_hash: "tx-a", tx_block_height: 99, tx_index: 1 }],
           resume_token: "page-2"
         });
       }
@@ -134,7 +134,7 @@ test("paginates account history and deduplicates transaction hashes before batch
       return Response.json({
         account_txs: [
           { transaction_hash: "tx-a", tx_block_height: 99 },
-          { transaction_hash: "tx-b", tx_block_height: 100 }
+          { transaction_hash: "tx-b", tx_block_height: 100, tx_index: 2 }
         ],
         resume_token: null
       });
