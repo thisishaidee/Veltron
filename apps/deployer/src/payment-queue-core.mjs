@@ -46,8 +46,11 @@ export function normalizePending(records) {
     const serializedKind = keys[0];
     const kind = ({
       DiscretionaryRequest: "discretionary_request",
+      discretionary_request: "discretionary_request",
       Discretionary: "discretionary",
-      CommitmentSettlement: "commitment_settlement"
+      discretionary: "discretionary",
+      CommitmentSettlement: "commitment_settlement",
+      commitment_settlement: "commitment_settlement"
     })[serializedKind];
     if (!kind) throw new Error("Unknown pending record kind: " + serializedKind);
     const detail = item.kind[serializedKind];
