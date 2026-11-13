@@ -252,11 +252,12 @@ impl Veltron {
         require!(self.commitment_ids.insert(&id), "Commitment index already exists");
         self.active_commitments_total = new_total;
         self.assert_solvent();
+        let created = self.commitments.get(&id).expect("new commitment exists");
         emit_event("commitment_created", json!({
             "commitment_id": id,
-            "recipient_id": self.commitments.get(&id).expect("new commitment exists").recipient_id.as_str(),
-            "amount": amount.0.to_string(),
-            "description": self.commitments.get(&id).expect("new commitment exists").description
+            "recipient_id": created.recipient_id.as_str(),
+            "amount": created.amount.to_string(),
+            "description": created.description
         }));
     }
 
@@ -438,7 +439,7 @@ impl Veltron {
         self.assert_owner();
         let request = self.pending.get(&request_id.0)
             .unwrap_or_else(|| env::panic_str("Payment request not found"));
-        require!(matches!(request.kind, PendingKind::DiscretionaryRequest { .. }),
+        require!(matches!(&request.kind, PendingKind::DiscretionaryRequest { .. }),
             "Pending item is not an approval request");
         self.pending.remove(&request_id.0);
         env::log_str(&format!("VELTRON_PAYMENT_REJECTED id={}", request_id.0));
