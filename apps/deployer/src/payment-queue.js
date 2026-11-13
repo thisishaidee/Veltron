@@ -227,6 +227,25 @@ async function act(methodName, requestId) {
   const verb = methodName === "approve_payment" ? "APPROVE" : "REJECT";
   if (!window.confirm(verb + " request #" + requestId + " for " + formatVtt(record.amount) + " to " + record.detail.recipient_id + "? Meteor will show one FunctionCall to " + TREASURY + ".")) return;
 
+  // Native confirmation dialogs block the event loop, so the expiry timer cannot
+  // run while the dialog is open. Revalidate the snapshot and request immediately
+  // after confirmation, before opening the wallet for signing.
+  const confirmedReadiness = actionReadiness({
+    snapshot: verifiedSnapshot,
+    accountId,
+    networkConfirmed: $("network-confirm").checked
+  });
+  const confirmedRecord = verifiedSnapshot?.queued.find(item => item.id === String(requestId));
+  if (busy || (methodName === "approve_payment" ? !confirmedReadiness.canApprove : !confirmedReadiness.canReject) ||
+      !confirmedRecord || confirmedRecord.amount !== record.amount ||
+      confirmedRecord.detail.recipient_id !== record.detail.recipient_id ||
+      confirmedRecord.detail.memo !== record.detail.memo ||
+      !connector || accountId !== OWNER) {
+    $("read-status").textContent = "Action cancelled: the verified snapshot expired or owner/request state changed while confirmation was open. Refresh finalized state before trying again.";
+    await refresh();
+    return;
+  }
+
   busy = true;
   generation += 1;
   for (const queued of verifiedSnapshot?.queued || []) {
