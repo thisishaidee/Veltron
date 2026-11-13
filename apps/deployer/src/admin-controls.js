@@ -132,7 +132,7 @@ async function readProvider(endpoint, blockHash) {
 }
 function readiness() {
   return !busy && accountId === OWNER && $("network-confirm").checked &&
-    snapshot?.verified === true && Date.now() - snapshot.checkedAt <= SNAPSHOT_TTL_MS;
+    snapshot?.verified === true && Number.isFinite(snapshot.checkedAtMonotonic) &&\n    performance.now() - snapshot.checkedAtMonotonic >= 0 &&\n    performance.now() - snapshot.checkedAtMonotonic <= SNAPSHOT_TTL_MS;
 }
 function setActionButtons() {
   const ready = readiness();
@@ -244,12 +244,12 @@ async function refresh() {
     const [a,b] = await Promise.all(RPCS.map(endpoint => readProvider(endpoint, hash)));
     if (current !== generation) return;
     if (stable(a) !== stable(b)) throw new Error("RPC providers disagree at the same finalized block. State is withheld.");
-    snapshot = { ...a, blockTimestampNs, verified: true, checkedAt: Date.now() };
+    snapshot = { ...a, blockTimestampNs, verified: true, checkedAtMonotonic: performance.now() };
     render(snapshot);
     $("read-status").textContent = "VERIFIED — both providers agree at finalized block " + hash + ". Snapshot expires after 30 seconds. No transaction was sent.";
     setActionButtons();
     setTimeout(() => {
-      if (snapshot && Date.now() - snapshot.checkedAt > SNAPSHOT_TTL_MS) {
+      if (snapshot && performance.now() - snapshot.checkedAtMonotonic > SNAPSHOT_TTL_MS) {
         snapshot = undefined; setActionButtons();
         $("read-status").textContent = "SNAPSHOT EXPIRED — refresh finalized state before any owner action.";
       }
