@@ -5,6 +5,7 @@ on:
     paths:
       - "services/audit-indexer/**"
       - ".github/workflows/audit-indexer.yml"
+      - ".github/workflows/deploy-audit-indexer.yml"
       - "apps/deployer/**"
   push:
     branches:
