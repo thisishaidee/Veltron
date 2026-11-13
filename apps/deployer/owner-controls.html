@@ -60,7 +60,7 @@ input[type=checkbox]{width:20px;min-width:20px;vertical-align:middle;accent-colo
 <p id="pause-status" class="status" role="status" aria-live="polite">No action requested.</p>
 </section>
 <section class="panel">
-<h2>6 · Commitment settlement center</h2><p>Settlement sends the committed amount to the recipient already recorded in the commitment. On successful token callback, the contract removes the commitment. A failed transfer leaves the commitment available again.</p>
+<h2>6 · Commitment settlement center</h2><p>Settlement uses settle_commitment_checked with the exact amount and recipient shown in this snapshot. The contract rejects the action if either value changed before execution. On successful token callback, the contract removes the commitment. A failed transfer leaves the commitment available again.</p>
 <div id="commitments" class="status">Refresh verified state to load commitments.</div>
 <p id="settlement-status" class="status" role="status" aria-live="polite">No settlement requested.</p>
 </section>
