@@ -51,7 +51,16 @@ export function normalizePending(records) {
         throw new Error("Queued payment request recipient or memo is malformed.");
       }
       queued.push(record);
-    } else if (kind === "discretionary" || kind === "commitment_settlement") {
+    } else if (kind === "discretionary") {
+      if (typeof detail.recipient_id !== "string" || !/^[a-z0-9._-]{2,64}$/.test(detail.recipient_id) ||
+          !(detail.memo === null || typeof detail.memo === "string")) {
+        throw new Error("In-flight discretionary transfer recipient or memo is malformed.");
+      }
+      transfers.push(record);
+    } else if (kind === "commitment_settlement") {
+      if (typeof detail.commitment_id !== "string" || detail.commitment_id.length < 1 || detail.commitment_id.length > 64) {
+        throw new Error("Commitment settlement record is malformed.");
+      }
       transfers.push(record);
     } else {
       throw new Error("Unknown pending record kind: " + kind);
