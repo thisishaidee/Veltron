@@ -155,7 +155,7 @@
       byId("indexer-event-count").textContent = String(audit.events.length);
       byId("indexer-note").textContent = audit.note || "The indexer watermark is not proof of complete historical coverage.";
       if (!audit.events.length) {
-        byId("indexer-events").textContent = "No VELTRON audit events have been indexed yet. The historical backfill is still in progress.";
+        byId("indexer-events").textContent = "No VELTRON audit events are available yet. The currently deployed treasury contract version does not emit structured VELTRON audit logs, so the indexer cannot reconstruct earlier activity. New events can appear after the event-emitting contract release is safely installed.";
       } else {
         byId("indexer-events").innerHTML = table(
           ["Block", "Event", "Actor", "Receipt status"],
