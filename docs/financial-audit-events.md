@@ -24,7 +24,7 @@ Each log has the NEP-297 envelope:
 }
 ```
 
-All token quantities and nanosecond timestamps are decimal strings. Consumers must parse amounts as arbitrary-precision integers, never JavaScript floating-point numbers. The timestamp and actor are emitted by the contract at the point the event is logged. For callback events, the actor is the treasury contract account because the callback is executed by the contract itself; transaction and receipt provenance remains the authoritative source for who initiated the original action.
+All token quantities and nanosecond timestamps are decimal strings. Consumers must parse amounts as arbitrary-precision integers, never JavaScript floating-point numbers. The timestamp and actor are emitted by the contract at the point the event is logged. The `treasury_initialized` event captures the initial authorization and spending baseline at construction. For callback events, the actor is the treasury contract account because the callback is executed by the contract itself; transaction and receipt provenance remains the authoritative source for who initiated the original action.
 
 ## Event catalogue
 
