@@ -67,16 +67,30 @@ function formatVtt(value) {
   const fraction = (amount % 1000000n).toString().padStart(6, "0").replace(/0+$/, "");
   return whole.toLocaleString("en-US") + (fraction ? "." + fraction : "") + " VTT";
 }
-function parseVtt(value) {
+function parseVtt(value, allowZero = false) {
   const match = /^(0|[1-9][0-9]*)(?:\.([0-9]{1,6}))?$/.exec(value.trim());
   if (!match) throw new Error("Enter a valid VTT amount with up to six decimal places.");
   const result = BigInt(match[1]) * 1000000n + BigInt((match[2] || "").padEnd(6, "0") || "0");
-  if (result <= 0n) throw new Error("Amount must be greater than zero.");
+  if (allowZero ? result < 0n : result <= 0n) throw new Error(allowZero ? "Amount cannot be negative." : "Amount must be greater than zero.");
   return result.toString();
 }
 function validAccount(value) {
   if (!/^[a-z0-9._-]{2,64}$/.test(value)) throw new Error("Enter a valid NEAR account ID.");
   return value;
+}
+async function readAllCommitments(endpoint, blockHash) {
+  const all = [];
+  let cursor = null;
+  for (let page = 0; page < 6; page += 1) {
+    const result = await view(endpoint, "get_commitments", { from_id: cursor, limit: 50 }, blockHash);
+    if (!Array.isArray(result?.commitments)) throw new Error(endpoint.name + " returned an invalid commitments page.");
+    all.push(...result.commitments);
+    if (all.length > 256) throw new Error(endpoint.name + " exceeded the contract commitment limit.");
+    if (result.next_cursor == null) return all;
+    if (typeof result.next_cursor !== "string" || result.next_cursor === cursor) throw new Error(endpoint.name + " returned an invalid commitment cursor.");
+    cursor = result.next_cursor;
+  }
+  throw new Error(endpoint.name + " did not finish commitment pagination.");
 }
 async function readProvider(endpoint, blockHash) {
   const network = await rpc(endpoint, "status", []);
@@ -86,13 +100,13 @@ async function readProvider(endpoint, blockHash) {
     view(endpoint, "get_agent_config", {}, blockHash),
     view(endpoint, "get_financial_position", {}, blockHash),
     view(endpoint, "get_pause_status", {}, blockHash),
-    view(endpoint, "get_commitments", { from_id: null, limit: 50 }, blockHash),
+    readAllCommitments(endpoint, blockHash),
     view(endpoint, "get_pending_transfers", {}, blockHash),
     view(endpoint, "get_token_balance_audit", {}, blockHash)
   ]);
   if (owner !== OWNER) throw new Error(endpoint.name + " reports an unexpected owner.");
   if (!agent || typeof agent.agent_id !== "string") throw new Error(endpoint.name + " returned invalid agent configuration.");
-  if (!position || typeof paused !== "boolean" || !Array.isArray(pending) || !Array.isArray(commitments?.commitments)) {
+  if (!position || typeof paused !== "boolean" || !Array.isArray(pending) || !Array.isArray(commitments)) {
     throw new Error(endpoint.name + " returned incomplete treasury state.");
   }
   const normalizedPosition = {};
@@ -111,7 +125,7 @@ async function readProvider(endpoint, blockHash) {
   };
   return {
     blockHash, owner, agent: normalizedAgent, position: normalizedPosition, paused,
-    commitments: commitments.commitments, nextCursor: commitments.next_cursor,
+    commitments,
     pending, audit: normalizedAudit
   };
 }
@@ -297,7 +311,7 @@ $("save-agent").addEventListener("click", async () => {
 });
 $("save-reserve").addEventListener("click", async () => {
   try {
-    const amount = parseVtt($("reserve-amount").value);
+    const amount = parseVtt($("reserve-amount").value, true);
     if (BigInt(amount) < BigInt(snapshot?.position.safety_reserve || "0") &&
         !window.confirm("You are reducing the safety reserve. This increases potential spendable funds. Continue to the exact wallet review?")) return;
     await send("set_safety_reserve", { amount }, "reserve-status", {
