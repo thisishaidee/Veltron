@@ -4,22 +4,28 @@
   "main": "src/index.js",
   "compatibility_date": "2026-11-13",
   "workers_dev": true,
-  "triggers": { "crons": ["* * * * *"] },
+  "triggers": {
+    "crons": [
+      "* * * * *"
+    ]
+  },
   "observability": {
     "enabled": true,
-    "traces": { "enabled": true }
+    "traces": {
+      "enabled": true
+    }
   },
   "d1_databases": [
     {
       "binding": "AUDIT_DB",
       "database_name": "veltron-audit-index",
-      "database_id": "REPLACE_WITH_PROVISIONED_D1_DATABASE_ID"
+      "database_id": "1a2c1f9c-d6a0-48c0-829c-a8e840c9913b"
     }
   ],
   "vars": {
     "NETWORK": "testnet",
     "TREASURY_ACCOUNT": "veltron-treasury.testnet",
-    "START_BLOCK_HEIGHT": "REQUIRED_AFTER_CONTRACT_DEPLOYMENT",
+    "START_BLOCK_HEIGHT": "277136692",
     "MAX_BLOCKS_PER_TICK": "10"
   }
 }
