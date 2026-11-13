@@ -30,9 +30,11 @@ export function normalizePending(records) {
   const seen = new Set();
   for (const item of records) {
     if (!item || typeof item !== "object" ||
-        !/^(0|[1-9][0-9]*)$/.test(String(item.id)) ||
-        !/^(0|[1-9][0-9]*)$/.test(String(item.amount)) ||
-        !/^(0|[1-9][0-9]*)$/.test(String(item.created_at_ns)) ||
+        typeof item.id !== "string" || !/^(0|[1-9][0-9]*)$/.test(item.id) ||
+        typeof item.amount !== "string" || !/^(0|[1-9][0-9]*)$/.test(item.amount) ||
+        typeof item.created_at_ns !== "string" || !/^(0|[1-9][0-9]*)$/.test(item.created_at_ns) ||
+        BigInt(item.id) > 18446744073709551615n || BigInt(item.created_at_ns) > 18446744073709551615n ||
+        BigInt(item.amount) > 340282366920938463463374607431768211455n ||
         !item.kind || typeof item.kind !== "object" || Array.isArray(item.kind)) {
       throw new Error("A pending record has an invalid ID, amount, timestamp, or kind.");
     }
