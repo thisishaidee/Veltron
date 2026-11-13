@@ -6,6 +6,8 @@ export const RPCS = [
 ];
 export const GAS = "30000000000000";
 export const SNAPSHOT_MAX_AGE_MS = 30_000;
+// Base58(SHA-256) of the exact event-aware contract artifact verified by CI.
+export const EVENT_AWARE_CONTRACT_CODE_HASH = "qNrDinLxStGuvUQQKj6NZDWKmj3vSccU6rnfVUrseAn";
 
 export function stable(value) {
   if (Array.isArray(value)) return "[" + value.map(stable).join(",") + "]";
@@ -84,8 +86,9 @@ export function actionReadiness({ snapshot, accountId, networkConfirmed, now = D
   const verified = Boolean(snapshot?.verified && snapshot?.providersAgree);
   const owner = accountId === OWNER;
   return { fresh, verified, owner, networkConfirmed: networkConfirmed === true,
-    canReject: fresh && verified && owner && networkConfirmed,
-    canApprove: fresh && verified && owner && networkConfirmed && snapshot?.paused === false };
+    supportsApproval: snapshot?.supportsApproval === true,
+    canReject: fresh && verified && owner && networkConfirmed && snapshot?.supportsApproval === true,
+    canApprove: fresh && verified && owner && networkConfirmed && snapshot?.supportsApproval === true && snapshot?.paused === false };
 }
 
 export function paymentCall(methodName, requestId) {
