@@ -23,6 +23,12 @@ const EVENT_NAMES = new Set([
 ]);
 const MAX_BATCH_EVENTS = 500;
 const MAX_PAGE_SIZE = 100;
+const PUBLIC_CORS_HEADERS = {
+  "access-control-allow-origin": "*",
+  "access-control-allow-methods": "GET, OPTIONS",
+  "access-control-allow-headers": "Accept",
+  "access-control-max-age": "86400"
+};
 
 function jsonResponse(body, status = 200, headers = {}) {
   return new Response(JSON.stringify(body), {
@@ -140,7 +146,7 @@ async function getEvents(request, env) {
   const cursorValue = url.searchParams.get("cursor");
   if (cursorValue) {
     const cursor = decodeCursor(cursorValue);
-    if (!cursor) return jsonResponse({ error: "Invalid pagination cursor" }, 400);
+    if (!cursor) return jsonResponse({ error: "Invalid pagination cursor" }, 400, PUBLIC_CORS_HEADERS);
     filters.push("(block_height, receipt_index, log_index) < (?, ?, ?)");
     values.push(...cursor);
   }
@@ -170,18 +176,21 @@ async function getEvents(request, env) {
       coverage: "partial_or_unknown",
       note: "The watermark reports the last ingested finalized block, not proof that historical backfill is complete."
     }
-  });
+  }, 200, PUBLIC_CORS_HEADERS);
 }
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (request.method === "OPTIONS" && ["/health", "/v1/events"].includes(url.pathname)) {
+      return new Response(null, { status: 204, headers: PUBLIC_CORS_HEADERS });
+    }
     if (request.method === "GET" && url.pathname === "/health") {
-      return jsonResponse({ ok: true, service: "veltron-audit-indexer-api", network: env.NETWORK, contract_id: env.TREASURY_ACCOUNT });
+      return jsonResponse({ ok: true, service: "veltron-audit-indexer-api", network: env.NETWORK, contract_id: env.TREASURY_ACCOUNT }, 200, PUBLIC_CORS_HEADERS);
     }
     if (request.method === "GET" && url.pathname === "/v1/events") {
       try { return await getEvents(request, env); }
-      catch { return jsonResponse({ error: "Unable to query audit history" }, 500); }
+      catch { return jsonResponse({ error: "Unable to query audit history" }, 500, PUBLIC_CORS_HEADERS); }
     }
     if (request.method === "POST" && url.pathname === "/internal/v1/blocks") {
       const auth = request.headers.get("authorization") || "";
