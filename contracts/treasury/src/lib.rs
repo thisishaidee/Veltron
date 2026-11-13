@@ -1690,13 +1690,13 @@ mod tests {
     #[test]
     #[should_panic(expected = "Cannot audit while transfers are pending")]
     fn rejects_balance_audit_while_outgoing_transfer_is_pending() {
-        let mut contract = setup("agent.near");
+        let mut contract = setup("owner.near");
         contract.treasury_balance = 1_000;
-        contract.request_payment(account("vendor.near"), U128(10), None);
+        contract.start_transfer(10, PendingKind::Discretionary {
+            recipient_id: account("vendor.near"),
+            memo: None,
+        });
 
-        let mut builder = VMContextBuilder::new();
-        builder.predecessor_account_id(account("owner.near"));
-        testing_env!(builder.build());
         contract.refresh_token_balance_audit();
     }
 
