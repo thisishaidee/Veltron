@@ -126,24 +126,24 @@ test("rejects unknown event names and oversized batches", async () => {
 });
 
 test("rejects a block behind the durable cursor", async () => {
-  await assert.rejects(() => ingestBlock(fakeDb({ block_height: 121 }), config, block), /behind the durable cursor/);
+  await assert.rejects(() => ingestBlock(fakeDb({ block_height: 121 }), config, block), /Block gap or unexpected height/);
 });
 
 test("accepts empty finalized blocks so the indexing watermark can advance", async () => {
   const db = fakeDb();
-  const result = await ingestBlock(db, config, { ...block, events: [], block_height: 121, finalized_head_height: 121 });
-  assert.deepEqual(result, { accepted: 0, block_height: 121, history_complete: true });
+  const result = await ingestBlock(db, config, { ...block, events: [], finalized_head_height: 120 });
+  assert.deepEqual(result, { accepted: 0, block_height: 120, history_complete: true });
   assert.equal(db.statements.length, 1);
 });
 
 test("rejects cursor gaps and conflicting hashes at the current height", async () => {
   await assert.rejects(
     () => ingestBlock(fakeDb({ block_height: 120, block_hash: "block-hash" }), config, { ...block, block_height: 122, finalized_head_height: 122 }),
-    /Block gap detected/
+    /Block gap or unexpected height/
   );
   await assert.rejects(
-    () => ingestBlock(fakeDb({ block_height: 120, block_hash: "different-hash" }), config, block),
-    /Block hash changed/
+    () => ingestBlock(fakeDb({ block_height: 120, block_hash: "different-hash" }), config, { ...block, block_height: 121, block_hash: "block-hash-121", prev_block_hash: "not-the-cursor-hash", finalized_head_height: 121 }),
+    /Previous block hash does not match/
   );
 });
 
