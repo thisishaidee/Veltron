@@ -4,12 +4,12 @@ This service is the durable storage and read-API layer for VELTRON's receipt aud
 
 ## Current scope
 
-- Scheduled finalized-block polling from FastNEAR NEAR Data (`testnet.neardata.xyz` or `mainnet.neardata.xyz`), with extraction of receipt execution outcomes and `EVENT_JSON:` logs for the configured treasury.
+- Scheduled finalized-block polling uses FastNEAR RPC first, then dRPC and official NEAR RPC fallbacks for finalized head and anchor checks; NEAR Data supplies full receipt execution outcomes and `EVENT_JSON:` logs.
 - Strict validation of network, treasury account, event standard/version, event names, event provenance and integer-string timestamps.
 - D1 persistence with idempotency key `(network, contract_id, receipt_id, log_index)`.
 - Atomic D1 batch of event inserts and block-watermark advancement.
 - Bounded cursor pagination and filters for event type, actor, transfer ID and commitment ID.
-- Explicitly reports `history_complete: false` and `coverage: partial_or_unknown` until a verified historical coverage procedure proves coverage.
+- Records `coverage_start_height`, `finalized_head_height`, and `history_complete`; coverage is complete only after every finalized block from the configured start height through the recorded finalized head has passed sequential hash-continuity checks.
 
 **Important:** the scheduled collector is implemented, but the service is not operational until its D1 database, verified `START_BLOCK_HEIGHT` and Worker deployment are configured. It polls finalized blocks in bounded batches and advances its cursor only after block continuity checks. On its first run it also fetches the preceding block and verifies that the configured start block links to that anchor. This does not itself certify complete historical coverage: confirm that NEAR Data serves the full required range, let indexing catch up, and verify continuity, event counts and receipt provenance. The API deliberately keeps `history_complete: false` until a separate, evidence-backed completeness procedure exists.
 
