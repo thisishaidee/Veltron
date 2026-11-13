@@ -36,8 +36,8 @@
   </div>
   <div class="panel">
     <h2>Verified build reference</h2>
-    <p>Source commit: <code>878f5bd60fb5e4509f9a3e89698a34c89949c7b2</code></p>
-    <p>Treasury SHA-256:<br><code>9cff6db47077c788fefd9ce4b0a2f4552973e547e6676c2a5d924653472e0443</code></p>
+    <p>Source commit: <code>b7b2908bc6d0cda4b4fe6047ee31d43d93a1faf3</code></p>
+    <p>Treasury SHA-256:<br><code>72e83973547b1521c125d653a5c545dda4dd17cafdaf496f435b50369ad00a57</code></p>
     <p>Test-token SHA-256:<br><code>5d5041336cc8fc92cc9ca11fff1f0b1f7ead33c4826c6d12013f957ba1e7c95b</code></p>
     <p class="muted">These hashes identify the CI artifact built from this source commit. The treasury currently deployed on Testnet is still an older build; matching this file does not mean the updated treasury has been deployed. Do not initialize or rely on the updated treasury until its finalized on-chain hash is independently verified.</p>
   </div>
@@ -139,7 +139,7 @@
   </div>
   <p class="muted">A matching hash proves file identity against this recorded build, not contract safety or deployment success. The wallet approval screen is the final authority for what you are signing.</p>
   <script>
-    const expected={treasury:"9cff6db47077c788fefd9ce4b0a2f4552973e547e6676c2a5d924653472e0443",token:"5d5041336cc8fc92cc9ca11fff1f0b1f7ead33c4826c6d12013f957ba1e7c95b"};
+    const expected={treasury:"72e83973547b1521c125d653a5c545dda4dd17cafdaf496f435b50369ad00a57",token:"5d5041336cc8fc92cc9ca11fff1f0b1f7ead33c4826c6d12013f957ba1e7c95b"};
     const labels={treasury:"Treasury",token:"Test-token"};
     async function verify(kind){
       const file=document.getElementById(kind).files[0],result=document.getElementById(kind+"-result");
