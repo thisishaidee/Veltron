@@ -11,6 +11,9 @@ test("owner controls reads the same finalized block from two independent Testnet
   assert.match(source, /chain_id !== "testnet"/);
   assert.match(source, /stable\(a\) !== stable\(b\)/);
   assert.match(source, /SNAPSHOT_TTL_MS = 30000/);
+  assert.match(source, /checkedAtMonotonic: performance\.now\(\)/);
+  assert.match(source, /performance\.now\(\) - snapshot\.checkedAtMonotonic >= 0/);
+  assert.match(source, /performance\.now\(\) - snapshot\.checkedAtMonotonic > SNAPSHOT_TTL_MS/);
 });
 
 test("owner actions are restricted to the configured owner and explicit Testnet confirmation", () => {
