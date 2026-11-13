@@ -109,7 +109,7 @@ export function extractContractEvents(block, contractId) {
   return events;
 }
 
-export function extractTransactionEvents(transactions, contractId, minHeight, maxHeight) {
+export function extractTransactionEvents(transactions, contractId, minHeight, maxHeight, transactionIndexes = new Map()) {
   if (!Array.isArray(transactions)) throw new Error("FastNear transaction response is missing transactions");
   const eventsByBlock = new Map();
   for (const entry of transactions) {
@@ -118,6 +118,10 @@ export function extractTransactionEvents(transactions, contractId, minHeight, ma
       throw new Error("FastNear transaction response omitted transaction.hash");
     }
     if (!Array.isArray(entry.receipts)) throw new Error("FastNear transaction response is missing receipts");
+    const transactionIndex = Number.isSafeInteger(entry.execution_outcome?.index)
+      ? entry.execution_outcome.index
+      : transactionIndexes.get(transactionHash);
+    if (!Number.isSafeInteger(transactionIndex)) throw new Error("FastNear transaction response omitted its block transaction index");
     entry.receipts.forEach((receipt, receiptIndex) => {
       const execution = receipt?.execution_outcome;
       const outcome = execution?.outcome;
@@ -135,7 +139,7 @@ export function extractTransactionEvents(transactions, contractId, minHeight, ma
         events.push({
           receipt_id: execution.id,
           transaction_hash: transactionHash,
-          receipt_index: receiptIndex,
+          receipt_index: transactionIndex * 1_000_000 + receiptIndex,
           log_index: logIndex,
           receipt_status: outcomeStatus(outcome.status),
           envelope: parseEventEnvelope(log)
@@ -267,7 +271,8 @@ export async function runFinalizedIndexer(env, fetchImpl = fetch) {
   const transactionDetails = hashes.length
     ? await fetchTransactionDetails(network.history, hashes, fetchImpl)
     : [];
-  const eventsByBlock = extractTransactionEvents(transactionDetails, contractId, startHeight, headHeight);
+  const transactionIndexes = new Map(accountRows.map((row) => [row.transaction_hash, row.tx_index]));
+  const eventsByBlock = extractTransactionEvents(transactionDetails, contractId, startHeight, headHeight, transactionIndexes);
 
   while (startHeight + indexedBlocks <= headHeight && indexedBlocks < maxBlocks) {
     const rangeStart = startHeight + indexedBlocks;
