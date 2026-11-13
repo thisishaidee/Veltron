@@ -82,18 +82,33 @@ export async function runFinalizedIndexer(env, fetchImpl = fetch) {
   if (!Number.isSafeInteger(headHeight)) throw new Error("NEAR Data finalized head response is invalid");
 
   let indexedBlocks = 0, indexedEvents = 0, lastHeight = cursor?.block_height ?? null;
+  let expectedPreviousHash = cursor?.block_hash ?? null;
+  if (!cursor && startHeight > 0 && startHeight <= headHeight) {
+    const anchorResponse = await fetchImpl(baseUrl + "/v0/block/" + (startHeight - 1), { headers: { accept: "application/json" } });
+    if (!anchorResponse.ok) throw new Error("NEAR Data start-anchor request returned HTTP " + anchorResponse.status);
+    const anchorDocument = await anchorResponse.json();
+    const anchorHeader = anchorDocument?.block?.header;
+    if (!anchorHeader || anchorHeader.height !== startHeight - 1 || typeof anchorHeader.hash !== "string" || !anchorHeader.hash) {
+      throw new Error("NEAR Data start-anchor block is unavailable or mismatched; refusing to begin an unanchored history");
+    }
+    expectedPreviousHash = anchorHeader.hash;
+  }
   for (let height = startHeight; height <= headHeight && indexedBlocks < maxBlocks; height++) {
     const response = await fetchImpl(baseUrl + "/v0/block/" + height, { headers: { accept: "application/json" } });
     if (!response.ok) throw new Error("NEAR Data returned HTTP " + response.status);
     const document = await response.json();
     if (!document || !document.block?.header || document.block.header.height !== height) throw new Error("Finalized block " + height + " is unavailable or mismatched; cursor was not advanced");
     const header = document.block.header;
+    if (expectedPreviousHash && header.prev_hash !== expectedPreviousHash) {
+      throw new Error("Finalized block " + height + " does not link to the verified previous block hash; cursor was not advanced");
+    }
     const events = extractContractEvents(document, contractId);
     const result = await ingestBlock(env.AUDIT_DB, { network: env.NETWORK, contractId }, {
       network: env.NETWORK, contract_id: contractId, finalized: true,
       block_height: height, block_hash: header.hash, prev_block_hash: header.prev_hash,
       block_timestamp_ns: header.timestamp_nanosec, events
     });
+    expectedPreviousHash = header.hash;
     indexedBlocks++;
     indexedEvents += result.accepted;
     lastHeight = height;
