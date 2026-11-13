@@ -43,6 +43,34 @@ test("read-only audit history response includes cross-origin access headers", as
   assert.equal(body.indexing.finalized_head_height, null);
 });
 
+test("certifies coverage only when the finalized cursor reaches the recorded head", async () => {
+  const completeDb = {
+    prepare() {
+      return {
+        bind() {
+          return {
+            all: async () => ({ results: [] }),
+            first: async () => ({
+              block_height: 100,
+              block_hash: "h100",
+              block_timestamp_ns: "100",
+              coverage_start_height: 90,
+              finalized_head_height: 100,
+              history_complete: 1
+            })
+          };
+        }
+      };
+    }
+  };
+  const response = await worker.fetch(new Request("https://audit.example/v1/events"), { ...env, AUDIT_DB: completeDb });
+  const body = await response.json();
+  assert.equal(body.indexing.history_complete, true);
+  assert.equal(body.indexing.coverage, "complete_from_start_height");
+  assert.equal(body.indexing.coverage_start_height, 90);
+  assert.equal(body.indexing.finalized_head_height, 100);
+});
+
 test("health endpoint includes cross-origin access headers", async () => {
   const response = await worker.fetch(new Request("https://audit.example/health"), env);
   assert.equal(response.status, 200);
