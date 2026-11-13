@@ -2,6 +2,7 @@ name: Dashboard checks
 
 on:
   push:
+    branches: [main]
     paths:
       - "apps/deployer/**"
       - ".github/workflows/dashboard.yml"
@@ -64,3 +65,5 @@ jobs:
         run: |
           npm run test:e2e
           npm run test:commitments
+          npm run test:payment-queue
+          npm run test:admin-controls

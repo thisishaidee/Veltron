@@ -3,40 +3,54 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#0b1430">
+<meta name="theme-color" content="#090e12">
 <title>VELTRON — Commitment Management</title>
 <style>
-:root{color-scheme:dark;font:16px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#0b1430;color:#f3f5f7}
-*{box-sizing:border-box}body{width:min(100% - 32px,760px);margin:auto;padding:24px 0 max(40px,env(safe-area-inset-bottom))}
-h1{font-size:1.7rem;line-height:1.2}h2{font-size:1.1rem}p,li,label{color:#cbd3e3}
-.panel{border:1px solid #35415e;border-radius:12px;padding:16px;margin:16px 0;overflow-wrap:anywhere}
-button,input,textarea{font:inherit}button{width:100%;padding:13px;margin:8px 0;border:0;border-radius:8px;background:#17cbbb;color:#07152d;font-weight:750}
-button.secondary{background:#253653;color:#f3f5f7;border:1px solid #53627d}button:disabled{opacity:.4}
-input,textarea{width:100%;padding:12px;background:#111d3b;color:#fff;border:1px solid #52617d;border-radius:8px}
-label{display:block;font-weight:650;margin:12px 0 6px}.status{padding:12px;background:#1a294a;border-radius:8px;white-space:pre-wrap;overflow-wrap:anywhere}
-.muted{font-size:.9rem;color:#9eabc2}.warn{border-left:4px solid #e6b45e;padding-left:12px}
-.item{border-top:1px solid #35415e;padding:12px 0}.item:first-child{border-top:0}
-.actions{display:flex;gap:8px;flex-wrap:wrap}.actions button{flex:1;min-width:110px}
-a{color:#45e2d2}
+:root{color-scheme:dark;font:15px/1.55 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#090e12;color:#edf4f1;--panel:#111a1d;--panel2:#15211f;--line:#263532;--muted:#91a39d;--green:#68d7a5;--amber:#e7bd70}
+*{box-sizing:border-box}body{width:min(100% - 32px,920px);margin:auto;padding:22px 0 max(44px,env(safe-area-inset-bottom))}
+a{color:var(--green);text-decoration:none}a:hover{text-decoration:underline}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0 22px;border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:11px}.mark{width:38px;height:38px;border-radius:12px;background:#183329;color:var(--green);display:grid;place-items:center;font-weight:850;font-size:19px}.brand strong{display:block;letter-spacing:.12em;font-size:14px}.brand small{display:block;color:var(--muted);font-size:10px;letter-spacing:.16em}
+.network{font-size:11px;color:var(--green);border:1px solid #315c49;background:#10251c;border-radius:999px;padding:5px 10px;white-space:nowrap}
+h1{font-size:clamp(1.65rem,5vw,2.25rem);line-height:1.15;letter-spacing:-.04em;margin:28px 0 7px}h2{font-size:1rem;letter-spacing:-.01em;margin:0 0 12px}p,li{color:#bdcbc5;margin:.45rem 0}.lead{color:var(--muted);max-width:650px;margin-bottom:22px}
+.nav{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0 22px}.nav a{font-size:13px;padding:8px 12px;border:1px solid var(--line);border-radius:9px;color:#c7d5cf}.nav a[aria-current=page]{background:#183329;border-color:#315c49;color:var(--green)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:15px;padding:clamp(14px,3vw,21px);margin:14px 0;overflow-wrap:anywhere;box-shadow:0 8px 28px #0002}.panel.warn{border-color:#66512d;background:linear-gradient(110deg,#211c13,#111a1d 70%)}.eyebrow{font-size:10px;letter-spacing:.16em;font-weight:750;color:var(--amber);margin-bottom:7px}
+button,input,textarea{font:inherit}button{width:100%;padding:13px 15px;margin:7px 0;border:1px solid transparent;border-radius:10px;background:var(--green);color:#07150f;font-weight:780;cursor:pointer}button.secondary{background:#1b2926;color:#e5eee9;border-color:#3a4b44}button:disabled{opacity:.36;cursor:not-allowed}
+input,textarea{width:100%;padding:12px 13px;background:#0c1415;color:#edf4f1;border:1px solid #354640;border-radius:10px;min-width:0}input:focus,textarea:focus{outline:2px solid #68d7a5;outline-offset:1px}
+label{display:block;font-weight:650;margin:13px 0 6px;color:#cbd8d2}.status{padding:12px 14px;background:#0c1415;border:1px solid var(--line);border-radius:10px;white-space:pre-wrap;overflow-wrap:anywhere;color:#cbd8d2}
+.muted{font-size:.86rem;color:var(--muted)}.item{border-top:1px solid var(--line);padding:15px 0}.item:first-child{border-top:0}.item strong{font-size:14px}.actions{display:flex;gap:9px;flex-wrap:wrap}.actions button{flex:1;min-width:120px}
+.section-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}.section-tag{font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:4px 9px}
+footer{border-top:1px solid var(--line);margin-top:24px;padding-top:17px;color:var(--muted);font-size:12px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+@media(min-width:700px){.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}.form-grid .wide{grid-column:1/-1}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
 </style>
 </head>
 <body>
-<h1>VELTRON Commitment Management</h1>
-<p>Create and manage business obligations recorded by the deployed VELTRON treasury contract.</p>
+<header>
+  <div class="brand"><div class="mark" aria-hidden="true">V</div><div><strong>VELTRON</strong><small>TREASURY CONTROL</small></div></div>
+  <span class="network">● NEAR TESTNET</span>
+</header>
+<nav class="nav" aria-label="Treasury navigation">
+  <a href="./index.html">Overview</a><a href="./commitment-management.html" aria-current="page">Commitments</a><a href="./payment-queue.html">Payment queue</a><a href="./owner-controls.html">Owner controls</a><a href="./audit.html">Balance audit</a>
+</nav>
+<main>
+<h1>Commitment management</h1>
+<p class="lead">Reserve treasury funds for real business obligations. Commitments reduce spendable funds before an autonomous agent can request discretionary payments.</p>
 <section class="panel warn">
-<strong>NEAR TESTNET · OWNER OPERATIONS</strong>
+<div class="eyebrow">OWNER OPERATIONS · TESTNET</div>
+<strong>Commitments are on-chain controls.</strong>
 <p>Only the configured treasury owner can create, update, or cancel commitments. These operations change on-chain state and require an explicit wallet approval. This page never asks for keys or recovery phrases.</p>
 </section>
 <section class="panel">
-<h2>1. Connect owner wallet</h2>
-<button id="connect">Connect NEAR Testnet wallet</button>
-<p id="wallet-account" class="status">Not connected</p>
-<label><input id="network-confirm" type="checkbox" style="width:auto"> I checked Meteor itself and it displays NEAR Testnet.</label>
+<div class="section-head"><h2>01 / Owner wallet</h2><span class="section-tag">Signing access</span></div>
+<button id="connect" type="button">Connect NEAR Testnet wallet</button>
+<p id="wallet-account" class="status" role="status" aria-live="polite">Not connected</p>
+<label><input id="network-confirm" type="checkbox" style="width:auto;accent-color:#68d7a5"> I checked Meteor itself and it displays NEAR Testnet.</label>
 <p class="muted">Wallet connection alone does not prove its active network. Confirm the network inside the wallet before proceeding.</p>
 </section>
 <section class="panel">
-<h2>2. Live treasury position</h2>
-<button id="refresh" class="secondary">Refresh commitments and financial position</button>
+<div class="section-head"><h2>02 / Live treasury position</h2><span class="section-tag">Dual-provider read</span></div>
+<button id="refresh" class="secondary" type="button">Refresh commitments and financial position</button>
 <p id="read-status" class="status" role="status" aria-live="polite">Not checked. Reads use two independent finalized Testnet RPC providers.</p>
 <div id="position">
 <p>Treasury balance: <strong id="balance">—</strong></p>
@@ -48,29 +62,31 @@ a{color:#45e2d2}
 <div id="commitments"><p class="muted">Commitments will appear here after verification.</p></div>
 </section>
 <section class="panel">
-<h2>3. Create or update a commitment</h2>
-<p class="muted">Amounts are entered in VTT. The contract stores six-decimal base units.</p>
-<label for="commitment-id">Commitment ID</label>
-<input id="commitment-id" maxlength="64" autocomplete="off" placeholder="e.g. supplier-invoice-001">
-<label for="recipient">Fixed recipient NEAR account</label>
-<input id="recipient" maxlength="64" autocomplete="off" placeholder="supplier.testnet">
-<label for="amount">Amount (VTT)</label>
-<input id="amount" inputmode="decimal" placeholder="e.g. 125.50">
-<label for="description">Description</label>
-<textarea id="description" maxlength="256" rows="3" placeholder="What business obligation does this reserve cover?"></textarea>
-<button id="save" disabled>Review commitment in wallet</button>
+<div class="section-head"><h2>03 / Create or update</h2><span class="section-tag">Owner approval required</span></div>
+<p class="muted">Amounts are entered in VTT. The contract stores six-decimal base units. Only create obligations backed by a genuine business requirement.</p>
+<div class="form-grid">
+<div><label for="commitment-id">Commitment ID</label><input id="commitment-id" maxlength="64" autocomplete="off" placeholder="e.g. supplier-invoice-001"></div>
+<div><label for="recipient">Fixed recipient NEAR account</label><input id="recipient" maxlength="64" autocomplete="off" placeholder="supplier.testnet"></div>
+<div><label for="amount">Amount (VTT)</label><input id="amount" inputmode="decimal" placeholder="e.g. 125.50"></div>
+<div><label for="description">Description</label><textarea id="description" maxlength="256" rows="2" placeholder="What business obligation does this reserve cover?"></textarea></div>
+</div>
+<button id="save" type="button" disabled>Review commitment in wallet</button>
 <p id="save-status" class="status" role="status" aria-live="polite">Connect the owner, confirm Testnet, and refresh verified state first.</p>
 </section>
 <section class="panel">
-<h2>4. Cancel a commitment</h2>
-<p class="muted">Cancellation releases the reserved amount back into spendable balance. It does not transfer tokens.</p>
+<div class="section-head"><h2>04 / Cancel a commitment</h2><span class="section-tag">Releases reservation</span></div>
+<p class="muted">Cancellation releases the reserved amount back into spendable balance. It does not transfer tokens. A commitment with a settlement pending cannot be cancelled.</p>
 <label for="cancel-id">Existing commitment ID</label>
-<input id="cancel-id" maxlength="64" autocomplete="off" placeholder="Select an ID from the list above">
-<button id="cancel" class="secondary" disabled>Review cancellation in wallet</button>
+<input id="cancel-id" maxlength="64" autocomplete="off" placeholder="Select an ID from the verified list above">
+<button id="cancel" class="secondary" type="button" disabled>Review cancellation in wallet</button>
 <p id="cancel-status" class="status" role="status" aria-live="polite">No cancellation prepared.</p>
 </section>
-<p class="muted">This first operational module manages commitments only. It does not settle invoices or initiate agent payments. Those will be separate reviewed operations. If a wallet result is uncertain, refresh finalized state before considering another transaction.</p>
-<p><a href="./index.html">Back to VELTRON dashboard</a></p>
+<section class="panel">
+<h2>Safety reminder</h2>
+<p class="muted">If a wallet result is uncertain, refresh finalized state before considering another attempt. Never blindly resubmit. Commitment management does not settle invoices or initiate agent payments; those remain separate operations in the payment queue.</p>
+</section>
+</main>
+<footer><span>VELTRON · OWNER CONSOLE</span><span>Financial control, on-chain.</span></footer>
 <script type="module" src="./dist/commitments.js"></script>
 </body>
 </html>

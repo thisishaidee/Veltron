@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#090e12">
+<title>VELTRON — Owner Payment Queue</title>
+<style>
+:root{color-scheme:dark;font:15px/1.55 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#090e12;color:#edf4f1;--panel:#111a1d;--panel2:#15211f;--line:#263532;--muted:#91a39d;--green:#68d7a5;--amber:#e7bd70;--red:#ef8790}
+*{box-sizing:border-box}body{width:min(100% - 32px,920px);margin:auto;padding:22px 0 max(44px,env(safe-area-inset-bottom))}
+a{color:var(--green);text-decoration:none}a:hover{text-decoration:underline}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0 22px;border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:11px}.mark{width:38px;height:38px;border-radius:12px;background:#183329;color:var(--green);display:grid;place-items:center;font-weight:850;font-size:19px}.brand strong{display:block;letter-spacing:.12em;font-size:14px}.brand small{display:block;color:var(--muted);font-size:10px;letter-spacing:.16em}
+.network{font-size:11px;color:var(--green);border:1px solid #315c49;background:#10251c;border-radius:999px;padding:5px 10px;white-space:nowrap}
+h1{font-size:clamp(1.65rem,5vw,2.25rem);line-height:1.15;letter-spacing:-.04em;margin:28px 0 7px}h2{font-size:1rem;letter-spacing:-.01em;margin:0 0 12px}p{color:#bdcbc5;margin:.45rem 0}
+.lead{color:var(--muted);max-width:650px;margin-bottom:22px}
+.nav{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0 22px}.nav a{font-size:13px;padding:8px 12px;border:1px solid var(--line);border-radius:9px;color:#c7d5cf}.nav a[aria-current=page]{background:#183329;border-color:#315c49;color:var(--green)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:15px;padding:clamp(14px,3vw,21px);margin:14px 0;overflow-wrap:anywhere;box-shadow:0 8px 28px #0002}
+.panel.warn{border-color:#66512d;background:linear-gradient(110deg,#211c13,#111a1d 70%)}.eyebrow{font-size:10px;letter-spacing:.16em;font-weight:750;color:var(--amber);margin-bottom:7px}
+button,input{font:inherit}button{width:100%;padding:13px 15px;margin:7px 0;border:1px solid transparent;border-radius:10px;background:var(--green);color:#07150f;font-weight:780;cursor:pointer;transition:filter .15s,transform .15s}button:hover:not(:disabled){filter:brightness(1.07)}button:active:not(:disabled){transform:translateY(1px)}button.secondary{background:#1b2926;color:#e5eee9;border-color:#3a4b44}button.danger{background:#321d21;color:#ffdfe1;border-color:#754047}button:disabled{opacity:.36;cursor:not-allowed}
+label{display:block;margin:13px 0;color:#cbd8d2}.status{padding:12px 14px;background:#0c1415;border:1px solid var(--line);border-radius:10px;white-space:pre-wrap;overflow-wrap:anywhere;color:#cbd8d2}
+.muted{font-size:.86rem;color:var(--muted)}.metric{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:14px}.metric div{background:var(--panel2);border:1px solid #263a32;border-radius:11px;padding:12px;min-width:0;color:var(--muted);font-size:12px}.metric strong{display:block;color:#edf4f1;font-size:clamp(1rem,3.5vw,1.2rem);margin-top:5px;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.item{border-top:1px solid var(--line);padding:16px 0}.item:first-child{border-top:0}.item strong{font-size:14px;letter-spacing:.03em}.item p{margin:5px 0}.actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:12px}.actions button{flex:1;min-width:125px}
+.section-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}.section-tag{font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:4px 9px}
+footer{border-top:1px solid var(--line);margin-top:24px;padding-top:17px;color:var(--muted);font-size:12px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+@media(min-width:650px){.metric{grid-template-columns:repeat(3,minmax(0,1fr))}.two-col{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><div class="mark" aria-hidden="true">V</div><div><strong>VELTRON</strong><small>TREASURY CONTROL</small></div></div>
+  <span class="network">● NEAR TESTNET</span>
+</header>
+<nav class="nav" aria-label="Treasury navigation">
+  <a href="./index.html">Overview</a><a href="./commitment-management.html">Commitments</a><a href="./payment-queue.html" aria-current="page">Payment queue</a><a href="./owner-controls.html">Owner controls</a><a href="./audit.html">Balance audit</a>
+</nav>
+<main>
+<h1>Payment approvals</h1>
+<p class="lead">Review agent-submitted payment requests before any token transfer is started. Owner authorization stays explicit at every step.</p>
+<section class="panel warn">
+<div class="eyebrow">OWNER CONTROL · TESTNET</div>
+<strong>Requests are not transfers.</strong>
+<p>A queued request is only a reservation. Approving starts an on-chain transfer; rejecting releases the reservation. Every action requires a separate Meteor wallet approval. Never approve a request you do not recognize.</p>
+</section>
+<section class="panel">
+<div class="section-head"><h2>01 / Owner wallet</h2><span class="section-tag">Signing access</span></div>
+<button id="connect" type="button">Connect NEAR Testnet wallet</button>
+<p id="wallet-account" class="status" role="status" aria-live="polite">Not connected</p>
+<label><input id="network-confirm" type="checkbox" style="width:auto;accent-color:#68d7a5"> I checked Meteor itself and it displays NEAR Testnet.</label>
+<p class="muted">This checkbox records your confirmation; it does not independently inspect Meteor's active network.</p>
+</section>
+<section class="panel">
+<div class="section-head"><h2>02 / Finalized treasury position</h2><span class="section-tag">Read-only verification</span></div>
+<button id="refresh" class="secondary" type="button">Refresh verified state</button>
+<p id="read-status" class="status" role="status" aria-live="polite">Not checked. Two independent RPC providers must agree on the same finalized block.</p>
+<div class="metric">
+<div>Ledger balance<strong id="balance">—</strong></div>
+<div>Active commitments<strong id="commitments">—</strong></div>
+<div>Safety reserve<strong id="reserve">—</strong></div>
+<div>Pending discretionary<strong id="pending">—</strong></div>
+<div>Spendable balance<strong id="spendable">—</strong></div>
+<div>Outgoing payments paused<strong id="paused">—</strong></div>
+</div>
+</section>
+<div class="two-col">
+<section class="panel">
+<div class="section-head"><h2>03 / Awaiting decision</h2><span class="section-tag">Queued requests</span></div>
+<p class="muted">Only DiscretionaryRequest records appear here. These have not started a token transfer.</p>
+<div id="queue"><p class="muted">Refresh verified state to load queued requests.</p></div>
+</section>
+<section class="panel">
+<div class="section-head"><h2>04 / In progress</h2><span class="section-tag">Live transfers</span></div>
+<p class="muted">Actual outgoing transfers and commitment settlements appear here. They cannot be approved again from this list.</p>
+<div id="transfers"><p class="muted">Refresh verified state to load in-flight transfers.</p></div>
+</section>
+</div>
+<section class="panel">
+<h2>Safety reminder</h2>
+<p class="muted">If a wallet outcome is uncertain, do not retry. Refresh both providers and confirm the request is still queued before preparing another action. A wallet response alone is not proof of finalized execution.</p>
+</section>
+</main>
+<footer><span>VELTRON · OWNER CONSOLE</span><span>Financial control, on-chain.</span></footer>
+<script type="module" src="./dist/payment-queue.js"></script>
+</body>
+</html>
