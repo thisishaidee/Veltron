@@ -76,6 +76,39 @@ function parseEventEnvelope(log) {
   catch { throw new Error("Malformed EVENT_JSON log in finalized receipt"); }
 }
 
+export function extractContractEvents(block, contractId) {
+  if (!block || !Array.isArray(block.shards)) throw new Error("NEAR Data block is missing shard documents");
+  const receipts = [];
+  for (const shard of block.shards) {
+    if (!Array.isArray(shard.receipt_execution_outcomes)) throw new Error("NEAR Data shard is missing receipt_execution_outcomes");
+    for (let index = 0; index < shard.receipt_execution_outcomes.length; index++) {
+      const item = shard.receipt_execution_outcomes[index];
+      const outcome = item?.execution_outcome;
+      if (outcome?.outcome?.executor_id !== contractId) continue;
+      receipts.push({ shardId: shard.shard_id, sourceIndex: index, outcome, transactionHash: item.tx_hash });
+    }
+  }
+  receipts.sort((a, b) => a.shardId - b.shardId || a.sourceIndex - b.sourceIndex);
+  const events = [];
+  receipts.forEach((receipt, receiptIndex) => {
+    const logs = receipt.outcome?.outcome?.logs;
+    if (!Array.isArray(logs)) throw new Error("Contract receipt outcome is missing logs");
+    logs.forEach((log, logIndex) => {
+      if (typeof log !== "string" || !log.startsWith("EVENT_JSON:")) return;
+      if (typeof receipt.transactionHash !== "string" || !receipt.transactionHash) throw new Error("NEAR Data omitted tx_hash for an event-bearing receipt");
+      events.push({
+        receipt_id: receipt.outcome.id,
+        transaction_hash: receipt.transactionHash,
+        receipt_index: receiptIndex,
+        log_index: logIndex,
+        receipt_status: outcomeStatus(receipt.outcome.outcome.status),
+        envelope: parseEventEnvelope(log)
+      });
+    });
+  });
+  return events;
+}
+
 export function extractTransactionEvents(transactions, contractId, minHeight, maxHeight) {
   if (!Array.isArray(transactions)) throw new Error("FastNear transaction response is missing transactions");
   const eventsByBlock = new Map();
@@ -250,7 +283,7 @@ export async function runFinalizedIndexer(env, fetchImpl = fetch) {
       }
       if (typeof header.block_hash !== "string" || !header.block_hash ||
           typeof header.prev_block_hash !== "string" || !header.prev_block_hash ||
-          !/^\\d+$/.test(String(header.block_timestamp))) {
+          !/^\d+$/.test(String(header.block_timestamp))) {
         throw new Error("FastNear block range omitted a required block header field");
       }
       if (expectedPreviousHash && header.prev_block_hash !== expectedPreviousHash) {
