@@ -3,11 +3,11 @@ import { test, expect } from "@playwright/test";
 const OWNER = "haideedotxyz.testnet";
 const queued = {
   id: "17", amount: "125500000", created_at_ns: "1730000000000000000",
-  kind: { discretionary_request: { recipient_id: "vendor.testnet", memo: "Invoice 42" } }
+  kind: { DiscretionaryRequest: { recipient_id: "vendor.testnet", memo: "Invoice 42" } }
 };
 const transfer = {
   id: "18", amount: "1000000", created_at_ns: "1730000000000000001",
-  kind: { discretionary: { recipient_id: "supplier.testnet", memo: null } }
+  kind: { Discretionary: { recipient_id: "supplier.testnet", memo: null } }
 };
 
 async function mockRpc(page, disagree = false) {
