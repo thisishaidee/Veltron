@@ -28,6 +28,8 @@ test("rejects malformed and duplicate pending records", () => {
   assert.throws(() => normalizePending([{...request(),kind:{unknown:{}}}]),/Unknown/);
   assert.throws(() => normalizePending([{...request(),id:9007199254740993}]),/invalid ID/);
   assert.throws(() => normalizePending([{...request(),id:"18446744073709551616"}]),/invalid ID/);
+  assert.throws(() => normalizePending([{id:"10",amount:"1",created_at_ns:"1",kind:{discretionary:{recipient_id:"bad account",memo:null}}}]),/recipient or memo/);
+  assert.throws(() => normalizePending([{id:"11",amount:"1",created_at_ns:"1",kind:{commitment_settlement:{commitment_id:""}}}]),/settlement record/);
 });
 
 test("provider disagreement or an unverified snapshot disables controls", () => {
