@@ -11,7 +11,9 @@ This service is the durable storage and read-API layer for VELTRON's receipt aud
 - Bounded cursor pagination and filters for event type, actor, transfer ID and commitment ID.
 - Records `coverage_start_height`, `finalized_head_height`, and `history_complete`; coverage is complete only after every finalized block from the configured start height through the recorded finalized head has passed sequential hash-continuity checks.
 
-**Important:** the scheduled collector is implemented, but the service is not operational until its D1 database, verified `START_BLOCK_HEIGHT` and Worker deployment are configured. It polls finalized blocks in bounded batches and advances its cursor only after block continuity checks. On its first run it also fetches the preceding block and verifies that the configured start block links to that anchor. This does not itself certify complete historical coverage: confirm that NEAR Data serves the full required range, let indexing catch up, and verify continuity, event counts and receipt provenance. The API deliberately keeps `history_complete: false` until a separate, evidence-backed completeness procedure exists.
+**Current deployment:** the dedicated VELTRON D1 database and `veltron-audit-indexer` Worker are provisioned and deployed. The cron is temporarily paused until the event-emitting treasury release is installed and `START_BLOCK_HEIGHT` is reset to that release transaction block. The previous treasury release did not emit the `EVENT_JSON:` standard, so scanning its earlier blocks cannot produce structured VELTRON audit events and is not required for this event-history scope.
+
+On the first run, the collector fetches the block immediately before `START_BLOCK_HEIGHT` and verifies the start block links to that anchor. It advances the cursor only after sequential hash-continuity checks. `history_complete` becomes true only when the cursor reaches the finalized head; it means complete structured-event coverage from the configured start block forward, not a reconstruction of activity before that block.
 
 ## Endpoints
 
