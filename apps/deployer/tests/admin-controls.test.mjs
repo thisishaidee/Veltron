@@ -22,7 +22,7 @@ test("owner actions are restricted to the configured owner and explicit Testnet 
   assert.match(source, /The agent must be distinct from the owner, treasury, and token contract/);
   assert.match(source, /active_commitments\) \+ BigInt\(snapshot\.position\.pending_discretionary/);
   assert.match(source, /\$\("network-confirm"\)\.checked/);
-  for (const method of ["set_agent", "set_safety_reserve", "set_paused", "settle_commitment", "reconcile_token_surplus"]) {
+  for (const method of ["set_agent", "set_safety_reserve", "set_paused", "settle_commitment_checked", "reconcile_token_surplus"]) {
     assert.ok(source.includes('send("' + method + '"') || source.includes('send(methodName'));
   }
   assert.match(source, /signAndSendTransaction/);
@@ -41,4 +41,12 @@ test("UI explicitly avoids claiming a complete historical event log", () => {
   assert.match(html, /not a complete historical event log/i);
   assert.match(html, /requires an indexed event source/i);
   assert.match(html, /contract does not enforce an audit-age limit/i);
+});
+
+
+test("settlement wallet call is bound to the exact recipient and amount shown", () => {
+  assert.match(source, /settle_commitment_checked/);
+  assert.match(source, /expected_recipient_id: expectedRecipient/);
+  assert.match(source, /expected_amount: expectedAmount/);
+  assert.match(source, /The contract will reject this if the commitment amount or recipient changed/);
 });
