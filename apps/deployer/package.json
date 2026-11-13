@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "scripts": {
     "test:e2e": "npm run build && playwright test",
-    "build": "esbuild src/wallet.js --bundle --format=esm --outfile=dist/wallet.js && esbuild src/treasury-config.js --bundle --format=esm --outfile=dist/treasury-config.js && esbuild src/commitments.js --bundle --format=esm --outfile=dist/commitments.js && esbuild src/payment-queue.js --bundle --format=esm --outfile=dist/payment-queue.js && esbuild src/admin-controls.js --bundle --format=esm --outfile=dist/admin-controls.js",
+    "build": "esbuild src/wallet.js --bundle --format=esm --outfile=dist/wallet.js && esbuild src/treasury-config.js --bundle --format=esm --outfile=dist/treasury-config.js && esbuild src/commitments.js --bundle --format=esm --outfile=dist/commitments.js && esbuild src/payment-queue.js --bundle --format=esm --outfile=dist/payment-queue.js && esbuild src/admin-controls.js --bundle --format=esm --outfile=dist/admin-controls.js && esbuild src/audit-history.js --bundle --format=esm --outfile=dist/audit-history.js",
     "test:executor": "node --test tests/meteor-executor.test.mjs",
     "test:deployment": "node --test scripts/deployment-checks.mjs",
     "test:all": "npm run test:executor && npm run test:deployment && npm run test:transfer && npm run test:audit && npm run test:e2e && npm run test:commitments && npm run test:payment-queue && npm run test:admin-controls",
