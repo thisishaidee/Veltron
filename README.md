@@ -2,50 +2,39 @@
 
 **Commitment-aware treasury infrastructure for autonomous businesses, built on [NEAR Protocol](https://near.org/).**
 
-VELTRON is designed to stop autonomous agents from spending treasury funds that have already been allocated to real business obligations.
+VELTRON prevents autonomous agents from spending treasury funds that have already been allocated to real business obligations.
 
-An agent may have permission to make payments, but that does not mean every unit in the treasury is available to spend.
+An agent may have permission to make payments, but that does not make every unit in the treasury available to spend.
 
 > The agent had permission to spend the money. It just wasn't supposed to spend that money.
 
 ## The problem
 
-Autonomous businesses need agents that can pay contractors, suppliers, and service providers. But a general spending limit alone cannot protect money that has already been promised to someone else.
+Autonomous businesses need agents that can pay contractors, suppliers, and service providers. A general spending limit is not enough: an agent can stay below its limit and still spend money already promised to someone else.
 
-For example, an agent might stay below its transaction limit and still spend money reserved for payroll or an invoice.
-
-VELTRON addresses this with an on-chain **Commitment Lock**.
-
-## How Commitment Lock works
-
-The treasury owner records obligations and their fixed recipients. VELTRON reserves those amounts in its internal accounting and calculates what remains available for discretionary agent payments.
+VELTRON addresses this with an on-chain **Commitment Lock**. The owner records obligations and fixed recipients; the contract reserves those amounts and calculates what remains available for discretionary agent payments.
 
 ```
 Spendable balance =
-  Treasury balance
+  Treasury token balance
   - Active commitments
   - Safety reserve
-  - Pending discretionary payments
+  - Pending discretionary reservations
 ```
 
-The smart contract enforces the accounting rules. The AI agent or frontend cannot override protected commitments.
+The contract enforces these accounting rules. The agent and frontend cannot override protected commitments.
 
-## Current MVP
+## Current system
 
-The first Rust contract implementation is in `contracts/treasury`.
+VELTRON is an early-stage NEAR Testnet MVP composed of:
 
-It currently includes:
+- **Treasury contract** — Rust / near-sdk contract for a configured NEP-141 token, owner-managed commitments, a safety reserve, an authorized agent, discretionary payment requests, owner-controlled commitment settlement, asynchronous transfer callbacks, and reservations for in-flight payments.
+- **Test token** — a separate NEP-141 test-token contract for controlled Testnet exercises.
+- **Read-only treasury dashboard** — mobile-first views of financial position, pause state, commitments, pending transfers, token-balance audit, and indexed audit coverage. It does not request wallet signatures or submit transactions.
+- **Audit indexer and API** — a Cloudflare Worker with a D1 database. It scans finalized NEAR Testnet blocks, validates block continuity, and stores structured treasury `EVENT_JSON:` receipt logs. Read API: [VELTRON audit events](https://veltron-audit-indexer.haideecoded-e0f.workers.dev/v1/events).
+- **Deployment and operator tooling** — guarded GitHub Actions workflows and supporting dashboard/deployer applications.
 
-- A single configured NEP-141 fungible token.
-- Owner-managed commitments with fixed recipients.
-- An owner-managed safety reserve and agent transaction limit.
-- Agent-initiated discretionary payment requests.
-- Owner-initiated settlement of recorded commitments.
-- Asynchronous token-transfer callbacks.
-- Reservations for pending discretionary transfers until their outcomes are confirmed.
-- Initial unit tests for accounting and reservation rules.
-
-The current MVP supports one owner and one authorized agent. It does not yet support multiple tokens, recurring schedules, cross-chain transfers, or agent-controlled commitment changes.
+The current deployment is Testnet-only. The audit indexer is configured to begin structured event coverage at block `277520554`, the finalized block containing the successful event-emitting treasury code upgrade. Its cursor and configured boundary have been aligned. **End-to-end event ingestion still requires a controlled, observed treasury operation that emits a structured event; an empty event table is not evidence that such an operation has been indexed.**
 
 ## Example
 
@@ -59,49 +48,62 @@ Imagine the treasury has 1,000 test-token units:
 | Safety reserve | 100 |
 | **Available to spend** | **300** |
 
-Even if the agent's per-transaction limit is 500, a request for 450 is rejected because it would use protected funds. A request for 250 is within the available balance.
+Even if the agent's per-transaction limit is 500, a request for 450 is rejected because it would consume protected funds. A request for 250 is within the available balance.
 
 These are illustrative test-token units, not a live USDC balance.
-
-## Network and hackathon focus
-
-- **Network:** NEAR Protocol
-- **Primary track:** Autonomous Business
-- **Related track:** AI Security & Defense
 
 ## Repository structure
 
 ```
 .
-├── .github/
-│   └── workflows/
-│       └── contract.yml
+├── apps/
+│   ├── dashboard/       # Read-only treasury and audit monitor
+│   ├── deployer/        # Deployment/operator interface
+│   └── transfer-preview/
 ├── contracts/
-│   └── treasury/
-│       ├── Cargo.toml
-│       └── src/
-│           └── lib.rs
-├── docs/
-│   └── CONTRACT-DESIGN.md
-├── Cargo.toml
-└── README.md
+│   ├── treasury/        # Main Rust treasury contract
+│   └── test-token/      # NEP-141 test token
+├── docs/                # Contract, deployment, dashboard and audit design
+├── services/
+│   └── audit-indexer/   # Cloudflare Worker + D1 audit service
+├── scripts/
+└── .github/workflows/   # CI, deployment and verification workflows
 ```
 
-## Run the contract tests
+## Development and tests
 
 With Rust and the required dependencies installed, run from the repository root:
 
 ```bash
-cargo test -p veltron-treasury
+cargo test --workspace
 ```
 
-GitHub Actions is configured to run the contract tests on relevant pushes and pull requests.
+For the dashboard:
 
-## Security and project status
+```bash
+cd apps/dashboard
+npm test
+```
 
-VELTRON is an early hackathon MVP under active development. It has **not** been independently audited, deployed, or verified on NEAR testnet. Do not deposit real funds or use this implementation to manage production assets.
+For the audit indexer:
 
-Before any testnet or production use, review [the contract design and limitations](docs/CONTRACT-DESIGN.md), verify NEP-141 transfer and callback behavior, and complete adversarial testing and an independent security review.
+```bash
+cd services/audit-indexer
+npm test
+```
+
+GitHub Actions runs the relevant checks for changes to the corresponding components.
+
+## Network, status and safety
+
+- **Network:** NEAR Testnet
+- **Primary hackathon track:** Autonomous Business
+- **Related track:** AI Security & Defense
+- **Security status:** early hackathon MVP; not independently audited and not suitable for production funds.
+
+Testnet deployment and read-only monitoring do not constitute a production security review. Do not deposit real assets or rely on this implementation for live business obligations.
+
+Before production use, VELTRON needs independent contract and integration review, adversarial testing of NEP-141 transfer/callback behavior, verified end-to-end audit ingestion, key-management and incident-response review, and a separately approved mainnet deployment plan. See [the contract design and limitations](docs/CONTRACT-DESIGN.md) and [the Testnet deployment checklist](docs/TESTNET-DEPLOYMENT-CHECKLIST.md).
 
 ## Maintainer
 
