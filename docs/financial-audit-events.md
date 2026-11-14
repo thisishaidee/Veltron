@@ -2,7 +2,11 @@
 
 ## Status
 
-The treasury contract emits structured NEP-297-compatible logs under the `EVENT_JSON:` prefix. These logs are immutable parts of NEAR transaction receipts. This change is the on-chain event source only: it does **not** ship or operate a historical event indexer, database, or history API. The dashboard must not label the event stream as a complete searchable audit history until that separate service is deployed and verified.
+The treasury contract emits structured NEP-297-compatible logs under the `EVENT_JSON:` prefix. These logs are immutable parts of NEAR transaction receipts.
+
+A separate historical indexer is now implemented and deployed for NEAR Testnet: the Cloudflare Worker `veltron-audit-indexer`, backed by D1, scans finalized blocks, checks sequential block-hash continuity, parses treasury receipt logs, and exposes a read-only paginated API at [the VELTRON audit endpoint](https://veltron-audit-indexer.haideecoded-e0f.workers.dev/v1/events). The API also reports the configured and recorded coverage boundary.
+
+The verified structured-event coverage start is Testnet block `277520554`, the finalized block containing the successful event-emitting treasury code upgrade. The configured start and existing D1 cursor are aligned; the cursor has advanced to the finalized head and the API reports complete coverage from that boundary. This means the indexer has scanned the full block range, **not** that at least one event has already been observed. The event table currently has no rows, so end-to-end ingestion still needs to be demonstrated with a controlled treasury operation that emits an event. Do not describe an empty feed as a complete financial activity history until such a test has passed.
 
 ## Envelope
 
