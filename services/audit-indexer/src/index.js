@@ -21,7 +21,7 @@ function isSafeInteger(value) {
 
 function encodeCursor(row) {
   const raw = JSON.stringify([row.block_height, row.receipt_index, row.log_index]);
-  return btoa(raw).replace(/\\+/g, "-").replace(/\\//g, "_").replace(/=+$/g, "");
+  return btoa(raw).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
 function decodeCursor(value) {
