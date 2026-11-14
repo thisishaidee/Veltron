@@ -45,7 +45,7 @@ test("read-only audit history response includes cross-origin access headers", as
   assert.equal(body.indexing.finalized_head_height, null);
 });
 
-test("certifies coverage only when the finalized cursor reaches the recorded head", async () => {
+test("reports a completed recorded window as a mismatch when it differs from configuration", async () => {
   const completeDb = {
     prepare() {
       return {
@@ -65,13 +65,46 @@ test("certifies coverage only when the finalized cursor reaches the recorded hea
       };
     }
   };
-  const response = await worker.fetch(new Request("https://audit.example/v1/events"), { ...env, START_BLOCK_HEIGHT: "100", AUDIT_DB: completeDb });
+  const response = await worker.fetch(new Request("https://audit.example/v1/events"), {
+    ...env, START_BLOCK_HEIGHT: "100", AUDIT_DB: completeDb
+  });
+  const body = await response.json();
+  assert.equal(body.indexing.history_complete, true);
+  assert.equal(body.indexing.coverage, "coverage_start_mismatch");
+  assert.equal(body.indexing.coverage_start_height, 90);
+  assert.equal(body.indexing.configured_start_height, 100);
+  assert.equal(body.indexing.coverage_start_matches_config, false);
+  assert.match(body.indexing.note, /Requested coverage is not verified/);
+  assert.match(body.indexing.note, /live cursor has been preserved/);
+});
+
+test("reports complete coverage when recorded and configured boundaries match", async () => {
+  const completeDb = {
+    prepare() {
+      return {
+        bind() {
+          return {
+            all: async () => ({ results: [] }),
+            first: async () => ({
+              block_height: 100,
+              block_hash: "h100",
+              block_timestamp_ns: "100",
+              coverage_start_height: 90,
+              finalized_head_height: 100,
+              history_complete: 1
+            })
+          };
+        }
+      };
+    }
+  };
+  const response = await worker.fetch(new Request("https://audit.example/v1/events"), {
+    ...env, START_BLOCK_HEIGHT: "90", AUDIT_DB: completeDb
+  });
   const body = await response.json();
   assert.equal(body.indexing.history_complete, true);
   assert.equal(body.indexing.coverage, "complete_from_start_height");
-  assert.equal(body.indexing.coverage_start_height, 90);
-  assert.equal(body.indexing.finalized_head_height, 100);
-  assert.equal(body.indexing.coverage_start_matches_config, false);
+  assert.equal(body.indexing.coverage_start_matches_config, true);
 });
 
 test("health endpoint includes cross-origin access headers", async () => {
