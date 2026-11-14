@@ -21,7 +21,7 @@ function isSafeInteger(value) {
 
 function encodeCursor(row) {
   const raw = JSON.stringify([row.block_height, row.receipt_index, row.log_index]);
-  return btoa(raw).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+  return btoa(raw).replace(/\\+/g, "-").replace(/\\//g, "_").replace(/=+$/g, "");
 }
 
 function decodeCursor(value) {
@@ -83,6 +83,19 @@ async function getEvents(request, env) {
   const watermark = await env.AUDIT_DB.prepare(
     "SELECT block_height, block_hash, block_timestamp_ns, coverage_start_height, finalized_head_height, history_complete FROM indexer_cursors WHERE network = ? AND contract_id = ?"
   ).bind(env.NETWORK, env.TREASURY_ACCOUNT).first();
+
+  const configuredStartHeight = Number(env.START_BLOCK_HEIGHT);
+  const hasConfiguredStart = Number.isSafeInteger(configuredStartHeight);
+  const hasRecordedStart = Boolean(watermark && watermark.coverage_start_height > 0);
+  const coverageStartMatchesConfig = Boolean(
+    hasRecordedStart && hasConfiguredStart &&
+    watermark.coverage_start_height === configuredStartHeight
+  );
+  const recordedCoverageComplete = Boolean(
+    watermark && watermark.history_complete === 1 && hasRecordedStart
+  );
+  const coverageMismatch = hasRecordedStart && hasConfiguredStart && !coverageStartMatchesConfig;
+
   return jsonResponse({
     events: events.map(rowToEvent),
     next_cursor: hasMore && events.length ? encodeCursor(events[events.length - 1]) : null,
@@ -95,23 +108,29 @@ async function getEvents(request, env) {
         block_hash: watermark.block_hash,
         block_timestamp_ns: watermark.block_timestamp_ns
       } : null,
-      coverage_start_height: watermark && watermark.coverage_start_height > 0 ? watermark.coverage_start_height : null,
-      configured_start_height: Number.isSafeInteger(Number(env.START_BLOCK_HEIGHT)) ? Number(env.START_BLOCK_HEIGHT) : null,
-      coverage_start_matches_config: Boolean(watermark && watermark.coverage_start_height > 0 &&
-        Number.isSafeInteger(Number(env.START_BLOCK_HEIGHT)) &&
-        watermark.coverage_start_height === Number(env.START_BLOCK_HEIGHT)),
+      coverage_start_height: hasRecordedStart ? watermark.coverage_start_height : null,
+      configured_start_height: hasConfiguredStart ? configuredStartHeight : null,
+      coverage_start_matches_config: coverageStartMatchesConfig,
       finalized_head_height: watermark && watermark.finalized_head_height > 0 ? watermark.finalized_head_height : null,
-      history_complete: Boolean(watermark && watermark.history_complete === 1 && watermark.coverage_start_height > 0),
-      coverage: watermark && watermark.history_complete === 1 && watermark.coverage_start_height > 0
-        ? "complete_from_start_height"
-        : watermark && watermark.coverage_start_height > 0
-          ? "partial_or_unknown"
-          : "awaiting_coverage_start",
-      note: watermark && watermark.history_complete === 1 && watermark.coverage_start_height > 0
-        ? "All finalized blocks from the recorded coverage start block through the recorded finalized head have been scanned. Earlier blocks are outside this coverage window."
-        : watermark && watermark.coverage_start_height > 0
-          ? "Backfill is in progress from the recorded coverage start block through the recorded finalized head."
-          : "Awaiting the event-emitting treasury release block. The scheduled scan remains paused until its exact finalized block is configured."
+      // This flag describes completeness from the persisted boundary only.
+      // It must not be interpreted as completeness from the currently configured boundary.
+      history_complete: recordedCoverageComplete,
+      coverage: coverageMismatch
+        ? "coverage_start_mismatch"
+        : recordedCoverageComplete
+          ? "complete_from_start_height"
+          : hasRecordedStart
+            ? "partial_or_unknown"
+            : "awaiting_coverage_start",
+      note: coverageMismatch
+        ? "The recorded coverage window is complete only from block " + watermark.coverage_start_height +
+          ", but the configured start is block " + configuredStartHeight +
+          ". Requested coverage is not verified. The live cursor has been preserved; do not reset it to resolve this mismatch."
+        : recordedCoverageComplete
+          ? "All finalized blocks from the recorded coverage start block through the recorded finalized head have been scanned. Earlier blocks are outside this coverage window."
+          : hasRecordedStart
+            ? "Backfill is in progress from the recorded coverage start block through the recorded finalized head."
+            : "Awaiting the event-emitting treasury release block. The scheduled scan remains paused until its exact finalized block is configured."
     }
   }, 200, PUBLIC_CORS_HEADERS);
 }
